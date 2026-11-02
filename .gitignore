@@ -1,0 +1,19 @@
+# Release packaging output and downloads
+/dist/
+/packaging/build/
+/packaging/vendor/
+
+# Local build, screenshot, and operating-system output
+/target/
+/shots/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Rust compiler backup files
+**/*.rs.bk
+
+# Editor temporary files
+*.swp
+*.swo
+*~

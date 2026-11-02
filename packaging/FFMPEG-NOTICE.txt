@@ -1,0 +1,23 @@
+PresentCraft includes FFmpeg
+============================
+
+This copy of PresentCraft comes with a separate FFmpeg program (`ffmpeg`,
+or `ffmpeg.exe` on Windows) that it uses to show and play videos. FFmpeg is
+not part of PresentCraft's own code; PresentCraft runs it as a separate
+program.
+
+FFmpeg is free software licensed under the GNU Lesser General Public
+License (LGPL) version 2.1 or later. The full licence text is in
+COPYING.LGPLv2.1 next to this file. This build has no GPL or non-free
+components enabled.
+
+Where the FFmpeg program came from, which version it is and exactly how it
+was configured are listed in BUILD-INFO.txt next to this file.
+
+Source code: https://ffmpeg.org/download.html
+The exact source release used is named in BUILD-INFO.txt and can be
+downloaded from https://ffmpeg.org/releases/. You may replace the bundled
+FFmpeg program with your own build of the same or a newer version; Slide
+Writer will use whichever program is in its place.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.

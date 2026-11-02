@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PresentCraft
+Comment=Create presentations with Markdown
+Exec=PresentCraft %f
+Icon=app.presentcraft.PresentCraft
+Terminal=false
+Categories=Office;Presentation;
+StartupWMClass=app.presentcraft.PresentCraft
