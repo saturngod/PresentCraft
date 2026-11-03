@@ -17,3 +17,6 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# Website source
+/website/
