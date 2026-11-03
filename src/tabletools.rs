@@ -538,19 +538,27 @@ impl App {
                         }
                         for (name, set) in COLOR_SETS {
                             let on = colors.as_deref() == Some(set);
-                            ui.horizontal(|ui| {
-                                if check(ui, on, name) {
-                                    act =
-                                        Some(Act::Meta("colors", "Colors", Some(set.to_string())));
-                                }
-                                for hexs in set.split(", ") {
-                                    let h = u32::from_str_radix(hexs.trim_start_matches('#'), 16)
-                                        .unwrap_or(0);
-                                    let (r, _) =
-                                        ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                                    ui.painter().rect_filled(r, 2.0, crate::theme::hex(h));
-                                }
-                            });
+                            let row_top = ui.cursor().top();
+                            if check(ui, on, name) {
+                                act = Some(Act::Meta("colors", "Colors", Some(set.to_string())));
+                            }
+                            // swatches drawn at the right end of the same row
+                            let row = egui::Rect::from_min_max(
+                                pos2(ui.min_rect().left(), row_top),
+                                pos2(ui.min_rect().right(), row_top + MENU_ROW_H),
+                            );
+                            let hexes: Vec<&str> = set.split(", ").collect();
+                            let mut x = row.right() - 10.0 - hexes.len() as f32 * 14.0;
+                            for hexs in hexes {
+                                let h = u32::from_str_radix(hexs.trim_start_matches('#'), 16)
+                                    .unwrap_or(0);
+                                let r = egui::Rect::from_min_size(
+                                    pos2(x, row.center().y - 5.0),
+                                    vec2(10.0, 10.0),
+                                );
+                                ui.painter().rect_filled(r, 2.0, crate::theme::hex(h));
+                                x += 14.0;
+                            }
                         }
                     });
                     ui.separator();
