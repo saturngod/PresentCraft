@@ -25,7 +25,23 @@ pub enum Tab {
 /// Share button colour (estimated from the person's screenshot).
 const SHARE_ORANGE: Color32 = Color32::from_rgb(0xE5, 0x9A, 0x16);
 
-const ON_SLIDE: Color32 = Color32::from_rgb(0x8E, 0xC6, 0xF5);
+/// Markdown syntax colour in the inspector, readable on either background.
+fn on_slide() -> Color32 {
+    if crate::settings::is_dark() {
+        Color32::from_rgb(0x8E, 0xC6, 0xF5)
+    } else {
+        Color32::from_rgb(0x1E, 0x6F, 0xC0)
+    }
+}
+
+/// Secondary text that must stay readable (stronger than `pal().text_dim`).
+fn text_mid() -> Color32 {
+    if crate::settings::is_dark() {
+        Color32::from_rgb(0xB4, 0xB4, 0xB8)
+    } else {
+        Color32::from_rgb(0x4A, 0x4A, 0x4F)
+    }
+}
 const ROW_H: f32 = 26.0;
 
 enum Action {
@@ -831,43 +847,43 @@ impl App {
             },
             Item {
                 icon: "A",
-                label: dimmed("→ ", "Body Text", ON_SLIDE, false),
+                label: dimmed("→ ", "Body Text", on_slide(), false),
                 shortcut: "Tab",
                 action: Action::Prefix("\t"),
             },
             Item {
                 icon: "H1",
-                label: dimmed("", "# Title", ON_SLIDE, true),
+                label: dimmed("", "# Title", on_slide(), true),
                 shortcut: "⌘1",
                 action: Action::Prefix("# "),
             },
             Item {
                 icon: "H2",
-                label: dimmed("", "## Subtitle", ON_SLIDE, true),
+                label: dimmed("", "## Subtitle", on_slide(), true),
                 shortcut: "⌘2",
                 action: Action::Prefix("## "),
             },
             Item {
                 icon: "H3",
-                label: dimmed("", "### Heading", ON_SLIDE, true),
+                label: dimmed("", "### Heading", on_slide(), true),
                 shortcut: "⌘3",
                 action: Action::Prefix("### "),
             },
             Item {
                 icon: "H4",
-                label: dimmed("", "#### Subheading", ON_SLIDE, true),
+                label: dimmed("", "#### Subheading", on_slide(), true),
                 shortcut: "⌘4",
                 action: Action::Prefix("#### "),
             },
             Item {
                 icon: "▣",
-                label: dimmed("", "/path/image.jpg", ON_SLIDE, false),
+                label: dimmed("", "/path/image.jpg", on_slide(), false),
                 shortcut: "",
                 action: Action::AddPicture,
             },
             Item {
                 icon: "▶",
-                label: dimmed("", "/path/video.mp4", ON_SLIDE, false),
+                label: dimmed("", "/path/video.mp4", on_slide(), false),
                 shortcut: "",
                 action: Action::AddVideo,
             },
@@ -1149,13 +1165,13 @@ impl App {
             ] {
                 ui.horizontal_wrapped(|ui| {
                     ui.add_space(10.0);
-                    ui.label(RichText::new(k).color(ON_SLIDE).monospace());
-                    ui.label(RichText::new(v).color(crate::settings::pal().text_dim));
+                    ui.label(RichText::new(k).color(on_slide()).monospace());
+                    ui.label(RichText::new(v).color(text_mid()));
                 });
             }
             ui.label(
                 RichText::new("Write these on the lines right under a picture or video.")
-                    .color(crate::settings::pal().text_dim)
+                    .color(text_mid())
                     .size(12.0),
             );
         }
@@ -1335,7 +1351,7 @@ impl App {
             egui::Align2::CENTER_CENTER,
             "or click to browse",
             FontId::proportional(12.0),
-            if dragging_here { pal.text_dim } else { FORMAT_BLUE },
+            if dragging_here { text_mid() } else { on_slide() },
         );
         self.media_drop_rect = Some(zone.expand(6.0).intersect(ui.clip_rect()));
         if zone_resp.clicked() {
