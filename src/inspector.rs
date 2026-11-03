@@ -2969,6 +2969,8 @@ fn background_swatch(
     if !egui::Popup::is_id_open(ui.ctx(), id) {
         return;
     }
+    // A plain Area doesn't mark the popup as shown, so egui would drop it next frame.
+    egui::Popup::open_id(ui.ctx(), id);
     let popup_w = PICKER_W + 24.0;
     let area = egui::Area::new(id)
         .kind(egui::UiKind::Picker)
@@ -3291,6 +3293,8 @@ fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
     if !egui::Popup::is_id_open(ui.ctx(), popup_id) {
         return;
     }
+    // A plain Area doesn't mark the popup as shown, so egui would drop it next frame.
+    egui::Popup::open_id(ui.ctx(), popup_id);
     let area = egui::Area::new(popup_id)
         .kind(egui::UiKind::Picker)
         .order(egui::Order::Foreground)
@@ -3387,5 +3391,53 @@ mod hex_tests {
         assert_eq!(parse_hex("#abc"), Some([0xAA, 0xBB, 0xCC]));
         assert_eq!(parse_hex("#12345"), None);
         assert_eq!(parse_hex("#zzzzzz"), None);
+    }
+}
+
+#[cfg(test)]
+mod swatch_tests {
+    use super::swatch;
+    use eframe::egui::{self, pos2, vec2, Color32, Event, Modifiers, PointerButton, RawInput, Rect};
+
+    fn frame(ctx: &egui::Context, events: Vec<Event>, colors: &mut [Color32; 2]) {
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_pass(input, |ctx| {
+            egui::Area::new(egui::Id::unique("swatches"))
+                .fixed_pos(pos2(0.0, 0.0))
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        let [light, dark] = colors;
+                        swatch(ui, light, 100.0);
+                        swatch(ui, dark, 100.0);
+                    });
+                });
+        });
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn clicking_a_swatch_keeps_its_picker_open() {
+        let ctx = egui::Context::default();
+        let mut colors = [Color32::RED, Color32::BLUE];
+        let at = pos2(50.0, 12.0);
+        let button = |pressed| Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::default(),
+        };
+        frame(&ctx, vec![], &mut colors);
+        frame(&ctx, vec![Event::PointerMoved(at)], &mut colors);
+        frame(&ctx, vec![button(true)], &mut colors);
+        frame(&ctx, vec![button(false)], &mut colors);
+        for _ in 0..5 {
+            frame(&ctx, vec![], &mut colors);
+        }
+        assert!(egui::Popup::is_any_open(&ctx));
+        assert_eq!(colors, [Color32::RED, Color32::BLUE]);
     }
 }
