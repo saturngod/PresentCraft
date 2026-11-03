@@ -1274,51 +1274,140 @@ impl App {
     /// The media library: drop box, search, and Images / Videos lists.
     fn media_library(&mut self, ui: &mut egui::Ui) {
         let pal = crate::settings::pal();
-        ui.add_space(14.0);
+        ui.add_space(12.0);
         let full = ui.available_width();
-        let (area, _) = ui.allocate_exact_size(vec2(full, 72.0), Sense::hover());
-        let zone_w = (full - 120.0).clamp(140.0, 220.0);
-        let zone = Rect::from_center_size(
-            pos2(area.left() + full / 2.0, area.center().y),
-            vec2(zone_w, 62.0),
-        );
+
+        // Drop zone: full width, icon with a title and a "browse" hint.
+        let (zone, _) = ui.allocate_exact_size(vec2(full, 104.0), Sense::hover());
         let zone_resp = ui
             .interact(zone, ui.scope_id().with("media-drop"), Sense::click())
-            .on_hover_text("Click to choose files, or drop them here");
+            .on_hover_text("Click to choose files, or drop them here")
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
         let dragging_here = ui.ctx().input(|i| {
             !i.raw.hovered_files.is_empty()
                 && i.pointer.latest_pos().is_some_and(|p| zone.expand(6.0).contains(p))
         });
-        if dragging_here || zone_resp.hovered() {
-            ui.painter().rect_filled(zone, 12.0, pal.hover);
-        }
+        let active = dragging_here || zone_resp.hovered();
+        let fill = if dragging_here {
+            FORMAT_BLUE.gamma_multiply(0.10)
+        } else if active {
+            pal.hover
+        } else {
+            pal.field.gamma_multiply(0.6)
+        };
+        ui.painter().rect_filled(zone, 10.0, fill);
         dashed_round_rect(
             ui.painter(),
-            zone,
-            12.0,
-            Stroke::new(2.0_f32, if dragging_here { FORMAT_BLUE } else { pal.text_dim }),
+            zone.shrink(0.5),
+            10.0,
+            Stroke::new(
+                1.2_f32,
+                if dragging_here {
+                    FORMAT_BLUE
+                } else if active {
+                    pal.text_dim
+                } else {
+                    pal.text_dim.gamma_multiply(0.55)
+                },
+            ),
+        );
+        let icon_c = pos2(zone.center().x, zone.top() + 32.0);
+        ui.painter().circle_filled(
+            icon_c,
+            16.0,
+            if dragging_here { FORMAT_BLUE.gamma_multiply(0.18) } else { pal.button },
+        );
+        paint_icon(
+            ui.painter(),
+            Rect::from_center_size(icon_c, vec2(24.0, 24.0)),
+            Icon::Picture,
+            if dragging_here { FORMAT_BLUE } else { pal.text_hi },
         );
         ui.painter().text(
-            zone.center(),
+            pos2(zone.center().x, zone.top() + 63.0),
             egui::Align2::CENTER_CENTER,
-            "Drop Images\nand Videos Here",
-            FontId::proportional(14.0),
-            pal.text_dim,
+            if dragging_here { "Release to add" } else { "Drop images or videos" },
+            FontId::proportional(13.5),
+            pal.text_hi,
+        );
+        ui.painter().text(
+            pos2(zone.center().x, zone.top() + 82.0),
+            egui::Align2::CENTER_CENTER,
+            "or click to browse",
+            FontId::proportional(12.0),
+            if dragging_here { pal.text_dim } else { FORMAT_BLUE },
         );
         self.media_drop_rect = Some(zone.expand(6.0).intersect(ui.clip_rect()));
         if zone_resp.clicked() {
             self.pick_media();
         }
 
-        // Gear menu, bottom right of the drop box.
-        let gear = Rect::from_min_size(
-            pos2(area.right() - 46.0, zone.bottom() - 30.0),
-            vec2(44.0, 28.0),
+        // Search field and options menu on one row.
+        ui.add_space(10.0);
+        const ROW_H: f32 = 30.0;
+        const GEAR_W: f32 = 44.0;
+        let (row, _) = ui.allocate_exact_size(vec2(full, ROW_H), Sense::hover());
+        let search_rect =
+            Rect::from_min_max(row.min, pos2(row.right() - GEAR_W - 8.0, row.bottom()));
+        let gear = Rect::from_min_max(pos2(row.right() - GEAR_W, row.top()), row.max);
+
+        // Same look as the editor's Find field: rounded box, magnifier, clear button.
+        let field_id = ui.scope_id().with("media-search");
+        let focused = ui.ctx().memory(|m| m.has_focus(field_id));
+        let ring = if focused { ui.visuals().selection.stroke.color } else { pal.border };
+        ui.painter().rect_filled(search_rect, 8.0, pal.field);
+        ui.painter().rect_stroke(
+            search_rect,
+            8.0,
+            Stroke::new(if focused { 2.0 } else { 1.0 }, ring),
+            egui::StrokeKind::Inside,
         );
+        let y = search_rect.center().y;
+        let glass = pos2(search_rect.left() + 15.0, y - 1.0);
+        let st = Stroke::new(1.4_f32, pal.icon);
+        ui.painter().circle_stroke(glass, 5.0, st);
+        ui.painter()
+            .line_segment([glass + vec2(3.6, 3.6), glass + vec2(7.0, 7.0)], st);
+        let has_query = !self.media_search.is_empty();
+        let clear = Rect::from_center_size(pos2(search_rect.right() - 14.0, y), vec2(18.0, 18.0));
+        if has_query {
+            let r = ui
+                .interact(clear, ui.scope_id().with("media-search-clear"), Sense::click())
+                .on_hover_text("Clear");
+            let c = clear.center();
+            ui.painter().circle_filled(
+                c,
+                7.5,
+                if r.hovered() { pal.text_dim } else { pal.icon.gamma_multiply(0.7) },
+            );
+            let x = Stroke::new(1.4_f32, pal.field);
+            ui.painter().line_segment([c + vec2(-2.8, -2.8), c + vec2(2.8, 2.8)], x);
+            ui.painter().line_segment([c + vec2(-2.8, 2.8), c + vec2(2.8, -2.8)], x);
+            if r.clicked() {
+                self.media_search.clear();
+            }
+        }
+        let text_right = if has_query { clear.left() - 4.0 } else { search_rect.right() - 8.0 };
+        let text_rect = Rect::from_min_max(
+            pos2(search_rect.left() + 28.0, search_rect.top() + 2.0),
+            pos2(text_right, search_rect.bottom() - 2.0),
+        );
+        let mut search_ui = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
+        egui::TextEdit::singleline(&mut self.media_search)
+            .id(field_id)
+            .frame(egui::Frame::NONE)
+            .hint_text("Search media")
+            .font(FontId::proportional(14.0))
+            .text_color(pal.text_hi)
+            .desired_width(text_rect.width())
+            .align(egui::Align2::LEFT_CENTER)
+            .min_size(text_rect.size())
+            .show(&mut search_ui);
+
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(gear));
-        let btn = egui::Button::new(RichText::new("       ").size(14.0))
+        let btn = egui::Button::new("")
             .min_size(gear.size())
-            .corner_radius(7.0);
+            .corner_radius(6.0);
         let menu = crate::tabletools::menu_from_button(&mut child, btn, |ui| {
             crate::tabletools::style_menu(ui);
             if ui.button("Add Images or Videos…").clicked() {
@@ -1350,25 +1439,17 @@ impl App {
         let gr = menu.rect;
         paint_icon(
             ui.painter(),
-            Rect::from_min_size(gr.min, vec2(28.0, gr.height())),
+            Rect::from_min_size(pos2(gr.left() + 4.0, gr.top()), vec2(22.0, gr.height())),
             Icon::Gear,
             pal.text_hi,
         );
         paint_icon(
             ui.painter(),
-            Rect::from_min_size(pos2(gr.left() + 22.0, gr.top()), vec2(20.0, gr.height())),
+            Rect::from_min_size(pos2(gr.left() + 24.0, gr.top()), vec2(16.0, gr.height())),
             Icon::ChevronDown,
-            pal.text_hi,
+            pal.text_dim,
         );
         menu.on_hover_text("Media options");
-
-        ui.add_space(10.0);
-        ui.add(
-            egui::TextEdit::singleline(&mut self.media_search)
-                .hint_text("🔍  Search Media")
-                .desired_width(f32::INFINITY)
-                .margin(vec2(10.0, 6.0)),
-        );
         ui.add_space(6.0);
 
         let items = self.media_items();
@@ -1413,7 +1494,7 @@ impl App {
             ui.add_space(8.0);
             ui.label(
                 RichText::new(format!("{title} ({})", list.len()))
-                    .size(15.0)
+                    .size(13.5)
                     .strong()
                     .color(pal.text_hi),
             );
