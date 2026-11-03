@@ -1,7 +1,8 @@
 name: Release
 
 # Builds release packages when a version tag (for example v0.2.0) is pushed,
-# then attaches them to a GitHub release for that tag.
+# then attaches them to a GitHub release for that tag. Make the tag with
+# packaging/release.sh so Cargo.toml carries the same version.
 # "Run workflow" in the Actions tab builds the packages without publishing.
 
 on:
@@ -17,8 +18,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches Cargo.toml
+        run: |
+          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "Cargo.toml version: $version"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version. Use packaging/release.sh to make release tags."
+            exit 1
+          fi
+
   macos:
     name: macOS (Apple silicon)
+    needs: version
     runs-on: macos-15
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -82,6 +99,7 @@ jobs:
 
   linux:
     name: Linux (${{ matrix.arch }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -128,6 +146,7 @@ jobs:
 
   windows:
     name: Windows (${{ matrix.arch }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:

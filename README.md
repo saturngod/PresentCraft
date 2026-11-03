@@ -18,7 +18,7 @@ cargo build --locked
 cargo run --locked --bin PresentCraft
 ```
 
-With no document argument, the app opens its bundled sample presentation. To open your own presentation (a `.prcraft` or `.iapresenter` package, or a Markdown file):
+With no document argument, the app opens its bundled sample presentation. To open your own presentation (a `.prcraft` package or a Markdown file):
 
 ```sh
 cargo run --locked --bin PresentCraft -- "/path/to/presentation.md"
@@ -49,12 +49,12 @@ In **Design → Logo**, select an image or drop it onto the logo preview, then a
 
 ## Document format
 
-PresentCraft saves presentations as `Name.prcraft` package folders, laid out like iA Presenter's `.iapresenter` packages:
+PresentCraft saves presentations as `Name.prcraft` package folders:
 
 ```text
 Name.prcraft/
 ├── text.md          the script (Markdown)
-├── info.json        document settings (iA Presenter's layout; ours under "app.myanmars.presentcraft")
+├── info.json        document settings (under "app.myanmars.presentcraft")
 ├── assets/          pictures and videos, referenced as /assets/photo.jpg
 └── Theme/
     ├── template.json  theme name, fonts, decoration, text size
@@ -75,11 +75,11 @@ Every picture and video lives inside the presentation. Adding one (dropping it o
 
 The **Media** panel lists everything in the package under **Images** and **Videos**, with a thumbnail and the slides that use each file (or *Not used*). Click a file to go to its slide, and double-click it to put it at the cursor. Right-click for Show in Finder, Copy into Presentation (for files outside the package), and Remove from Presentation (for unused files only). Files in the package that PresentCraft doesn't write are left alone, and unknown `info.json` keys are kept.
 
-`info.json` uses iA Presenter's layout. The top-level `creatorIdentifier`, `type`, `version` and `transient` keys match iA's. PresentCraft's settings (theme, appearance, author, audience, logo, header/footer and gradients) sit under `"app.myanmars.presentcraft"`. The `"net.ia.presenter"` block is read and kept up to date: `logo`, `logo-size`, and the header/footer places (`headertrailing`, …). Its `template` and `preset` choose the theme when the package has no `Theme/` folder, loading it from an installed iA Presenter or from an imported theme with that name.
+`info.json` has the top-level keys `creatorIdentifier`, `type`, `version` and `transient`. PresentCraft's settings (theme, appearance, author, audience, logo, header/footer and gradients) sit under `"app.myanmars.presentcraft"`.
 
-Open also accepts `.iapresenter` documents (folder or zip) and plain Markdown (`.md`, `.markdown`, `.txt`). These are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
+Open also accepts plain Markdown (`.md`, `.markdown`, `.txt`). These files are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
 
-Themes are folders laid out like iA Presenter's (compare `iA Presenter.app/Contents/Resources/Themes/New York`):
+Themes are folders laid out like this:
 
 ```text
 New York/
@@ -91,9 +91,9 @@ New York/
 └── image1.webp …    example pictures, used as /Theme/image1.webp
 ```
 
-- **Saving a theme** (Duplicate Theme, or the `Theme/` folder in a package) writes this whole structure. A theme that came from a folder (an imported or iA Presenter theme) keeps everything in it, including its CSS, fonts, pictures, preview, layout examples and keys like `DarkAccent1`. PresentCraft only updates the values you changed, and colours written as `#000` or `transparent` stay as they were.
-- **New themes** get a stylesheet named after the theme in lower case, with spaces kept ("My Theme" → `my theme.css`, as iA Presenter does), and a preview drawn in its colours. PresentCraft also adds `Decoration`, `TextSize` and `InvertTitles` to `template.json`; iA Presenter ignores these keys.
-- **Rules from [iA's theme guide](https://ia.net/presenter/support/visuals/themes?platform=mac):**
+- **Saving a theme** (Duplicate Theme, or the `Theme/` folder in a package) writes this whole structure. A theme that came from a folder (for example an imported theme) keeps everything in it, including its CSS, fonts, pictures, preview, layout examples and keys like `DarkAccent1`. PresentCraft only updates the values you changed, and colours written as `#000` or `transparent` stay as they were.
+- **New themes** get a stylesheet named after the theme in lower case, with spaces kept ("My Theme" → `my theme.css`), and a preview drawn in its colours. PresentCraft also adds `Decoration`, `TextSize` and `InvertTitles` to `template.json`.
+- **Layouts and fonts:**
   - Inverted cover and title slides are written as `"Layouts": [{"Name": "Cover", "Classes": "invert"}, {"Name": "Title", "Classes": "invert"}]`.
   - `template.json` holds font display names (`System`, `Inter`). `presets.json` holds CSS names (`system-ui`, `ui-serif`, or a list like `-apple-system-ui-serif, ui-serif`).
 - **Colours and charts:**
@@ -103,7 +103,7 @@ New York/
   - `LightGraphDataColors` / `DarkGraphDataColors` (`data-0`, `data-1`, …) colour charts.
 - **Gradients:** when the theme supplies `LightBgGradient` / `DarkBgGradient`, its own text colours are used on every slide (San Francisco: white throughout). A gradient you pick yourself gets black or white text for contrast.
 - **Fonts:** `.ttf` and `.otf` files anywhere in a theme's folder (usually `fonts/`) are used for its slides. Web-only fonts (`.woff`, `.woff2`) can't be drawn natively, so those themes use an installed font with the same name, or the built-in sans or serif.
-- **Importing:** Settings → Themes → Import Theme… adds any such folder, including iA Presenter's installed themes. Saved themes live in `Themes/` next to the settings file.
+- **Importing:** Settings → Themes → Import Theme… adds any such folder. Saved themes live in `Themes/` next to the settings file.
 
 AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:
 
@@ -118,10 +118,10 @@ When a package has no `Theme/` folder, `info.json`'s `Theme` key picks an instal
 
 The built-in themes are named after Southeast Asian cities. Each one's colours and typography are drawn from its city; there are no pictures.
 
-- **Storage:** each theme is an iA Presenter theme folder in `themes/`, built into the app. The folder holds `template.json`, `presets.json`, a stylesheet with `@font-face` rules, previews, and its fonts in `fonts/`.
+- **Storage:** each theme is a theme folder in `themes/`, built into the app. The folder holds `template.json`, `presets.json`, a stylesheet with `@font-face` rules, previews, and its fonts in `fonts/`.
 - **Fonts:** they come from [Google Fonts](https://fonts.google.com) under the SIL Open Font License (licence files are in each `fonts/` folder). They work without being installed.
 - **First run:** the app writes the folders to `Built-in Themes/` next to the settings file.
-- **Saving:** a presentation copies its theme, fonts included, into its `Theme/` folder, so it looks the same on another computer and in iA Presenter.
+- **Saving:** a presentation copies its theme, fonts included, into its `Theme/` folder, so it looks the same on another computer.
 
 | Theme | Look | Titles / body |
 | --- | --- | --- |
@@ -144,8 +144,8 @@ To change one, edit its `themes/<City>/` files, then refresh the stylesheets and
 
 ### Opening documents by double-click
 
-- **macOS:** the release bundle registers `.prcraft` (folder and zip) and offers PresentCraft for `.iapresenter` and Markdown.
-- **Windows:** in the unpacked release folder, run `powershell -ExecutionPolicy Bypass -File register-file-types.ps1` once. It registers `.prcraft` for the current user (no administrator rights needed) and adds PresentCraft to *Open with* for `.iapresenter` and Markdown. Run it again if you move the folder; add `-Remove` to undo.
+- **macOS:** the release bundle registers `.prcraft` (folder and zip) and offers PresentCraft for Markdown.
+- **Windows:** in the unpacked release folder, run `powershell -ExecutionPolicy Bypass -File register-file-types.ps1` once. It registers `.prcraft` for the current user (no administrator rights needed) and adds PresentCraft to *Open with* for Markdown. Run it again if you move the folder; add `-Remove` to undo.
 - **Linux:** in the unpacked release folder, run `./install.sh` once. It adds the menu entry, icons and the `application/x-presentcraft` file type under `~/.local/share`. `./install.sh --remove` undoes it.
 
 A folder package from a Mac is an ordinary folder on Windows and Linux. Open it with File → Open Package Folder…, by dragging it onto the window, or by passing its path on the command line.
@@ -169,7 +169,22 @@ Linux (on Linux): `packaging/build-ffmpeg.sh linux` then `packaging/package-linu
 
 ### GitHub Actions
 
-`.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed (`git tag v0.2.0 && git push origin v0.2.0`) and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64, and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing. The macOS job needs these repository secrets:
+`.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64, and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing.
+
+The version comes from `Cargo.toml`. It shows in the app, the package file names, the macOS bundle and the Windows exe. Make releases with `packaging/release.sh`, which sets the version, commits it and adds the matching tag, so the build always has the right number:
+
+```sh
+packaging/release.sh patch            # 0.1.0 -> 0.1.1
+packaging/release.sh minor            # 0.1.0 -> 0.2.0
+packaging/release.sh major            # 0.1.0 -> 1.0.0
+packaging/release.sh 0.2.0            # an exact version
+packaging/release.sh patch --dry-run  # show the new version and tag only
+packaging/release.sh patch --push     # also push the branch and tag, which starts the build
+```
+
+The working tree must be clean first. The script updates `Cargo.toml` and `Cargo.lock`, commits "Release v0.1.1" and creates the tag `v0.1.1`. Without `--push`, push yourself with `git push origin <branch> && git push origin v0.1.1`. A tag made by hand that does not match `Cargo.toml` fails the workflow's first check before anything is built.
+
+The macOS job needs these repository secrets:
 
 | Secret | Value |
 | --- | --- |
