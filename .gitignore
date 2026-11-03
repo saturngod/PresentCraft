@@ -26,3 +26,6 @@ Desktop.ini
 
 # Claude Code local files
 /.claude/
+
+# Promo video output (not part of the repository)
+/promo/
