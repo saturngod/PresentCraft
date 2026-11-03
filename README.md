@@ -109,11 +109,21 @@ New York/
 - **Fonts:** `.ttf` and `.otf` files anywhere in a theme's folder (usually `fonts/`) are used for its slides. Web-only fonts (`.woff`, `.woff2`) can't be drawn natively, so those themes use an installed font with the same name, or the built-in sans or serif.
 - **Importing:** Settings → Themes → Import Theme… adds any such folder. Saved themes live in `Themes/` next to the settings file.
 
-AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:
+AI agents can create packages with the `create-prcraft` skill. To use it with your own AI assistant, copy the folder [`Skills/create-prcraft/`](Skills/create-prcraft/SKILL.md):
+
+| Tool | Copy the folder to |
+| --- | --- |
+| Claude Code | `~/.claude/skills/` (all projects) or `<project>/.claude/skills/` |
+| Codex | `~/.agents/skills/` (all projects) or `<repo>/.agents/skills/` |
+| Claude apps (claude.ai, desktop) | zip the folder and upload it under Customize → Skills |
+
+[`Skills/README.md`](Skills/README.md) has the commands. Inside this repository, Claude Code also loads a developer version from `.claude/skills/create-prcraft/`.
+
+The skill's helper script builds a package from a Markdown script and checks it. It needs only Python 3:
 
 ```sh
-python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Bagan
-python3 .claude/skills/create-prcraft/scripts/prcraft.py check Talk.prcraft
+python3 Skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Bagan
+python3 Skills/create-prcraft/scripts/prcraft.py check Talk.prcraft
 ```
 
 When a package has no `Theme/` folder, `info.json`'s `Theme` key picks an installed theme by name.

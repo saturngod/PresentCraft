@@ -20,3 +20,6 @@ Desktop.ini
 
 # Website source
 /website/
+
+# Skill ZIPs made for uploading to the Claude apps
+/Skills/*.zip
