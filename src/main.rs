@@ -17,6 +17,7 @@ mod optionicons;
 mod macos_open;
 mod package;
 mod parse;
+mod presenter;
 mod render;
 mod settings;
 mod syntax;
@@ -518,6 +519,14 @@ pub struct App {
     /// From the command line: start presenting / play the first video.
     pending_present: bool,
     pending_play: bool,
+    /// Selected note in the presenter view.
+    present_note: usize,
+    /// Scroll the presenter view to the selected note.
+    note_scroll: bool,
+    /// Talk time counted before the timer was last paused.
+    talk_elapsed: f64,
+    /// When the running timer was started (`None` while paused).
+    talk_since: Option<f64>,
     /// Bring the presentation window to the front on its next frame.
     present_focus: bool,
     title_sent: String,
@@ -615,6 +624,10 @@ impl App {
             video_slide: usize::MAX,
             pending_present: false,
             pending_play: false,
+            present_note: 0,
+            note_scroll: false,
+            talk_elapsed: 0.0,
+            talk_since: None,
             present_focus: false,
             title_sent: String::new(),
             shot_path: shot,
@@ -1777,6 +1790,10 @@ impl App {
         }
         self.presenting = true;
         self.present_focus = true;
+        self.present_note = 0;
+        self.note_scroll = true;
+        self.talk_elapsed = 0.0;
+        self.talk_since = Some(ctx.input(|i| i.time));
         // Inline presenting (screenshot runs, or a backend without separate
         // windows) still takes over the main window, so go fullscreen there.
         if self.shot_path.is_none() && ctx.embed_viewports() {
@@ -2996,6 +3013,8 @@ pub enum Icon {
     ChevronLeft,
     ChevronRight,
     ChevronDown,
+    ChevronUp,
+    Pause,
     Gear,
 }
 
@@ -3006,6 +3025,19 @@ pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
         Icon::ChevronDown => {
             p.line_segment([c + vec2(-4.0, -2.0), c + vec2(0.0, 2.0)], s);
             p.line_segment([c + vec2(0.0, 2.0), c + vec2(4.0, -2.0)], s);
+        }
+        Icon::ChevronUp => {
+            p.line_segment([c + vec2(-4.0, 2.0), c + vec2(0.0, -2.0)], s);
+            p.line_segment([c + vec2(0.0, -2.0), c + vec2(4.0, 2.0)], s);
+        }
+        Icon::Pause => {
+            for dx in [-3.0, 3.0] {
+                p.rect_filled(
+                    Rect::from_center_size(c + vec2(dx, 0.0), vec2(3.0, 12.0)),
+                    1.0,
+                    color,
+                );
+            }
         }
         Icon::Gear => {
             for k in 0..8 {
@@ -3423,6 +3455,11 @@ impl eframe::App for App {
         }
         if self.presenting && inline_present {
             self.present_ui(ui);
+            return;
+        }
+        // The editor window becomes the presenter view.
+        if self.presenting {
+            self.presenter_view(ui);
             return;
         }
         if !self.settings_open && ctx.memory(|m| m.has_focus(egui::Id::unique(EDITOR_ID))) {
