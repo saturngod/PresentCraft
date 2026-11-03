@@ -21,16 +21,34 @@ pub fn is_theme_dir(dir: &Path) -> bool {
 
 /// Reads a theme folder into a custom preset.
 pub fn load(dir: &Path) -> Result<Preset, String> {
+    load_variant(dir, None)
+}
+
+/// Like [`load`], starting in the variant named `preset` (an iA Presenter
+/// preset name such as "Light", "Dark" or "Default") when it exists.
+pub fn load_variant(dir: &Path, preset: Option<&str>) -> Result<Preset, String> {
     let read = |name: &str| -> Result<Json, String> {
         let text = std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{name}: {e}"))?;
         Json::parse(&text).map_err(|e| format!("{name}: {e}"))
     };
     let template = read(TEMPLATE)?;
-    let presets = if dir.join(PRESETS).is_file() {
+    let mut presets = if dir.join(PRESETS).is_file() {
         read(PRESETS)?
     } else {
         Json::Obj(Vec::new())
     };
+    if let Some(name) = preset {
+        // The first variant listed is the one the deck starts in.
+        let mut list = presets.arr("Presets").to_vec();
+        if let Some(i) = list
+            .iter()
+            .position(|p| p.str("Name").is_some_and(|n| n.eq_ignore_ascii_case(name)))
+        {
+            let chosen = list.remove(i);
+            list.insert(0, chosen);
+            presets.set("Presets", Json::Arr(list));
+        }
+    }
     Ok(from_json(&template, &presets, dir))
 }
 
@@ -280,6 +298,42 @@ pub fn same_look(a: &Preset, b: &Preset) -> bool {
         && a.gradients == b.gradients
 }
 
+// ---------- iA Presenter's themes ----------
+
+/// Where an installed iA Presenter keeps its themes.
+fn ia_theme_roots() -> Vec<PathBuf> {
+    let mut roots = vec![PathBuf::from(
+        "/Applications/iA Presenter.app/Contents/Resources/Themes",
+    )];
+    if let Some(home) = std::env::var_os("HOME") {
+        roots.push(
+            PathBuf::from(home).join("Applications/iA Presenter.app/Contents/Resources/Themes"),
+        );
+    }
+    roots
+}
+
+/// The iA Presenter theme folder for a document's `"template"` value
+/// (a folder name such as "tokyo"), when iA Presenter is installed.
+pub fn ia_theme_dir(template: &str) -> Option<PathBuf> {
+    let want = template.trim();
+    for root in ia_theme_roots() {
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if is_theme_dir(&p)
+                && p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(want))
+            {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
 // ---------- the person's saved themes ----------
 
 /// Folder holding the person's own themes, one sub-folder each.
@@ -400,6 +454,19 @@ mod tests {
             let p = load(&e.path()).unwrap_or_else(|err| panic!("{:?}: {err}", e.path()));
             assert!(!p.name.is_empty());
         }
+    }
+
+    #[test]
+    fn finds_ia_template_by_folder_name_when_installed() {
+        if !Path::new("/Applications/iA Presenter.app").exists() {
+            return;
+        }
+        let dir = ia_theme_dir("tokyo").expect("Tokyo theme");
+        let p = load_variant(&dir, Some("Default")).unwrap();
+        assert_eq!(p.name, "Tokyo");
+        let helv = ia_theme_dir("helvetica").unwrap();
+        assert!(load_variant(&helv, Some("Dark")).unwrap().starts_dark);
+        assert!(!load_variant(&helv, Some("Light")).unwrap().starts_dark);
     }
 
     #[test]

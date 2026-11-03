@@ -54,7 +54,7 @@ PresentCraft saves presentations as `Name.prcraft` package folders, laid out lik
 ```text
 Name.prcraft/
 ├── text.md          the script (Markdown)
-├── info.json        document settings: appearance, author, audience, logo, header/footer, gradients
+├── info.json        document settings (iA Presenter's layout; ours under "app.myanmars.presentcraft")
 ├── assets/          pictures and videos, referenced as /assets/photo.jpg
 └── Theme/
     ├── template.json  theme name, fonts, decoration, text size
@@ -74,6 +74,8 @@ On macOS, Finder shows a folder package as one file. Saving only rewrites `text.
 Every picture and video lives inside the presentation. Adding one (dropping it on the editor or the Media panel, Add Images or Videos…, or Select Logo) copies it into `assets/` straight away and writes `/assets/<name>` in the script, never a path like `/Users/…/Downloads/photo.png`. A presentation that hasn't been saved yet keeps its media in a private working folder, and Save copies it into the new package. Opening a Markdown file copies the pictures and videos it uses in the same way. If a script still points outside the package, Save copies those files in too.
 
 The **Media** panel lists everything in the package under **Images** and **Videos**, with a thumbnail and the slides that use each file (or *Not used*). Click a file to go to its slide, and double-click it to put it at the cursor. Right-click for Show in Finder, Copy into Presentation (for files outside the package), and Remove from Presentation (for unused files only). Files in the package that PresentCraft doesn't write are left alone, and unknown `info.json` keys are kept.
+
+`info.json` uses iA Presenter's layout. The top-level `creatorIdentifier`, `type`, `version` and `transient` keys match iA's. PresentCraft's settings (theme, appearance, author, audience, logo, header/footer and gradients) sit under `"app.myanmars.presentcraft"`. The `"net.ia.presenter"` block is read and kept up to date: `logo`, `logo-size`, and the header/footer places (`headertrailing`, …). Its `template` and `preset` choose the theme when the package has no `Theme/` folder, loading it from an installed iA Presenter or from an imported theme with that name.
 
 Open also accepts `.iapresenter` documents (folder or zip) and plain Markdown (`.md`, `.markdown`, `.txt`). These are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
 

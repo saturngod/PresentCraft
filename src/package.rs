@@ -393,7 +393,7 @@ fn save_folder(dest: &Path, req: SaveRequest) -> Result<Saved, String> {
     };
     let mut info = req.info;
     if !logo.is_empty() {
-        info.set("Logo", logo.clone().into());
+        crate::docinfo::set_logo(&mut info, &logo);
     }
     write_atomic(&dest.join(TEXT), text.as_bytes())?;
     write_atomic(&dest.join(INFO), info.to_pretty().as_bytes())?;
@@ -688,7 +688,10 @@ mod tests {
             let p = root.join(s.trim_start_matches("./"));
             p.exists().then_some(p)
         };
-        let info = crate::json::obj([("Theme", preset.name.into())]);
+        let info = crate::json::obj([(
+            crate::docinfo::NS,
+            crate::json::obj([("theme", preset.name.into())]),
+        )]);
         let saved = save(
             &pkg,
             Form::Folder,
@@ -716,7 +719,8 @@ mod tests {
         let theme = opened.theme.unwrap();
         assert_eq!(theme.name, preset.name);
         assert!(theme.starts_dark);
-        assert_eq!(opened.info.unwrap().str("Theme"), Some(preset.name));
+        let d = crate::docinfo::read(&opened.info.unwrap());
+        assert_eq!(d.theme.as_deref(), Some(preset.name));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

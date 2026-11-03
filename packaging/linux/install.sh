@@ -8,7 +8,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 data="${XDG_DATA_HOME:-$HOME/.local/share}"
-id=app.presentcraft.PresentCraft
+id=app.myanmars.presentcraft
 
 refresh() {
   command -v update-mime-database >/dev/null && update-mime-database "$data/mime" || true

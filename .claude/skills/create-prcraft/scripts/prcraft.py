@@ -41,6 +41,8 @@ STORED_EXTS = {
     ".m4v", ".webm", ".mp3", ".m4a", ".zip", ".pdf",
 }
 SLOT_KINDS = {"Empty", "Number", "Date", "Logo", "Custom"}
+NS = "app.myanmars.presentcraft"
+IA_NS = "net.ia.presenter"
 CHART_KINDS = {
     "bar", "bars", "column", "columns", "line", "lines", "spline", "curve",
     "area", "step", "pie", "donut", "doughnut", "radar", "gauge", "bubble",
@@ -148,16 +150,22 @@ def cmd_build(a):
         lines[i] = lines[i].replace(src, done[f], 1)
     (work / "text.md").write_text("\n".join(lines), encoding="utf-8")
 
-    info = {
-        "Format": "PresentCraft",
-        "FormatVersion": 1,
-        "Creator": "prcraft.py",
-        "Appearance": a.appearance,
-        "Author": a.author,
-        "Audience": a.audience,
+    ours = {
+        "creator": "prcraft.py",
+        "appearance": a.appearance,
+        "author": a.author,
+        "audience": a.audience,
     }
     if a.theme:
-        info["Theme"] = a.theme
+        ours["theme"] = a.theme
+    # Same top-level layout as iA Presenter's info.json.
+    info = {
+        "creatorIdentifier": NS,
+        "type": "net.daringfireball.markdown",
+        "version": 2,
+        "transient": False,
+        NS: ours,
+    }
     if a.theme_dir:
         tdir = Path(a.theme_dir)
         if not (tdir / "template.json").is_file():
@@ -238,15 +246,29 @@ def cmd_check(a):
         if not isinstance(info, dict):
             errors.append("info.json must be an object")
             info = {}
-        if info.get("Appearance", "light") not in ("light", "dark"):
-            errors.append('info.json Appearance must be "light" or "dark"')
-        slots = info.get("Slots", [])
+        # Settings live under our identifier; the first version used flat keys.
+        ours = info.get(NS)
+        if ours is None:
+            ours = {k[0].lower() + k[1:]: v for k, v in info.items() if k[:1].isupper()}
+            if ours:
+                warnings.append(f'info.json uses old flat keys; put them under "{NS}"')
+        if not isinstance(ours, dict):
+            errors.append(f'info.json "{NS}" must be an object')
+            ours = {}
+        ia = info.get(IA_NS) if isinstance(info.get(IA_NS), dict) else {}
+        if ours.get("appearance", "light") not in ("light", "dark"):
+            errors.append('info.json appearance must be "light" or "dark"')
+        slots = ours.get("slots", [])
         if not isinstance(slots, list) or len(slots) > 6:
             errors.append("info.json Slots must be a list of at most 6 objects")
         else:
             for s in slots:
-                if not isinstance(s, dict) or s.get("Kind", "Empty") not in SLOT_KINDS:
-                    errors.append(f"info.json Slots entry {s!r}: Kind must be one of {sorted(SLOT_KINDS)}")
+                kind = s.get("kind", s.get("Kind", "Empty")) if isinstance(s, dict) else None
+                if kind not in SLOT_KINDS:
+                    errors.append(f"info.json slots entry {s!r}: kind must be one of {sorted(SLOT_KINDS)}")
+        logo = ours.get("logo") or ia.get("logo")
+        if logo and not is_web(logo) and resolve(logo, root) is None:
+            errors.append(f"logo not found: {logo}")
         theme_dir = root / "Theme"
         if theme_dir.is_dir():
             for name in ("template.json", "presets.json"):
@@ -258,9 +280,9 @@ def cmd_check(a):
                     lenient_json(p.read_text(encoding="utf-8"))
                 except ValueError as e:
                     errors.append(f"Theme/{name}: {e}")
-        elif info.get("Theme") and info["Theme"] not in BUILTIN_THEMES:
+        elif ours.get("theme") and ours["theme"] not in BUILTIN_THEMES:
             warnings.append(
-                f'Theme "{info["Theme"]}" is not built in; it is used only if the person '
+                f'theme "{ours["theme"]}" is not built in; it is used only if the person '
                 "has a saved theme with that name (otherwise the default theme is used)"
             )
         for _, src in media_lines(text):

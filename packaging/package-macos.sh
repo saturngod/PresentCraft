@@ -39,7 +39,7 @@ cat >"$app/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>PresentCraft</string>
   <key>CFBundleDisplayName</key><string>PresentCraft</string>
-  <key>CFBundleIdentifier</key><string>app.presentcraft.PresentCraft</string>
+  <key>CFBundleIdentifier</key><string>app.myanmars.presentcraft</string>
   <key>CFBundleExecutable</key><string>PresentCraft</string>
   <key>CFBundleIconFile</key><string>PresentCraft.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -56,14 +56,14 @@ cat >"$app/Contents/Info.plist" <<PLIST
       <key>LSHandlerRank</key><string>Owner</string>
       <key>LSTypeIsPackage</key><true/>
       <key>CFBundleTypeIconFile</key><string>PresentCraft.icns</string>
-      <key>LSItemContentTypes</key><array><string>app.presentcraft.prcraft</string></array>
+      <key>LSItemContentTypes</key><array><string>app.myanmars.presentcraft.prcraft</string></array>
     </dict>
     <dict>
       <key>CFBundleTypeName</key><string>PresentCraft Presentation</string>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
       <key>CFBundleTypeIconFile</key><string>PresentCraft.icns</string>
-      <key>LSItemContentTypes</key><array><string>app.presentcraft.prcraft.zip</string></array>
+      <key>LSItemContentTypes</key><array><string>app.myanmars.presentcraft.prcraft.zip</string></array>
     </dict>
     <dict>
       <key>CFBundleTypeName</key><string>iA Presenter Document</string>
@@ -82,7 +82,7 @@ cat >"$app/Contents/Info.plist" <<PLIST
   <key>UTExportedTypeDeclarations</key>
   <array>
     <dict>
-      <key>UTTypeIdentifier</key><string>app.presentcraft.prcraft</string>
+      <key>UTTypeIdentifier</key><string>app.myanmars.presentcraft.prcraft</string>
       <key>UTTypeDescription</key><string>PresentCraft Presentation</string>
       <key>UTTypeConformsTo</key><array><string>com.apple.package</string><string>public.composite-content</string></array>
       <key>UTTypeIconFile</key><string>PresentCraft.icns</string>
@@ -91,7 +91,7 @@ cat >"$app/Contents/Info.plist" <<PLIST
     </dict>
     <!-- The same extension as a single zip file (saved on Windows and Linux). -->
     <dict>
-      <key>UTTypeIdentifier</key><string>app.presentcraft.prcraft.zip</string>
+      <key>UTTypeIdentifier</key><string>app.myanmars.presentcraft.prcraft.zip</string>
       <key>UTTypeDescription</key><string>PresentCraft Presentation</string>
       <key>UTTypeConformsTo</key><array><string>public.data</string><string>public.composite-content</string></array>
       <key>UTTypeIconFile</key><string>PresentCraft.icns</string>

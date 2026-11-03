@@ -48,13 +48,13 @@ cp "$ff/ffmpeg" "$dir/ffmpeg/ffmpeg"
 cp "$here/FFMPEG-NOTICE.txt" "$ff/COPYING.LGPLv2.1" "$ff/BUILD-INFO.txt" "$dir/licenses/"
 # Desktop integration assets; install under ~/.local/share or /usr/share.
 mkdir -p "$dir/share/applications" "$dir/share/mime/packages"
-cp "$here/app.presentcraft.PresentCraft.desktop" "$dir/share/applications/"
-cp "$here/linux/app.presentcraft.PresentCraft.xml" "$dir/share/mime/packages/"
+cp "$here/app.myanmars.presentcraft.desktop" "$dir/share/applications/"
+cp "$here/linux/app.myanmars.presentcraft.xml" "$dir/share/mime/packages/"
 cp "$here/linux/install.sh" "$dir/install.sh"
 for size in 16 24 32 48 64 128 256 512 1024; do
   icons="$dir/share/icons/hicolor/${size}x${size}/apps"
   mkdir -p "$icons"
-  cp "$here/icons/$size.png" "$icons/app.presentcraft.PresentCraft.png"
+  cp "$here/icons/$size.png" "$icons/app.myanmars.presentcraft.png"
 done
 tar -czf "$root/dist/$name.tar.gz" -C "$root/dist" "$name"
 echo "Done: $root/dist/$name.tar.gz ($(du -h "$root/dist/$name.tar.gz" | cut -f1))"

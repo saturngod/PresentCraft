@@ -61,6 +61,13 @@ impl Json {
         }
     }
 
+    /// Removes `key` if present.
+    pub fn remove(&mut self, key: &str) {
+        if let Json::Obj(items) = self {
+            items.retain(|(k, _)| k != key);
+        }
+    }
+
     pub fn parse(text: &str) -> Result<Json, String> {
         let mut p = Parser {
             s: text.trim_start_matches('\u{feff}').as_bytes(),

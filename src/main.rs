@@ -2,6 +2,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod chart;
+mod docinfo;
 mod export;
 mod fonts;
 mod images;
@@ -337,7 +338,7 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([980.0, 560.0])
             .with_title("PresentCraft")
             .with_icon(icon)
-            .with_app_id("app.presentcraft.PresentCraft")
+            .with_app_id("app.myanmars.presentcraft")
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false),
@@ -676,6 +677,14 @@ impl App {
             // Copy the media it uses into a package of its own right away,
             // so the presentation never points at files outside it.
             if let Ok(work) = package::new_work_dir() {
+                // An iA Presenter package's media folder comes along whole,
+                // so the logo and unused files stay with the presentation.
+                let src_assets = doc.root.join(package::ASSETS);
+                if doc.kind == package::Kind::IaPresenter && src_assets.is_dir() {
+                    if let Err(e) = themefile::copy_dir(&src_assets, &work.join(package::ASSETS)) {
+                        self.status = format!("Couldn't copy media: {e}");
+                    }
+                }
                 let images = &self.images;
                 let resolve = |src: &str| images.resolve(src);
                 match package::import_media(&self.text, &work, &resolve) {
@@ -710,20 +719,12 @@ impl App {
             self.import_dir = p.parent().map(|d| d.to_path_buf());
             self.path = None;
         }
-        if let Some(theme) = doc.theme {
-            self.use_doc_theme(theme);
-        } else if let Some(i) = doc.info.as_ref().and_then(|j| j.str("Theme")).and_then(|name| {
-            // No Theme/ folder: pick an installed theme by name.
-            self.presets
-                .iter()
-                .position(|p| p.name.eq_ignore_ascii_case(name.trim()))
-        }) {
-            self.apply_preset(i);
-        }
-        if let Some(info) = &doc.info {
-            self.apply_doc_info(info);
-        }
-        self.doc_info = doc.info.filter(|_| doc.kind == package::Kind::PrCraft);
+        let settings = doc.info.as_ref().map(docinfo::read).unwrap_or_default();
+        self.pick_doc_theme(doc.theme, &settings);
+        self.apply_doc_settings(&settings);
+        // Kept so keys this app doesn't use (iA Presenter's among them)
+        // survive saving.
+        self.doc_info = doc.info.filter(|_| doc.kind != package::Kind::Text);
         self.doc_form = (doc.kind == package::Kind::PrCraft).then_some(doc.form);
         self.dirty = false;
         self.current = 0;
@@ -794,103 +795,84 @@ impl App {
         p
     }
 
-    /// Document settings written to `info.json`.
-    fn doc_info_json(&self) -> json::Json {
-        use json::{obj, Json};
-        let mut info = match &self.doc_info {
-            Some(j @ Json::Obj(_)) => j.clone(),
-            _ => Json::Obj(Vec::new()),
+    /// Chooses the document's theme: its own `Theme/` folder, else a theme
+    /// named in `info.json`, else the iA Presenter template it names.
+    fn pick_doc_theme(&mut self, own: Option<Preset>, d: &docinfo::DocSettings) {
+        if let Some(theme) = own {
+            self.use_doc_theme(theme);
+            return;
+        }
+        let by_name = |presets: &[Preset], name: &str| {
+            presets
+                .iter()
+                .position(|p| p.name.eq_ignore_ascii_case(name.trim()))
         };
-        let look = |dark: bool| if dark { "Dark" } else { "Light" };
-        info.set("Format", "PresentCraft".into());
-        info.set("FormatVersion", 1usize.into());
-        info.set(
-            "Creator",
-            format!("PresentCraft {}", env!("CARGO_PKG_VERSION")).into(),
-        );
-        info.set("Theme", self.presets[self.preset_idx].name.into());
-        info.set("Appearance", look(self.dark).to_ascii_lowercase().into());
-        info.set("Author", self.author.clone().into());
-        info.set("Audience", self.audience.clone().into());
-        info.set("Logo", self.logo.clone().into());
-        info.set("LogoSize", (self.logo_size as f64).into());
-        info.set(
-            "Slots",
-            Json::Arr(
-                self.slots
-                    .iter()
-                    .map(|sl| {
-                        obj([
-                            ("Kind", format!("{:?}", sl.kind).into()),
-                            ("Text", sl.text.clone().into()),
-                        ])
-                    })
-                    .collect(),
-            ),
-        );
-        let gradients = [false, true].map(|d| {
-            let i = usize::from(d);
-            (
-                look(d),
-                obj([
-                    ("Enabled", self.deck_gradient[i].into()),
-                    (
-                        "Colors",
-                        Json::Arr(
-                            self.gradient_colors[i]
-                                .iter()
-                                .map(|c| themefile::color_hex(*c).into())
-                                .collect(),
-                        ),
-                    ),
-                ]),
-            )
-        });
-        info.set("DeckGradient", obj(gradients));
-        info
+        if let Some(i) = d.theme.as_deref().and_then(|n| by_name(&self.presets, n)) {
+            self.apply_preset(i);
+            return;
+        }
+        let Some(template) = d.ia_template.as_deref() else {
+            return;
+        };
+        let ia = themefile::ia_theme_dir(template)
+            .and_then(|dir| themefile::load_variant(&dir, d.ia_preset.as_deref()).ok());
+        match ia {
+            Some(t) => self.use_doc_theme(t),
+            None => {
+                // iA Presenter isn't installed: use an imported copy.
+                if let Some(i) = by_name(&self.presets, template) {
+                    self.apply_preset(i);
+                } else {
+                    self.status = format!(
+                        "This presentation uses the iA Presenter theme \"{template}\". Import it in Settings → Themes to use it here."
+                    );
+                }
+            }
+        }
     }
 
-    /// Restores document settings from `info.json`; missing keys keep the
-    /// current values.
-    fn apply_doc_info(&mut self, info: &json::Json) {
-        if let Some(a) = info.str("Appearance") {
-            self.dark = a.eq_ignore_ascii_case("dark");
+    /// Document settings written to `info.json`.
+    fn doc_info_json(&self) -> json::Json {
+        let d = docinfo::DocSettings {
+            theme: Some(self.presets[self.preset_idx].name.to_string()),
+            ia_template: None,
+            ia_preset: None,
+            dark: Some(self.dark),
+            author: Some(self.author.clone()),
+            audience: Some(self.audience.clone()),
+            logo: Some(self.logo.clone()),
+            logo_size: Some(self.logo_size),
+            slots: Some(self.slots.clone()),
+            gradients: [0, 1].map(|i| Some((self.deck_gradient[i], self.gradient_colors[i].clone()))),
+        };
+        docinfo::write(self.doc_info.as_ref(), &d)
+    }
+
+    /// Applies settings from `info.json`; unset ones keep current values.
+    fn apply_doc_settings(&mut self, d: &docinfo::DocSettings) {
+        if let Some(dark) = d.dark {
+            self.dark = dark;
         }
-        if let Some(a) = info.str("Author") {
-            self.author = a.to_string();
+        if let Some(a) = &d.author {
+            self.author = a.clone();
         }
-        if let Some(a) = info.str("Audience") {
-            self.audience = a.to_string();
+        if let Some(a) = &d.audience {
+            self.audience = a.clone();
         }
-        if let Some(l) = info.str("Logo") {
-            self.logo = l.to_string();
+        if let Some(l) = &d.logo {
+            self.logo = l.clone();
         }
-        if let Some(n) = info.num("LogoSize") {
-            self.logo_size = (n as f32).clamp(0.01, 0.5);
+        if let Some(n) = d.logo_size {
+            self.logo_size = n;
         }
-        for (slot, j) in self.slots.iter_mut().zip(info.arr("Slots")) {
-            if let Some(k) = j.str("Kind") {
-                slot.kind = theme::SlotKind::ALL
-                    .into_iter()
-                    .find(|sk| format!("{sk:?}").eq_ignore_ascii_case(k))
-                    .unwrap_or_default();
-            }
-            slot.text = j.str("Text").unwrap_or_default().to_string();
+        if let Some(slots) = &d.slots {
+            self.slots = slots.clone();
         }
-        if let Some(g) = info.get("DeckGradient") {
-            for (i, look) in ["Light", "Dark"].into_iter().enumerate() {
-                let Some(v) = g.get(look) else { continue };
-                self.deck_gradient[i] = v.bool("Enabled").unwrap_or(false);
-                let colors: Vec<Color32> = v
-                    .arr("Colors")
-                    .iter()
-                    .filter_map(|c| match c {
-                        json::Json::Str(s) => themefile::parse_color(s),
-                        _ => None,
-                    })
-                    .collect();
+        for (i, g) in d.gradients.iter().enumerate() {
+            if let Some((on, colors)) = g {
+                self.deck_gradient[i] = *on;
                 if colors.len() >= 2 {
-                    self.gradient_colors[i] = colors;
+                    self.gradient_colors[i] = colors.clone();
                 }
             }
         }

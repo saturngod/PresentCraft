@@ -127,41 +127,69 @@ opacity: 40%
 
 ## info.json
 
-All keys are optional. Unknown keys are kept when the app saves. Write strict JSON.
+The layout matches iA Presenter's `info.json`:
+- Four top-level keys: `creatorIdentifier`, `type`, `version` and `transient`.
+- PresentCraft's settings go under `"app.myanmars.presentcraft"`.
+- An optional `"net.ia.presenter"` block holds iA Presenter's own settings.
+
+All settings are optional. Write strict JSON. Unknown keys and blocks are kept when the app saves.
 
 ```json
 {
-  "Format": "PresentCraft",
-  "FormatVersion": 1,
-  "Theme": "Midnight",
-  "Appearance": "dark",
-  "Author": "Ada Lovelace",
-  "Audience": "Engineering all-hands",
-  "Logo": "/assets/logo.png",
-  "LogoSize": 0.05,
-  "Slots": [
-    { "Kind": "Empty", "Text": "" },
-    { "Kind": "Empty", "Text": "" },
-    { "Kind": "Custom", "Text": "ACME Corp" },
-    { "Kind": "Logo", "Text": "" },
-    { "Kind": "Empty", "Text": "" },
-    { "Kind": "Number", "Text": "" }
-  ],
-  "DeckGradient": {
-    "Light": { "Enabled": false, "Colors": ["#F6D94C", "#2463D4"] },
-    "Dark": { "Enabled": true, "Colors": ["#0B1020", "#3A1C71"] }
+  "creatorIdentifier": "app.myanmars.presentcraft",
+  "type": "net.daringfireball.markdown",
+  "version": 2,
+  "transient": false,
+  "app.myanmars.presentcraft": {
+    "theme": "Midnight",
+    "appearance": "dark",
+    "author": "Ada Lovelace",
+    "audience": "Engineering all-hands",
+    "logo": "/assets/logo.png",
+    "logoSize": 0.05,
+    "slots": [
+      { "kind": "Empty", "text": "" },
+      { "kind": "Empty", "text": "" },
+      { "kind": "Logo", "text": "" },
+      { "kind": "Empty", "text": "" },
+      { "kind": "Custom", "text": "ACME Corp" },
+      { "kind": "Number", "text": "" }
+    ],
+    "deckGradient": {
+      "light": { "enabled": false, "colors": ["#F6D94C", "#2463D4"] },
+      "dark": { "enabled": true, "colors": ["#0B1020", "#3A1C71"] }
+    }
   }
 }
 ```
 
-| Key | Meaning |
+| Key (under `app.myanmars.presentcraft`) | Meaning |
 | --- | --- |
-| `Theme` | A theme name. It is used only when there is no `Theme/` folder. Built-in themes: `Swiss`, `Contrast Serif`, `Paper`, `Signal`, `Graphite`, `Studio` (the default), `Midnight`, `Editorial`, `Corporate`, `Sunset` |
-| `Appearance` | `"light"` or `"dark"`: which colour variant the slides use |
-| `Author`, `Audience` | Metadata shown in the Design panel |
-| `Logo`, `LogoSize` | The logo picture, and its height as a fraction of slide height (0.01–0.5). The logo appears in slots set to `Logo` |
-| `Slots` | Six header/footer places, in this order: leading, middle and trailing header, then leading, middle and trailing footer. Each `Kind` is `Empty`, `Number` (slide number), `Date`, `Logo` or `Custom` (uses `Text`) |
-| `DeckGradient` | Background colours that blend from the first to the last slide, set separately for light and dark slides. `Colors` needs 2 or more `#RRGGBB` values |
+| `theme` | A theme name. It is used only when there is no `Theme/` folder. Built-in themes: `Swiss`, `Contrast Serif`, `Paper`, `Signal`, `Graphite`, `Studio` (the default), `Midnight`, `Editorial`, `Corporate`, `Sunset` |
+| `appearance` | `"light"` or `"dark"`: which colour variant the slides use |
+| `author`, `audience` | Metadata shown in the Design panel |
+| `logo`, `logoSize` | The logo picture (put it in `assets/`), and its height as a fraction of slide height (about 0.02–0.08). The logo appears in slots set to `Logo` |
+| `slots` | Six header/footer places, in this order: leading, middle and trailing header, then leading, middle and trailing footer. Each `kind` is `Empty`, `Number` (slide number), `Date`, `Logo` or `Custom` (uses `text`) |
+| `deckGradient` | Background colours that blend from the first to the last slide, set separately for light and dark slides. `colors` needs 2 or more `#RRGGBB` values |
+
+### iA Presenter's block
+
+The app reads iA Presenter's settings and keeps them up to date when it saves. You don't need to write them. When you do (or when converting an `.iapresenter`), use iA's keys:
+
+```json
+"net.ia.presenter": {
+  "template": "tokyo",
+  "preset": "Default",
+  "logo": "/assets/logo.png",
+  "logo-size": "7.5",
+  "headertrailing": "logo",
+  "footertrailing": "slideNumber"
+}
+```
+
+- **`template` and `preset`:** an iA Presenter theme folder name and its preset name. They are used only when there is no `Theme/` folder and no `theme` key. The app loads the theme from an installed iA Presenter, or from a theme with that name imported in Settings → Themes.
+- **`logo-size`:** a percentage of slide height, written as text (`"7.5"` means 0.075).
+- **Header and footer places:** the keys are `headerleading`, `headermiddle`, `headertrailing`, `footerleading`, `footermiddle` and `footertrailing`. Each value is `logo`, `date`, `slideNumber`, or your own custom text.
 
 ## Custom theme (Theme/)
 
@@ -224,6 +252,6 @@ Include a `Theme/` folder only for a look the built-in themes can't give. A `The
 - Put every local picture or video in `assets/` and reference it as `/assets/<name>`. Write spaces as `%20`, for example `/assets/team%20photo.jpg`. Absolute paths and paths outside the package break on another computer.
 - Web addresses (`https://…`) are fine. The app downloads and caches them.
 - Keep `text.md` as UTF-8 with LF line endings.
-- Never put PresentCraft-only data anywhere other than `info.json` or `Theme/`. The app preserves other files in a folder package but doesn't read them.
+- Never put PresentCraft-only data anywhere other than the `app.myanmars.presentcraft` block of `info.json` or `Theme/`. The app preserves other files in a folder package but doesn't read them.
 - **Zip form:** members go at the top level (`text.md`, not `Talk/text.md`, though the app accepts one wrapping folder). Store media uncompressed and Deflate text. The helper's `--zip` and `zip` commands do this.
 - **Editing an existing package:** change `text.md` and add files to `assets/`, leaving other members alone. For a zip, `unzip` it, edit the folder, then `zip` it back.
