@@ -11,6 +11,7 @@ mod inline;
 mod inspector;
 mod json;
 mod mechanics;
+mod optionicons;
 #[cfg(target_os = "macos")]
 mod macos_open;
 mod package;
@@ -125,6 +126,8 @@ pub const INSPECTOR_W: f32 = 307.0;
 const EDITOR_COLUMN: f32 = 700.0;
 const EDITOR_FONT: f32 = 18.5;
 const EDITOR_LINE: f32 = 31.7;
+/// Gap before an option line, in editor-font units, that holds its icon.
+const OPTION_GAP: f32 = 1.5;
 /// Default words per minute used for the speaking-time estimate.
 const SPEECH_WPM: f32 = mechanics::SPEECH_WPM as f32;
 
@@ -2440,8 +2443,11 @@ impl App {
                 let starts: Vec<usize> = self.slides.iter().map(|s| s.start_char).collect();
                 let editor_settings = self.settings.clone();
                 let current = self.current;
+                // option-line icons found by the last layout: (char, key, colour)
+                let icons = std::cell::RefCell::new(Vec::new());
                 let mut layouter = |ui: &egui::Ui, s: &str, wrap: f32| {
-                    let mut job = highlight(s, &editor_settings, current);
+                    let mut job =
+                        highlight(s, &editor_settings, current, &mut icons.borrow_mut());
                     job.wrap.max_width = wrap;
                     let g = ui.fonts(|f| f.layout_job(job));
                     hanging_indent(g, s)
@@ -2471,6 +2477,20 @@ impl App {
                                     self.cursor = c;
                                     self.sel_start = s;
                                     self.scroll_thumb = true;
+                                }
+                            }
+                            {
+                                // icons sit in the gap left before each option line
+                                let size = editor_settings.editor_font * 0.78;
+                                let gap = editor_settings.editor_font * OPTION_GAP;
+                                let painter = ui.painter();
+                                for (ch, key, color) in icons.borrow().iter() {
+                                    let r = out.galley.pos_from_ccursor(CCursor::new(*ch));
+                                    let c = pos2(
+                                        out.galley_pos.x + r.left() - gap * 0.55,
+                                        out.galley_pos.y + r.center().y - size * 0.3,
+                                    );
+                                    optionicons::paint(painter, key, c, size, *color);
                                 }
                             }
                             if !changed {
@@ -2828,8 +2848,15 @@ fn hanging_indent(g: std::sync::Arc<egui::Galley>, text: &str) -> std::sync::Arc
 /// Editor colouring: on-slide text (headings, tabbed lines,
 /// pictures, tables) in the slide's colour, spoken text light grey, slide
 /// breaks dim grey, tabs shown as an arrow.
-fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJob {
+fn highlight(
+    s: &str,
+    settings: &settings::Settings,
+    current: usize,
+    icons: &mut Vec<(usize, &'static str, Color32)>,
+) -> LayoutJob {
+    icons.clear();
     let mut job = LayoutJob::default();
+    let mut at = 0usize; // char index of the current line
     let reg = FontId::new(
         settings.editor_font,
         if settings.typography == 2 {
@@ -2857,6 +2884,8 @@ fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJo
         ..Default::default()
     };
     for line in s.split_inclusive('\n') {
+        let line_at = at;
+        at += line.chars().count();
         let body = line.trim_end_matches('\n');
         let t = body.trim();
         let lower = t.to_ascii_lowercase();
@@ -2880,33 +2909,7 @@ fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJo
             prev_media = false;
             continue;
         }
-        let is_kv = t
-            .split_once(':')
-            .map(|(k, _)| {
-                [
-                    "size",
-                    "x",
-                    "y",
-                    "background",
-                    "opacity",
-                    "filter",
-                    "title",
-                    "caption",
-                    "position",
-                    "chart",
-                    "type",
-                    "xlabel",
-                    "ylabel",
-                    "colors",
-                    "xformat",
-                    "legend",
-                    "color-type",
-                    "bar-type",
-                    "orientation",
-                ]
-                .contains(&k.trim().to_ascii_lowercase().as_str())
-            })
-            .unwrap_or(false);
+        let is_kv = optionicons::key_of(t).is_some();
         let is_media = !t.contains(' ')
             && !t.is_empty()
             && (lower.starts_with("http")
@@ -2948,7 +2951,15 @@ fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJo
                 }
             }
         } else if media_line && !is_media && (is_kv || t.starts_with('[')) {
-            job.append(line, 0.0, fmt(&reg, quiet));
+            if let Some(key) = optionicons::key_of(t) {
+                let lead = line.len() - line.trim_start().len();
+                let (ws, rest) = line.split_at(lead);
+                job.append(ws, 0.0, fmt(&reg, quiet));
+                icons.push((line_at + ws.chars().count(), key, quiet));
+                job.append(rest, settings.editor_font * OPTION_GAP, fmt(&reg, quiet));
+            } else {
+                job.append(line, 0.0, fmt(&reg, quiet));
+            }
         } else if media_line {
             job.append(line, 0.0, fmt(&reg, col));
         } else if let Some(rest) = line.strip_prefix('\t') {

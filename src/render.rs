@@ -86,7 +86,6 @@ fn put_text(
 #[derive(Clone, Copy, PartialEq)]
 enum Anchor {
     Top,
-    Bottom,
     Center,
 }
 
@@ -246,7 +245,7 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
             return colors.body;
         }
         let (anchor, centered) = if cover {
-            (Anchor::Bottom, false)
+            (Anchor::Center, false)
         } else if title {
             (Anchor::Center, true)
         } else {
@@ -794,7 +793,6 @@ fn draw_group(
     let mut y = match anchor {
         _ if flex_count > 0 => rect.top(),
         Anchor::Top => rect.top(),
-        Anchor::Bottom => rect.bottom() - content_h,
         Anchor::Center => rect.center().y - content_h / 2.0,
     };
     let x = if centered {
