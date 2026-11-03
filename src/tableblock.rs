@@ -193,7 +193,7 @@ impl TableBlock {
         }
     }
 
-    fn cells(&self, lines: &[String]) -> (Vec<Vec<String>>, Vec<String>) {
+    pub(crate) fn cells(&self, lines: &[String]) -> (Vec<Vec<String>>, Vec<String>) {
         let mut rows = Vec::new();
         let mut aligns = Vec::new();
         for (k, l) in lines[self.start..self.table_end].iter().enumerate() {
@@ -214,7 +214,7 @@ impl TableBlock {
         (rows, aligns)
     }
 
-    fn write(&mut self, lines: &mut Vec<String>, rows: Vec<Vec<String>>, aligns: Vec<String>) {
+    pub(crate) fn write(&mut self, lines: &mut Vec<String>, rows: Vec<Vec<String>>, aligns: Vec<String>) {
         let n = rows
             .iter()
             .map(|r| r.len())

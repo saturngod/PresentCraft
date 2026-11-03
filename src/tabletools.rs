@@ -1,6 +1,7 @@
 //! Floating toolbar over the table under the cursor:
 //! [table] [chart] [•••]. The ••• menu changes chart type, caption, axis
-//! labels and colours, or reformats/transposes the table. The data rows are
+//! labels and colours, reformats/transposes the table, or opens it in the
+//! spreadsheet-style table editor. The data rows are
 //! never changed by a type switch — only the `Chart:` line is rewritten.
 
 use crate::parse::{ChartKind, ColorType};
@@ -16,6 +17,7 @@ enum Act {
     Meta(&'static str, &'static str, Option<String>),
     Reformat,
     Transpose,
+    EditTable,
     SaveCsv,
 }
 
@@ -592,6 +594,9 @@ impl App {
                     if check(ui, false, "Transpose Rows and Columns") {
                         act = Some(Act::Transpose);
                     }
+                    if check(ui, false, "Edit in Table Editor…") {
+                        act = Some(Act::EditTable);
+                    }
                     if check(ui, false, "Save Data as CSV…") {
                         act = Some(Act::SaveCsv);
                     }
@@ -615,6 +620,10 @@ impl App {
             }
             Act::Reformat => block.reformat(&mut lines),
             Act::Transpose => block.transpose(&mut lines),
+            Act::EditTable => {
+                self.open_table_editor(block.start);
+                return;
+            }
             Act::SaveCsv => {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("CSV", &["csv"])

@@ -19,6 +19,7 @@ mod render;
 mod settings;
 mod syntax;
 mod tableblock;
+mod tableeditor;
 mod tabletools;
 mod theme;
 mod themefile;
@@ -461,6 +462,8 @@ pub struct App {
     pub table_rows: usize,
     pub table_values: bool,
     pub table_display: usize,
+    /// The open "Edit in Table Editor…" dialog.
+    pub table_editor: Option<tableeditor::TableEditor>,
     /// Cursor (char index) and selection start in the editor.
     pub cursor: usize,
     pub sel_start: usize,
@@ -557,6 +560,7 @@ impl App {
             table_rows: 4,
             table_values: mechanics::TABLE_VALUES,
             table_display: 0,
+            table_editor: None,
             cursor: 0,
             sel_start: 0,
             jump_to: None,
@@ -3049,6 +3053,7 @@ impl eframe::App for App {
         }
         self.inspector(ctx);
         self.editor(ctx);
+        self.table_editor_ui(ctx);
         self.settings_window(ctx);
     }
 }
