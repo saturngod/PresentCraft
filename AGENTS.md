@@ -32,6 +32,10 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 - `src/export.rs`: PDF, PowerPoint, image, and HTML export.
 - `src/mechanics.rs`: application defaults and editor behavior constants.
 
+## UI design
+
+Follow `DESIGN.md` for colours, typography, spacing and component rules (buttons, text fields, menus, inspector rows) when adding or changing UI.
+
 ## Evidence and maintenance
 
 Preserve the existing appearance during unrelated changes. Avoid hand-editing `target/` build products or treating old screenshots as fresh validation. Keep `Cargo.lock` consistent with intentional dependency changes and update the README when build commands or launch options change.
