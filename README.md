@@ -43,7 +43,9 @@ When the document is saved, pictures and videos you add or drop that sit in the 
 
 Themes bundle colours, title and body fonts, and text size. Selecting a theme applies the full bundle, replacing manual design overrides. You can adjust fonts and size in Design afterward; Duplicate Theme in Settings captures those choices in a custom theme.
 
-In **Design → Header & Footer**, select any of the six slots and choose **Logo**. Select an image or drop it onto the logo preview, then adjust **Size**. Each slot can use a different image; logos keep their aspect ratio and appear in presentations and all export formats. **Remove Logo** clears the selected slot’s image. Like the other Design controls, these choices apply to the current presentation session.
+In **Design → Colors**, click a **Background** swatch and choose **Gradient**. Pick a preset or edit the color stops in the picker; choose **Solid** to return to the theme’s background colors. Light and dark appearances have independent background modes and gradient colors. The first slide uses the first color, the last uses the last color, and slides between them blend evenly through the color stops. Add or remove colors, or reverse their order. A one-slide deck uses the first color. Text automatically switches between black and white for contrast; theme decorations and cover inversion are replaced by the chosen background, while background pictures and videos still appear on top. The gradient applies to thumbnails, presenting, and all exports. Like other Design overrides, it lasts for the current session; selecting a theme turns it off, and Duplicate Theme saves the base theme without the deck gradient.
+
+In **Design → Logo**, select an image or drop it onto the logo preview, then adjust **Size**. The presentation has one logo: in **Design → Header & Footer**, set any of the six places to **Logo** to show it there — one place or several. Logos keep their aspect ratio and appear in presentations and all export formats. **Remove Logo** clears the image everywhere. Like the other Design controls, these choices apply to the current presentation session.
 
 ## Release packages
 

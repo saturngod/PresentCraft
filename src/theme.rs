@@ -19,6 +19,10 @@ pub struct Theme {
     pub slots: [Slot; 6],
     /// Today's date, shown by `SlotKind::Date` slots.
     pub date: String,
+    /// The deck's one logo, drawn in every slot set to `SlotKind::Logo`.
+    pub logo: String,
+    /// Logo height as a fraction of slide height.
+    pub logo_size: f32,
     pub decor: Decor,
 }
 
@@ -59,9 +63,6 @@ pub struct Slot {
     pub kind: SlotKind,
     /// Text for `SlotKind::Custom`.
     pub text: String,
-    pub logo: String,
-    /// Logo height as a fraction of slide height.
-    pub logo_size: f32,
 }
 
 impl Default for Slot {
@@ -69,8 +70,6 @@ impl Default for Slot {
         Self {
             kind: SlotKind::Empty,
             text: String::new(),
-            logo: String::new(),
-            logo_size: 0.05,
         }
     }
 }
@@ -189,7 +188,6 @@ mod slot_tests {
         s.kind = SlotKind::Date;
         assert_eq!(s.resolve(3, "02/11/2026"), "02/11/2026");
         s.kind = SlotKind::Logo;
-        s.logo = "logo.png".into();
         assert_eq!(s.resolve(3, "02/11/2026"), "");
         s.kind = SlotKind::Custom;
         s.text = " Saturngod ".into();
@@ -752,4 +750,67 @@ pub fn install_fonts(ctx: &egui::Context) {
         }
     }
     ctx.set_fonts(fonts);
+}
+
+/// Evenly spaced color stops sampled across the deck, including both endpoints.
+pub fn deck_color(stops: &[Color32], index: usize, count: usize) -> Option<Color32> {
+    let first = *stops.first()?;
+    if stops.len() == 1 || count <= 1 {
+        return Some(first);
+    }
+    let position = index.min(count - 1) as f32 / (count - 1) as f32 * (stops.len() - 1) as f32;
+    let left = (position.floor() as usize).min(stops.len() - 2);
+    let t = position - left as f32;
+    let a = stops[left].to_array();
+    let b = stops[left + 1].to_array();
+    let channel = |i: usize| (a[i] as f32 + (b[i] as f32 - a[i] as f32) * t).round() as u8;
+    Some(Color32::from_rgb(channel(0), channel(1), channel(2)))
+}
+
+/// Choose the higher-contrast black or white foreground using sRGB luminance.
+pub fn contrast_text(bg: Color32) -> Color32 {
+    let linear = |v: u8| {
+        let v = v as f32 / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * linear(bg.r()) + 0.7152 * linear(bg.g()) + 0.0722 * linear(bg.b());
+    if luminance > 0.179 {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
+}
+
+#[cfg(test)]
+mod gradient_tests {
+    use super::*;
+
+    #[test]
+    fn deck_endpoints_and_intermediate_stops() {
+        let stops = [hex(0xFFFF00), hex(0x00FF00), hex(0x0000FF)];
+        assert_eq!(deck_color(&stops, 0, 10), Some(stops[0]));
+        assert_eq!(deck_color(&stops, 9, 10), Some(stops[2]));
+        assert_eq!(deck_color(&stops, 2, 5), Some(stops[1]));
+        assert_eq!(deck_color(&stops, 1, 5), Some(hex(0x80FF00)));
+        assert_eq!(deck_color(&stops, 100, 10), Some(stops[2]));
+    }
+
+    #[test]
+    fn short_decks_and_empty_stops_are_safe() {
+        let stops = [Color32::RED, Color32::BLUE];
+        assert_eq!(deck_color(&stops, 0, 1), Some(Color32::RED));
+        assert_eq!(deck_color(&stops, 0, 0), Some(Color32::RED));
+        assert_eq!(deck_color(&stops[..1], 9, 10), Some(Color32::RED));
+        assert_eq!(deck_color(&[], 0, 10), None);
+    }
+
+    #[test]
+    fn text_contrasts_with_both_ends() {
+        assert_eq!(contrast_text(hex(0xF6D94C)), Color32::BLACK);
+        assert_eq!(contrast_text(hex(0x2463D4)), Color32::WHITE);
+    }
 }

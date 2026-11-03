@@ -420,12 +420,17 @@ pub struct App {
     pub dark: bool,
     pub light_override: Option<Palette>,
     pub dark_override: Option<Palette>,
+    pub deck_gradient: [bool; 2],
+    pub gradient_colors: [Vec<Color32>; 2],
     pub title_font: FontChoice,
     pub body_font: FontChoice,
     pub size_idx: usize,
     /// Header and footer slots, and the one selected in the inspector.
     pub slots: [theme::Slot; 6],
     pub slot_sel: usize,
+    /// The deck's one logo (shown by every slot set to Logo) and its height.
+    pub logo: String,
+    pub logo_size: f32,
     pub logo_drop_rect: Option<egui::Rect>,
     /// Today's date (refreshed when it is shown in the inspector).
     pub today: String,
@@ -498,11 +503,15 @@ impl App {
             preset_idx: default_theme,
             light_override: None,
             dark_override: None,
+            deck_gradient: [false; 2],
+            gradient_colors: std::array::from_fn(|_| vec![hex(0xF6D94C), hex(0x2463D4)]),
             title_font: FontChoice::Theme,
             body_font: FontChoice::Theme,
             size_idx: 1,
             slots: Default::default(),
             slot_sel: 5,
+            logo: String::new(),
+            logo_size: 0.05,
             logo_drop_rect: None,
             today: theme::today(),
             author: String::new(),
@@ -550,6 +559,7 @@ impl App {
         self.dark = self.presets[i].starts_dark;
         self.light_override = None;
         self.dark_override = None;
+        self.deck_gradient = [false; 2];
         self.title_font = FontChoice::Theme;
         self.body_font = FontChoice::Theme;
         self.size_idx = self.presets[i].size_idx;
@@ -593,6 +603,8 @@ impl App {
             size_scale: SIZES[if current { self.size_idx } else { p.size_idx }].1,
             slots: self.slots.clone(),
             date: self.today.clone(),
+            logo: self.logo.clone(),
+            logo_size: self.logo_size,
             decor: p.decor,
         }
     }
@@ -1105,7 +1117,6 @@ impl App {
             if self.tab == inspector::Tab::Design
                 && !self.presenting
                 && !self.settings_open
-                && self.slots[self.slot_sel.min(5)].kind == theme::SlotKind::Logo
                 && self.logo_drop_rect.is_some_and(|r| {
                     ctx.input(|i| i.pointer.latest_pos().is_some_and(|p| r.contains(p)))
                 })
@@ -1114,7 +1125,7 @@ impl App {
                     "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp"
                 )
             {
-                self.slots[self.slot_sel.min(5)].logo = p.to_string_lossy().into_owned();
+                self.logo = p.to_string_lossy().into_owned();
                 continue;
             }
             if matches!(ext.as_str(), "md" | "markdown" | "txt" | "text") {
@@ -1238,7 +1249,20 @@ impl App {
     }
 
     pub fn paint_slide(&mut self, painter: &egui::Painter, rect: Rect, idx: usize) {
-        let theme = self.theme();
+        let mut theme = self.theme();
+        if self.deck_gradient[usize::from(self.dark)] {
+            if let Some(bg) = theme::deck_color(
+                &self.gradient_colors[usize::from(self.dark)],
+                idx,
+                self.slides.len(),
+            ) {
+                theme.bg = bg;
+                theme.body = theme::contrast_text(bg);
+                theme.title = theme.body;
+                theme.invert_titles = false;
+                theme.decor = theme::Decor::None;
+            }
+        }
         self.paint_slide_with(painter, rect, idx, &theme);
     }
 

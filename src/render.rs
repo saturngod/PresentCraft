@@ -134,9 +134,9 @@ pub fn draw_slide(cx: &mut Ctx, rect: Rect, slide: &Slide, number: usize) {
     ];
     for (slot, (pos, anchor)) in theme.slots.iter().zip(places) {
         if slot.kind == crate::theme::SlotKind::Logo {
-            if !slot.logo.is_empty() {
-                if let Some((texture, size)) = cx.images.get(painter.ctx(), &slot.logo, None) {
-                    let height = rect.height() * slot.logo_size.clamp(0.02, 0.08);
+            if !theme.logo.is_empty() {
+                if let Some((texture, size)) = cx.images.get(painter.ctx(), &theme.logo, None) {
+                    let height = rect.height() * theme.logo_size.clamp(0.02, 0.08);
                     let width =
                         (height * size[0] as f32 / size[1].max(1) as f32).min(rect.width() * 0.25);
                     let height = height.min(width * size[1] as f32 / size[0].max(1) as f32);
