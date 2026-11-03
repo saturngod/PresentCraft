@@ -634,6 +634,14 @@ pub fn install_fonts(ctx: &egui::Context) {
             fam.push("symbols".to_string());
         }
     }
+    // Other scripts (Myanmar, Thai, Indic, CJK, Arabic, …) from system fonts,
+    // after everything else so existing glyphs keep their look.
+    for (name, data) in script_fallbacks() {
+        fonts.font_data.insert(name.clone(), data.clone());
+        for fam in fonts.families.values_mut() {
+            fam.push(name.clone());
+        }
+    }
     // UI text in a clean system sans.
     if fonts.font_data.contains_key("sans") {
         if let Some(p) = fonts.families.get_mut(&FontFamily::Proportional) {
@@ -641,6 +649,262 @@ pub fn install_fonts(ctx: &egui::Context) {
         }
     }
     ctx.set_fonts(fonts);
+}
+
+/// System fonts for scripts the main fonts lack, one per script (first file
+/// found wins). Read once and reused whenever fonts are reinstalled.
+fn script_fallbacks() -> &'static [(String, Arc<FontData>)] {
+    static CACHE: std::sync::OnceLock<Vec<(String, Arc<FontData>)>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| {
+        let mac = "/System/Library/Fonts/";
+        let win = windows_fonts_dir();
+        let noto = [
+            "/usr/share/fonts/truetype/noto/",
+            "/usr/share/fonts/noto/",
+            "/usr/share/fonts/google-noto/",
+            "/usr/share/fonts/google-noto-vf/",
+            "/usr/share/fonts/opentype/noto/",
+            "/usr/share/fonts/noto-cjk/",
+            "/usr/share/fonts/google-noto-cjk/",
+        ];
+        // Each script: macOS files, Windows files, then Linux Noto file names.
+        let scripts: &[(&str, &[&str], &[&str], &[&str])] = &[
+            (
+                "myanmar",
+                &["NotoSansMyanmar.ttc", "Supplemental/Myanmar Sangam MN.ttc"],
+                &["mmrtext.ttf"],
+                &[
+                    "NotoSansMyanmar-Regular.ttf",
+                    "NotoSansMyanmar-Regular.otf",
+                    "NotoSansMyanmar[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "thai",
+                &["ThonburiUI.ttc", "Supplemental/Thonburi.ttc"],
+                &["leelawui.ttf", "tahoma.ttf"],
+                &["NotoSansThai-Regular.ttf", "NotoSansThai[wdth,wght].ttf"],
+            ),
+            (
+                "lao",
+                &["Supplemental/Lao Sangam MN.ttf"],
+                &["leelawui.ttf"],
+                &["NotoSansLao-Regular.ttf", "NotoSansLao[wdth,wght].ttf"],
+            ),
+            (
+                "khmer",
+                &["Supplemental/Khmer Sangam MN.ttf"],
+                &["leelawui.ttf", "daunpenh.ttf"],
+                &["NotoSansKhmer-Regular.ttf", "NotoSansKhmer[wdth,wght].ttf"],
+            ),
+            (
+                "indic",
+                &["Kohinoor.ttc", "Supplemental/Devanagari Sangam MN.ttc"],
+                &["nirmala.ttc", "nirmala.ttf"],
+                &[
+                    "NotoSansDevanagari-Regular.ttf",
+                    "NotoSansDevanagari[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "bengali",
+                &["KohinoorBangla.ttc"],
+                &["nirmala.ttc", "nirmala.ttf"],
+                &[
+                    "NotoSansBengali-Regular.ttf",
+                    "NotoSansBengali[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "tamil",
+                &["Supplemental/Tamil Sangam MN.ttc"],
+                &[],
+                &["NotoSansTamil-Regular.ttf", "NotoSansTamil[wdth,wght].ttf"],
+            ),
+            (
+                "telugu",
+                &["KohinoorTelugu.ttc", "Supplemental/Telugu Sangam MN.ttc"],
+                &[],
+                &[
+                    "NotoSansTelugu-Regular.ttf",
+                    "NotoSansTelugu[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "kannada",
+                &["NotoSansKannada.ttc", "Supplemental/Kannada Sangam MN.ttc"],
+                &[],
+                &[
+                    "NotoSansKannada-Regular.ttf",
+                    "NotoSansKannada[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "malayalam",
+                &["Supplemental/Malayalam Sangam MN.ttc"],
+                &[],
+                &[
+                    "NotoSansMalayalam-Regular.ttf",
+                    "NotoSansMalayalam[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "gujarati",
+                &[
+                    "KohinoorGujarati.ttc",
+                    "Supplemental/Gujarati Sangam MN.ttc",
+                ],
+                &[],
+                &[
+                    "NotoSansGujarati-Regular.ttf",
+                    "NotoSansGujarati[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "gurmukhi",
+                &["Supplemental/Gurmukhi Sangam MN.ttc"],
+                &[],
+                &[
+                    "NotoSansGurmukhi-Regular.ttf",
+                    "NotoSansGurmukhi[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "oriya",
+                &["NotoSansOriya.ttc", "Supplemental/Oriya Sangam MN.ttc"],
+                &[],
+                &["NotoSansOriya-Regular.ttf", "NotoSansOriya[wdth,wght].ttf"],
+            ),
+            (
+                "sinhala",
+                &["Supplemental/Sinhala Sangam MN.ttc"],
+                &["nirmala.ttc", "nirmala.ttf"],
+                &[
+                    "NotoSansSinhala-Regular.ttf",
+                    "NotoSansSinhala[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "tibetan",
+                &["Supplemental/Kokonor.ttf"],
+                &["himalaya.ttf"],
+                &[
+                    "NotoSerifTibetan-Regular.ttf",
+                    "NotoSansTibetan-Regular.ttf",
+                ],
+            ),
+            (
+                "arabic",
+                &["SFArabic.ttf", "GeezaPro.ttc"],
+                &["segoeui.ttf", "arial.ttf"],
+                &[
+                    "NotoSansArabic-Regular.ttf",
+                    "NotoSansArabic[wdth,wght].ttf",
+                    "NotoNaskhArabic-Regular.ttf",
+                ],
+            ),
+            (
+                "hebrew",
+                &["SFHebrew.ttf"],
+                &["segoeui.ttf"],
+                &[
+                    "NotoSansHebrew-Regular.ttf",
+                    "NotoSansHebrew[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "armenian",
+                &["SFArmenian.ttf", "NotoSansArmenian.ttc"],
+                &["segoeui.ttf"],
+                &[
+                    "NotoSansArmenian-Regular.ttf",
+                    "NotoSansArmenian[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "georgian",
+                &["SFGeorgian.ttf"],
+                &["segoeui.ttf"],
+                &[
+                    "NotoSansGeorgian-Regular.ttf",
+                    "NotoSansGeorgian[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "ethiopic",
+                &["Supplemental/KefaIII.ttf"],
+                &["ebrima.ttf"],
+                &[
+                    "NotoSansEthiopic-Regular.ttf",
+                    "NotoSansEthiopic[wdth,wght].ttf",
+                ],
+            ),
+            (
+                "cjk",
+                &["Hiragino Sans GB.ttc", "ヒラギノ角ゴシック W3.ttc"],
+                &[
+                    "msyh.ttc",
+                    "msyh.ttf",
+                    "YuGothR.ttc",
+                    "meiryo.ttc",
+                    "simsun.ttc",
+                ],
+                &[
+                    "NotoSansCJK-Regular.ttc",
+                    "NotoSansCJKsc-Regular.otf",
+                    "NotoSansCJK-VF.ttc",
+                    "NotoSansSC-Regular.otf",
+                ],
+            ),
+            (
+                "korean",
+                &["AppleSDGothicNeo.ttc"],
+                &["malgun.ttf"],
+                &[
+                    "NotoSansCJK-Regular.ttc",
+                    "NotoSansCJKkr-Regular.otf",
+                    "NotoSansKR-Regular.otf",
+                ],
+            ),
+            (
+                "unicode",
+                &["Supplemental/Arial Unicode.ttf"],
+                &["seguisym.ttf"],
+                &["DejaVuSans.ttf", "FreeSans.ttf"],
+            ),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for (name, mac_files, win_files, linux_files) in scripts {
+            let mut candidates: Vec<String> = Vec::new();
+            candidates.extend(mac_files.iter().map(|f| format!("{mac}{f}")));
+            candidates.extend(win_files.iter().map(|f| format!("{win}{f}")));
+            for dir in noto.iter().chain(
+                [
+                    "/usr/share/fonts/truetype/dejavu/",
+                    "/usr/share/fonts/TTF/",
+                    "/usr/share/fonts/truetype/freefont/",
+                ]
+                .iter(),
+            ) {
+                candidates.extend(linux_files.iter().map(|f| format!("{dir}{f}")));
+            }
+            // Skip a file already loaded for an earlier script (e.g. Nirmala).
+            let Some((path, bytes)) = candidates
+                .into_iter()
+                .filter(|p| !seen.contains(p))
+                .find_map(|p| std::fs::read(&p).ok().map(|b| (p, b)))
+            else {
+                continue;
+            };
+            seen.insert(path);
+            out.push((
+                format!("script-{name}"),
+                Arc::new(FontData::from_owned(bytes)),
+            ));
+        }
+        out
+    })
 }
 
 /// Evenly spaced color stops sampled across the deck, including both endpoints.

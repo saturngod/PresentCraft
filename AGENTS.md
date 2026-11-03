@@ -2,7 +2,7 @@
 
 ## Scope and stack
 
-Work in the project root (the directory containing `Cargo.toml`). This is a Rust 2021 native desktop application using egui/eframe 0.31.1, not a website or SwiftUI app. Read `README.md` for build and launch instructions. Keep changes focused on the user's request and preserve existing work.
+Work in the project root (the directory containing `Cargo.toml`). This is a Rust 2021 native desktop application using egui/eframe 0.37.0, not a website or SwiftUI app. Read `README.md` for build and launch instructions. Keep changes focused on the user's request and preserve existing work.
 
 ## Build and verify
 

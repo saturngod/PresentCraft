@@ -185,7 +185,7 @@ fn item_row(ui: &mut egui::Ui, it: &Item) -> bool {
         FontId::new(12.5, crate::theme::family(false, true, false)),
         crate::settings::pal().icon,
     );
-    let g = ui.fonts(|f| f.layout_job(it.label.clone()));
+    let g = ui.fonts_mut(|f| f.layout_job(it.label.clone()));
     p.galley(
         pos2(r.left() + 46.0, r.center().y - g.size().y / 2.0),
         g,
@@ -400,9 +400,9 @@ impl App {
         let resp = resp.on_hover_text("Choose a theme");
         let popup_id = ui.make_persistent_id("theme-popup");
         if resp.clicked() {
-            ui.memory_mut(|m| m.toggle_popup(popup_id));
+            egui::Popup::toggle_id(ui.ctx(), popup_id);
         }
-        let open = ui.memory(|m| m.is_popup_open(popup_id));
+        let open = egui::Popup::is_id_open(ui.ctx(), popup_id);
         let fill = if resp.hovered() || open {
             pal.hover
         } else {
@@ -429,8 +429,7 @@ impl App {
             pal.text_hi,
         );
 
-        egui::popup_below_widget(
-            ui,
+        crate::tabletools::popup_below(
             popup_id,
             &resp,
             egui::PopupCloseBehavior::CloseOnClickOutside,
@@ -475,7 +474,7 @@ impl App {
                                     pal.text_hi
                                 },
                             );
-                            if selected && !r.hovered() && ui.memory(|m| m.is_popup_open(popup_id))
+                            if selected && !r.hovered() && egui::Popup::is_id_open(ui.ctx(), popup_id)
                             {
                                 // Keep the chosen theme in view when the list opens.
                                 if !ui.ctx().memory(|m| {
@@ -491,13 +490,13 @@ impl App {
                             }
                             if r.clicked() {
                                 self.preset_idx = i;
-                                ui.memory_mut(|m| m.close_popup());
+                                egui::Popup::close_all(ui.ctx());
                             }
                         }
                     });
             },
         );
-        if !ui.memory(|m| m.is_popup_open(popup_id)) {
+        if !egui::Popup::is_id_open(ui.ctx(), popup_id) {
             ui.ctx()
                 .memory_mut(|m| m.data.remove::<bool>(popup_id.with("scrolled")));
         }
@@ -618,10 +617,11 @@ impl App {
         }
     }
 
-    pub fn inspector(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::right("inspector")
+    pub fn inspector(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
+        egui::Panel::right("inspector")
             .resizable(false)
-            .exact_width(INSPECTOR_W)
+            .exact_size(INSPECTOR_W)
             .frame(
                 egui::Frame::new()
                     .fill(crate::settings::pal().inspector_bg)
@@ -632,7 +632,7 @@ impl App {
                         bottom: 0,
                     }),
             )
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let full = ui.max_rect();
                 ui.painter().line_segment(
                     [
@@ -1319,10 +1319,10 @@ impl App {
         let btn = egui::Button::new(RichText::new("       ").size(14.0))
             .min_size(gear.size())
             .corner_radius(7.0);
-        let menu = egui::menu::menu_custom_button(&mut child, btn, |ui| {
+        let menu = crate::tabletools::menu_from_button(&mut child, btn, |ui| {
             crate::tabletools::style_menu(ui);
             if ui.button("Add Images or Videos…").clicked() {
-                ui.close_menu();
+                ui.close();
                 self.pick_media();
             }
             let assets = self
@@ -1335,19 +1335,19 @@ impl App {
                 .add_enabled(assets.is_some(), egui::Button::new("Show Media Folder"))
                 .clicked()
             {
-                ui.close_menu();
+                ui.close();
                 if let Some(d) = assets {
                     crate::open_external(d.as_os_str());
                 }
             }
             ui.separator();
             if ui.button("Clear Thumbnails Cache").clicked() {
-                ui.close_menu();
+                ui.close();
                 self.images.clear_cache();
                 self.media_cache = None;
             }
         });
-        let gr = menu.response.rect;
+        let gr = menu.rect;
         paint_icon(
             ui.painter(),
             Rect::from_min_size(gr.min, vec2(28.0, gr.height())),
@@ -1360,7 +1360,7 @@ impl App {
             Icon::ChevronDown,
             pal.text_hi,
         );
-        menu.response.on_hover_text("Media options");
+        menu.on_hover_text("Media options");
 
         ui.add_space(10.0);
         ui.add(
@@ -1510,16 +1510,16 @@ impl App {
             .context_menu(|ui| {
                 crate::tabletools::style_menu(ui);
                 if ui.button("Insert at Cursor").clicked() {
-                    ui.close_menu();
+                    ui.close();
                     action = Some(MediaAction::Insert(it.src.clone()));
                 }
                 if let Some(p) = &it.path {
                     if ui.button(REVEAL_LABEL).clicked() {
-                        ui.close_menu();
+                        ui.close();
                         reveal(p);
                     }
                     if it.place == Place::Outside && ui.button("Copy into Presentation").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         action = Some(MediaAction::CopyIn(it.src.clone(), p.clone()));
                     }
                 }
@@ -1529,7 +1529,7 @@ impl App {
                     .on_disabled_hover_text("Only media no slide uses can be removed")
                     .clicked()
                 {
-                    ui.close_menu();
+                    ui.close();
                     if let Some(p) = &it.path {
                         action = Some(MediaAction::Remove(p.clone()));
                     }
@@ -2430,7 +2430,7 @@ fn stepper(ui: &mut egui::Ui, v: &mut usize, min: usize, max: usize) {
 /// checkmark on the current value, left-aligned rows with a hover bar.
 fn menu_combo<T: PartialEq + Copy>(
     ui: &mut egui::Ui,
-    id_salt: impl std::hash::Hash,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
     value: &mut T,
     options: &[(T, &str)],
 ) {
@@ -2446,7 +2446,7 @@ fn menu_combo<T: PartialEq + Copy>(
         .width(width)
         .selected_text(current)
         .show_ui(ui, |ui| {
-            let room = ui.ctx().screen_rect().right() - ui.max_rect().left() - 20.0;
+            let room = ui.ctx().content_rect().right() - ui.max_rect().left() - 20.0;
             ui.set_width((width - 12.0).min(room).max(120.0_f32.min(room)));
             ui.spacing_mut().item_spacing.y = 0.0;
             for (k, (v, label)) in options.iter().enumerate() {
@@ -2454,7 +2454,7 @@ fn menu_combo<T: PartialEq + Copy>(
                 let r = menu_row(ui, salt.with(k), text, note, v == value, None, 24.0);
                 if r.clicked() {
                     *value = *v;
-                    ui.memory_mut(|m| m.close_popup());
+                    egui::Popup::close_all(ui.ctx());
                 }
             }
         });
@@ -2548,7 +2548,7 @@ fn font_combo(
         .show_ui(ui, |ui| {
             // Wide enough for long names, but never past the window's right edge
             // (the popup opens at the button's left edge).
-            let room = ui.ctx().screen_rect().right() - ui.max_rect().left() - 20.0;
+            let room = ui.ctx().content_rect().right() - ui.max_rect().left() - 20.0;
             ui.set_width(260.0_f32.min(room).max(ui.available_width().min(room)));
             ui.spacing_mut().item_spacing.y = 0.0;
             let first_open = filter.is_none();
@@ -2571,8 +2571,7 @@ fn font_combo(
                         ui.add(
                             egui::TextEdit::singleline(text)
                                 .hint_text("Search fonts")
-                                .frame(false)
-                                .margin(egui::Margin::symmetric(0, 2))
+                                .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 2)))
                                 .desired_width(ui.available_width()),
                         )
                     })
@@ -2698,7 +2697,7 @@ fn font_combo(
                     if keyed && hl >= offset {
                         let row = (hl - offset) as f32 * row_h;
                         let top = egui::scroll_area::State::load(ui.ctx(), scroll_id)
-                            .map(|s| s.offset.y)
+                            .map(|s| s.offset().y)
                             .unwrap_or(0.0);
                         if row < top {
                             area = area.vertical_scroll_offset(row);
@@ -2732,17 +2731,21 @@ fn font_combo(
             ui.data_mut(|d| d.insert_temp(hl_id, hl));
             if let Some(c) = picked {
                 *v = c;
-                ui.memory_mut(|m| m.close_popup());
+                egui::Popup::close_all(ui.ctx());
             }
         });
     // Start with an empty search each time the list opens.
-    if shown.inner.is_none() || !ui.memory(|m| m.any_popup_open()) {
+    if shown.inner.is_none() || !egui::Popup::is_any_open(ui.ctx()) {
         filter = None;
         ui.data_mut(|d| d.remove::<usize>(hl_id));
     }
     ui.data_mut(|d| match filter {
-        Some(f) => d.insert_temp(filter_id, f),
-        None => d.remove::<String>(filter_id),
+        Some(f) => {
+            d.insert_temp(filter_id, f);
+        }
+        None => {
+            d.remove::<String>(filter_id);
+        }
     });
 }
 
@@ -2863,9 +2866,9 @@ fn background_swatch(
     let response = gradient_chip(ui, &preview, vec2(width, 24.0), false)
         .on_hover_text("Choose a solid background or deck gradient");
     if response.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(id));
+        egui::Popup::toggle_id(ui.ctx(), id);
     }
-    if !ui.memory(|m| m.is_popup_open(id)) {
+    if !egui::Popup::is_id_open(ui.ctx(), id) {
         return;
     }
     let popup_w = PICKER_W + 24.0;
@@ -2873,7 +2876,7 @@ fn background_swatch(
         .kind(egui::UiKind::Picker)
         .order(egui::Order::Foreground)
         .fixed_pos({
-            let screen = ui.ctx().screen_rect().shrink(12.0);
+            let screen = ui.ctx().content_rect().shrink(12.0);
             pos2(
                 (response.rect.right() - popup_w)
                     .min(screen.right() - popup_w)
@@ -2905,7 +2908,7 @@ fn background_swatch(
                             ui.painter().line_segment([c + vec2(-k, -k), c + vec2(k, k)], st);
                             ui.painter().line_segment([c + vec2(-k, k), c + vec2(k, -k)], st);
                             if close.clicked() {
-                                ui.memory_mut(|m| m.close_popup());
+                                egui::Popup::close_all(ui.ctx());
                             }
                         });
                     });
@@ -2922,7 +2925,7 @@ fn background_swatch(
         .response;
     if !response.clicked() && (ui.input(|i| i.key_pressed(Key::Escape)) || area.clicked_elsewhere())
     {
-        ui.memory_mut(|m| m.close_popup());
+        egui::Popup::close_all(ui.ctx());
     }
 }
 
@@ -3184,9 +3187,9 @@ fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
         egui::StrokeKind::Inside,
     );
     if resp.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(popup_id));
+        egui::Popup::toggle_id(ui.ctx(), popup_id);
     }
-    if !ui.memory(|m| m.is_popup_open(popup_id)) {
+    if !egui::Popup::is_id_open(ui.ctx(), popup_id) {
         return;
     }
     let area = egui::Area::new(popup_id)
@@ -3205,7 +3208,7 @@ fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
     if !resp.clicked()
         && (ui.input(|i| i.key_pressed(egui::Key::Escape)) || area.clicked_elsewhere())
     {
-        ui.memory_mut(|m| m.close_popup());
+        egui::Popup::close_all(ui.ctx());
     }
 }
 

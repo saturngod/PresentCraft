@@ -114,6 +114,23 @@ const SAMPLE: &str = include_str!("sample.md");
 const EDITOR_ID: &str = "markdown-editor";
 const SCREENSHOT_FRAMES: u32 = 120;
 
+/// The last captured window picture, filled in by egui's screenshot callback.
+static SHOT: std::sync::Mutex<Option<std::sync::Arc<egui::ColorImage>>> =
+    std::sync::Mutex::new(None);
+
+/// Asks egui for a picture of the window; it arrives via `take_shot`.
+fn request_shot(ctx: &egui::Context) {
+    let repaint = ctx.clone();
+    ctx.request_screenshot(move |image| {
+        *SHOT.lock().unwrap() = Some(image);
+        repaint.request_repaint();
+    });
+}
+
+fn take_shot() -> Option<std::sync::Arc<egui::ColorImage>> {
+    SHOT.lock().unwrap().take()
+}
+
 // Editor accent colours.
 pub const FORMAT_BLUE: Color32 = hex(0x59BDFF);
 pub const DESIGN_PINK: Color32 = hex(0xFC44B2);
@@ -1147,22 +1164,22 @@ impl App {
         let menu_btn = egui::Button::new(egui::RichText::new("   ").size(16.0))
             .frame(false)
             .min_size(vec2(30.0, 26.0));
-        let inner = egui::menu::menu_custom_button(ui, menu_btn, |ui| {
+        let inner = crate::tabletools::menu_from_button(ui, menu_btn, |ui| {
             crate::tabletools::style_menu(ui);
             ui.menu_button("File", |ui| {
                 crate::tabletools::style_menu(ui);
                 if menu_item(ui, "New", "⌘N") {
-                    ui.close_menu();
+                    ui.close();
                     self.new_doc();
                 }
                 if menu_item(ui, "Open…", "⌘O") {
-                    ui.close_menu();
+                    ui.close();
                     self.open_dialog();
                 }
                 // Outside macOS a package is a plain folder, which the file
                 // picker can't choose as a document.
                 if !cfg!(target_os = "macos") && ui.button("Open Package Folder…").clicked() {
-                    ui.close_menu();
+                    ui.close();
                     if let Some(p) = rfd::FileDialog::new()
                         .set_title("Choose a .prcraft or .iapresenter folder")
                         .pick_folder()
@@ -1179,7 +1196,7 @@ impl App {
                     }
                     for path in self.recent_files.clone() {
                         if ui.button(path.display().to_string()).clicked() {
-                            ui.close_menu();
+                            ui.close();
                             if self.confirm_replace() {
                                 self.open_path(path);
                             }
@@ -1188,15 +1205,15 @@ impl App {
                 });
                 ui.separator();
                 if menu_item(ui, "Save", "⌘S") {
-                    ui.close_menu();
+                    ui.close();
                     self.save(false);
                 }
                 if menu_item(ui, "Save As…", "⇧⌘S") {
-                    ui.close_menu();
+                    ui.close();
                     self.save(true);
                 }
                 if ui.button("Duplicate…").clicked() {
-                    ui.close_menu();
+                    ui.close();
                     let path = self.path.clone();
                     let dirty = self.dirty;
                     self.save(true);
@@ -1208,7 +1225,7 @@ impl App {
                     .add_enabled(self.path.is_some(), egui::Button::new("Revert to Saved…"))
                     .clicked()
                 {
-                    ui.close_menu();
+                    ui.close();
                     if self.confirm_replace() {
                         if let Some(path) = self.path.clone() {
                             self.open_path(path);
@@ -1219,7 +1236,7 @@ impl App {
                 ui.menu_button("Import", |ui| {
                     crate::tabletools::style_menu(ui);
                     if ui.button("Markdown or Text…").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.open_dialog();
                     }
                 });
@@ -1232,18 +1249,18 @@ impl App {
                         ("HTML…", export::Format::Html),
                     ] {
                         if ui.button(name).clicked() {
-                            ui.close_menu();
+                            ui.close();
                             self.start_export(format);
                         }
                     }
                     if ui.button("Markdown…").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         self.export_markdown();
                     }
                 });
                 ui.separator();
                 if menu_item(ui, if IS_MAC { "Close Window" } else { "Exit" }, "⌘W") {
-                    ui.close_menu();
+                    ui.close();
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
@@ -1253,7 +1270,7 @@ impl App {
                     .max_height(650.0)
                     .show(ui, |ui| {
                         if menu_item(ui, "Blank Slide", "⇧⌘N") {
-                            ui.close_menu();
+                            ui.close();
                             self.insert_slide_template("");
                         }
                         for (group, templates) in SLIDE_TEMPLATES {
@@ -1261,7 +1278,7 @@ impl App {
                             menu_note(ui, group);
                             for (name, content) in *templates {
                                 if ui.button(*name).clicked() {
-                                    ui.close_menu();
+                                    ui.close();
                                     self.insert_slide_template(content);
                                 }
                             }
@@ -1279,22 +1296,22 @@ impl App {
                     },
                     "",
                 ) {
-                    ui.close_menu();
+                    ui.close();
                     self.show_sidebar = !self.show_sidebar;
                 }
                 if menu_item(ui, "Settings…", "⌘,") {
                     self.settings_open = true;
-                    ui.close_menu();
+                    ui.close();
                 }
             });
             ui.separator();
             if menu_item(ui, "Start Presentation", "⌘↵") {
-                ui.close_menu();
+                ui.close();
                 self.start_presenting(ctx);
             }
         });
-        let r = inner.response.rect;
-        let resp = inner.response.on_hover_text("Menu");
+        let r = inner.rect;
+        let resp = inner.on_hover_text("Menu");
         if resp.hovered() {
             ui.painter()
                 .rect_filled(r, 6.0, crate::settings::pal().hover);
@@ -1496,7 +1513,10 @@ impl App {
             i.raw
                 .dropped_files
                 .iter()
-                .filter_map(|f| f.path.clone())
+                .filter_map(|f| {
+                    let p = f.path();
+                    (!p.as_os_str().is_empty()).then(|| p.to_path_buf())
+                })
                 .collect()
         });
         for p in dropped {
@@ -1584,9 +1604,9 @@ impl App {
         self.frame += 1;
         ctx.request_repaint();
         let mut saved = false;
-        ctx.input(|i| {
-            for e in &i.raw.events {
-                if let egui::Event::Screenshot { image, .. } = e {
+        {
+            if let Some(image) = take_shot() {
+                {
                     let [w, h] = image.size;
                     let mut buf = Vec::with_capacity(w * h * 4);
                     for p in &image.pixels {
@@ -1603,12 +1623,12 @@ impl App {
                     saved = true;
                 }
             }
-        });
+        }
         if saved || self.frame > SCREENSHOT_FRAMES + 240 {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if self.frame >= SCREENSHOT_FRAMES && !self.shot_requested {
             self.shot_requested = true;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            request_shot(ctx);
         }
     }
 
@@ -1647,7 +1667,8 @@ impl App {
             .with_title("Presentation")
             .with_inner_size([1280.0, 720.0])
             .with_fullscreen(true);
-        ctx.show_viewport_immediate(id, builder, |pctx, _class| {
+        ctx.show_viewport_immediate(id, builder, |pui, _class| {
+            let pctx = &pui.ctx().clone();
             if pctx.input(|i| i.viewport().close_requested()) {
                 self.stop_presenting(pctx);
                 return;
@@ -1656,7 +1677,7 @@ impl App {
                 self.stop_presenting(pctx);
                 return;
             }
-            self.present_ui(pctx);
+            self.present_ui(pui);
         });
     }
 
@@ -1756,19 +1777,12 @@ impl App {
         }
     }
 
-    fn export_ui(&mut self, ctx: &egui::Context) {
+    fn export_ui(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         let n = self.slides.len();
         let mut cancel = ctx.input(|i| i.key_pressed(Key::Escape));
         // a captured picture arrived?
-        let shot = ctx.input(|i| {
-            i.raw.events.iter().find_map(|e| {
-                if let egui::Event::Screenshot { image, .. } = e {
-                    Some(image.clone())
-                } else {
-                    None
-                }
-            })
-        });
+        let shot = take_shot();
         if let (Some(img), Some(job)) = (shot, self.export.as_mut()) {
             let ppp = ctx.pixels_per_point();
             let r = self.export_rect;
@@ -1852,7 +1866,7 @@ impl App {
         let mut recorded_videos = Vec::new();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(Color32::BLACK))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let avail = ui.max_rect();
                 let rect = fit_16_9(avail.shrink2(vec2(0.0, 40.0)));
                 self.export_rect = rect;
@@ -1914,7 +1928,7 @@ impl App {
             }
         }
         if request {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            request_shot(ctx);
         }
         if n == 0 {
             cancel = true;
@@ -1927,7 +1941,8 @@ impl App {
     }
 
     // ---------- presenting ----------
-    fn present_ui(&mut self, ctx: &egui::Context) {
+    fn present_ui(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         let mut next = 0;
         let mut stop = false;
         ctx.input(|i| {
@@ -1978,11 +1993,11 @@ impl App {
             return;
         }
         if self.prompter {
-            egui::SidePanel::right("prompter")
+            egui::Panel::right("prompter")
                 .resizable(true)
-                .default_width(420.0)
+                .default_size(420.0)
                 .frame(egui::Frame::new().fill(hex(0x141414)).inner_margin(28.0))
-                .show(ctx, |ui| {
+                .show(ui, |ui| {
                     ui.label(
                         RichText::new(format!(
                             "Slide {} of {}",
@@ -2020,7 +2035,7 @@ impl App {
         }
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(Color32::BLACK))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let avail = ui.max_rect();
                 let rect = if self.settings.responsive {
                     avail
@@ -2103,14 +2118,15 @@ impl App {
     }
 
     // ---------- writing ----------
-    fn sidebar(&mut self, ctx: &egui::Context) {
+    fn sidebar(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         let pal = crate::settings::pal();
-        let panel = egui::SidePanel::left("thumbs")
+        let panel = egui::Panel::left("thumbs")
             .resizable(true)
-            .default_width(self.settings.sidebar_width)
-            .width_range(SIDEBAR_MIN..=SIDEBAR_MAX)
+            .default_size(self.settings.sidebar_width)
+            .size_range(SIDEBAR_MIN..=SIDEBAR_MAX)
             .frame(egui::Frame::new().fill(pal.sidebar_bg))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let sw = ui.max_rect().width();
                 // top bar: the window buttons (macOS) + slide count + sidebar toggle
                 let top = Rect::from_min_size(ui.max_rect().min, vec2(sw, TOP_BAR));
@@ -2242,11 +2258,11 @@ impl App {
                             );
                             resp.context_menu(|ui| {
                                 if ui.button("Present from Here").clicked() {
-                                    ui.close_menu();
+                                    ui.close();
                                     present_from = Some(i);
                                 }
                                 if ui.button("Insert Slide After").clicked() {
-                                    ui.close_menu();
+                                    ui.close();
                                     insert_after = Some(i);
                                 }
                             });
@@ -2323,10 +2339,11 @@ impl App {
         }
     }
 
-    fn editor(&mut self, ctx: &egui::Context) {
+    fn editor(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(crate::settings::pal().editor_bg))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let full = ui.max_rect();
                 ui.painter().line_segment(
                     [full.left_top(), full.left_bottom()],
@@ -2445,11 +2462,12 @@ impl App {
                 let current = self.current;
                 // option-line icons found by the last layout: (char, key, colour)
                 let icons = std::cell::RefCell::new(Vec::new());
-                let mut layouter = |ui: &egui::Ui, s: &str, wrap: f32| {
+                let mut layouter = |ui: &egui::Ui, s: &dyn egui::TextBuffer, wrap: f32| {
+                    let s = s.as_str();
                     let mut job =
                         highlight(s, &editor_settings, current, &mut icons.borrow_mut());
                     job.wrap.max_width = wrap;
-                    let g = ui.fonts(|f| f.layout_job(job));
+                    let g = ui.fonts_mut(|f| f.layout_job(job));
                     hanging_indent(g, s)
                 };
                 let mut circles: Vec<(egui::Pos2, usize)> = Vec::new();
@@ -2463,7 +2481,7 @@ impl App {
                             ui.add_space(side);
                             let out = egui::TextEdit::multiline(&mut self.text)
                                 .id(id)
-                                .frame(false)
+                                .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 2)))
                                 .desired_width(col_w)
                                 .desired_rows(30)
                                 .lock_focus(true)
@@ -2471,8 +2489,8 @@ impl App {
                                 .show(ui);
                             changed = out.response.changed();
                             if let Some(cr) = out.cursor_range {
-                                let c = cr.primary.ccursor.index;
-                                let s = cr.secondary.ccursor.index;
+                                let c = cr.primary.index.0;
+                                let s = cr.secondary.index.0;
                                 if c != self.cursor || s != self.sel_start || changed {
                                     self.cursor = c;
                                     self.sel_start = s;
@@ -2485,7 +2503,7 @@ impl App {
                                 let gap = editor_settings.editor_font * OPTION_GAP;
                                 let painter = ui.painter();
                                 for (ch, key, color) in icons.borrow().iter() {
-                                    let r = out.galley.pos_from_ccursor(CCursor::new(*ch));
+                                    let r = out.galley.pos_from_cursor(CCursor::new(*ch));
                                     let c = pos2(
                                         out.galley_pos.x + r.left() - gap * 0.55,
                                         out.galley_pos.y + r.center().y - size * 0.3,
@@ -2499,7 +2517,7 @@ impl App {
                             }
                             if let Some(ch) = scroll_to {
                                 // bring the clicked slide's first line near the top of the editor
-                                let r = out.galley.pos_from_ccursor(CCursor::new(ch));
+                                let r = out.galley.pos_from_cursor(CCursor::new(ch));
                                 let y = out.galley_pos.y + r.top() - 90.0;
                                 let target =
                                     Rect::from_min_size(pos2(out.galley_pos.x, y), vec2(1.0, 1.0));
@@ -2508,7 +2526,7 @@ impl App {
                             if !changed {
                                 for (i, start) in starts.iter().enumerate().skip(1) {
                                     let first = first_content_char(&self.text, *start);
-                                    let r = out.galley.pos_from_ccursor(CCursor::new(first));
+                                    let r = out.galley.pos_from_cursor(CCursor::new(first));
                                     circles.push((
                                         pos2(
                                             out.galley_pos.x - 48.0,
@@ -2809,21 +2827,13 @@ fn hanging_indent(g: std::sync::Arc<egui::Galley>, text: &str) -> std::sync::Arc
         let k = tabs.get(para).copied().unwrap_or(0);
         if first_row {
             indent = if k > 0 {
-                row.glyphs
-                    .get(k)
-                    .map(|gl| gl.pos.x - row.rect.left())
-                    .unwrap_or(0.0)
+                // Glyph positions are relative to their row.
+                row.glyphs.get(k).map(|gl| gl.pos.x).unwrap_or(0.0)
             } else {
                 0.0
             };
         } else if k > 0 && indent > 0.0 {
-            let d = vec2(indent, 0.0);
-            row.rect = row.rect.translate(d);
-            for gl in row.glyphs.iter_mut() {
-                gl.pos.x += indent;
-            }
-            row.visuals.mesh.translate(d);
-            row.visuals.mesh_bounds = row.visuals.mesh_bounds.translate(d);
+            row.pos.x += indent;
             changed = true;
         }
         first_row = row.ends_with_newline;
@@ -2834,8 +2844,10 @@ fn hanging_indent(g: std::sync::Arc<egui::Galley>, text: &str) -> std::sync::Arc
     let input = g.clone();
     let result = if changed {
         for row in &out.rows {
-            out.rect = out.rect.union(row.rect);
-            out.mesh_bounds = out.mesh_bounds.union(row.visuals.mesh_bounds);
+            out.rect = out.rect.union(row.rect());
+            out.mesh_bounds = out
+                .mesh_bounds
+                .union(row.visuals.mesh_bounds.translate(row.pos.to_vec2()));
         }
         Arc::new(out)
     } else {
@@ -2985,7 +2997,8 @@ fn highlight(
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &ui.ctx().clone();
         #[cfg(target_os = "macos")]
         for p in macos_open::take_pending() {
             self.open_requested(p);
@@ -3041,11 +3054,11 @@ impl eframe::App for App {
             self.present_window(ctx);
         }
         if self.export.is_some() {
-            self.export_ui(ctx);
+            self.export_ui(ui);
             return;
         }
         if self.presenting && inline_present {
-            self.present_ui(ctx);
+            self.present_ui(ui);
             return;
         }
         if !self.settings_open && ctx.memory(|m| m.has_focus(egui::Id::new(EDITOR_ID))) {
@@ -3060,10 +3073,10 @@ impl eframe::App for App {
         }
         self.format_shortcuts(ctx);
         if self.show_sidebar {
-            self.sidebar(ctx);
+            self.sidebar(ui);
         }
-        self.inspector(ctx);
-        self.editor(ctx);
+        self.inspector(ui);
+        self.editor(ui);
         self.table_editor_ui(ctx);
         self.settings_window(ctx);
     }

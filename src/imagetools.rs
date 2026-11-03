@@ -152,7 +152,7 @@ impl App {
             return;
         };
         let start_ch = char_of_line(&lines, block.src);
-        let r = galley.pos_from_ccursor(CCursor::new(start_ch));
+        let r = galley.pos_from_cursor(CCursor::new(start_ch));
         let clip = ui.clip_rect();
         let y = (galley_pos.y + r.top() - 50.0)
             .max(clip.top() + 6.0)

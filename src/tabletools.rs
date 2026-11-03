@@ -116,7 +116,7 @@ pub(crate) fn check(ui: &mut egui::Ui, on: bool, text: &str) -> bool {
         pal.text_hi,
     );
     if resp.clicked() {
-        ui.close_menu();
+        ui.close();
     }
     resp.clicked()
 }
@@ -220,6 +220,32 @@ pub(crate) fn round_button(
 }
 
 /// Menu look shared by the toolbars' ••• menus.
+/// A menu opened by a custom button; returns the button's response.
+pub(crate) fn menu_from_button<R>(
+    ui: &mut egui::Ui,
+    button: egui::Button<'_>,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::Response {
+    egui::containers::menu::MenuButton::from_button(button)
+        .ui(ui, contents)
+        .0
+}
+
+/// A popup under `resp`, open while egui's popup memory says `id` is open.
+pub(crate) fn popup_below<R>(
+    id: egui::Id,
+    resp: &egui::Response,
+    close: egui::PopupCloseBehavior,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    egui::Popup::from_response(resp)
+        .id(id)
+        .open_memory(None)
+        .close_behavior(close)
+        .show(contents)
+        .map(|r| r.inner)
+}
+
 pub(crate) fn style_menu(ui: &mut egui::Ui) {
     ui.set_min_width(240.0);
     ui.spacing_mut().item_spacing.y = 2.0;
@@ -269,11 +295,10 @@ pub(crate) fn more_button<R>(
         v.active.weak_bg_fill = pal.hover;
     }
     let btn = egui::Button::new("").min_size(vec2(34.0, 34.0));
-    egui::menu::menu_custom_button(&mut child, btn, |ui| {
+    menu_from_button(&mut child, btn, |ui| {
         style_menu(ui);
         contents(ui)
     })
-    .response
     .on_hover_text("More options");
     let col = crate::settings::pal().text_hi;
     for dx in [-6.0, 0.0, 6.0] {
@@ -328,7 +353,7 @@ impl App {
             return;
         };
         let start_ch = char_of_line(&lines, block.start);
-        let r = galley.pos_from_ccursor(CCursor::new(start_ch));
+        let r = galley.pos_from_cursor(CCursor::new(start_ch));
         let clip = ui.clip_rect();
         let y = (galley_pos.y + r.top() - 50.0)
             .max(clip.top() + 6.0)

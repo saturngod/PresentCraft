@@ -293,7 +293,7 @@ impl TableEditor {
         } else {
             Color32::WHITE
         };
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let w = (screen.width() * 0.8).clamp(420.0, 900.0);
         let h = (screen.height() * 0.72).clamp(280.0, 620.0);
         let grid_h = h - 64.0;
@@ -315,7 +315,7 @@ impl TableEditor {
             .fill(body_fill)
             .stroke(Stroke::new(1.0_f32, pal.border))
             .corner_radius(12)
-            .shadow(ctx.style().visuals.window_shadow)
+            .shadow(ctx.global_style().visuals.window_shadow)
             .inner_margin(egui::Margin::same(0));
         egui::Modal::new(Id::new("table-editor"))
             .frame(frame)
@@ -324,7 +324,7 @@ impl TableEditor {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
 
                 // Column widths follow their content.
-                let char_w = ui.fonts(|f| f.glyph_width(&font, '-'));
+                let char_w = ui.fonts_mut(|f| f.glyph_width(&font, '-'));
                 let widths: Vec<f32> = (0..self.ncols())
                     .map(|j| {
                         let longest = self
@@ -419,10 +419,9 @@ impl TableEditor {
                             let pid = Id::new(("te-col-menu", j));
                             if resp.clicked() {
                                 self.sel = Some(Sel::Col(j));
-                                ui.memory_mut(|m| m.toggle_popup(pid));
+                                egui::Popup::toggle_id(ui.ctx(), pid);
                             }
-                            egui::popup::popup_below_widget(
-                                ui,
+                            crate::tabletools::popup_below(
                                 pid,
                                 &resp,
                                 egui::PopupCloseBehavior::CloseOnClick,
@@ -474,10 +473,9 @@ impl TableEditor {
                             let pid = Id::new(("te-row-menu", i));
                             if resp.clicked() {
                                 self.sel = Some(Sel::Row(i));
-                                ui.memory_mut(|m| m.toggle_popup(pid));
+                                egui::Popup::toggle_id(ui.ctx(), pid);
                             }
-                            egui::popup::popup_below_widget(
-                                ui,
+                            crate::tabletools::popup_below(
                                 pid,
                                 &resp,
                                 egui::PopupCloseBehavior::CloseOnClick,
@@ -534,7 +532,7 @@ impl TableEditor {
                         let mut move_to: Option<(usize, usize)> = None;
                         let mut grow = false;
                         let nrows = self.rows.len();
-                        let row_h = ui.fonts(|f| f.row_height(&font));
+                        let row_h = ui.fonts_mut(|f| f.row_height(&font));
                         for i in 0..nrows {
                             for j in 0..widths.len() {
                                 let cell = Rect::from_min_size(
@@ -554,7 +552,10 @@ impl TableEditor {
                                     r,
                                     egui::TextEdit::singleline(&mut self.rows[i][j])
                                         .id(Id::new(("te-cell", i, j)))
-                                        .frame(false)
+                                        .frame(
+                                            egui::Frame::NONE
+                                                .inner_margin(egui::Margin::symmetric(4, 2)),
+                                        )
                                         .font(font.clone())
                                         .text_color(pal.text_hi)
                                         .horizontal_align(align)

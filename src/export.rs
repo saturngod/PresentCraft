@@ -264,7 +264,7 @@ pub fn html_text_layer(boxes: &[crate::render::TextBox], slide: egui::Rect) -> S
                     format!("text-decoration:{};", deco.join(" "))
                 },
                 bg,
-                html_escape(&job.text[sec.byte_range.clone()]).replace('\n', "<br>"),
+                html_escape(&job.text[sec.byte_range.start.0..sec.byte_range.end.0]).replace('\n', "<br>"),
             ));
         }
         out.push_str("</div>");
@@ -307,7 +307,7 @@ pub fn pptx_text_shapes(boxes: &[crate::render::TextBox], slide: egui::Rect) -> 
         // Paragraphs: split sections on line breaks.
         let mut paras: Vec<Vec<(String, &egui::text::TextFormat)>> = vec![Vec::new()];
         for sec in &job.sections {
-            let text = &job.text[sec.byte_range.clone()];
+            let text = &job.text[sec.byte_range.start.0..sec.byte_range.end.0];
             let mut first = true;
             for part in text.split('\n') {
                 if !first {

@@ -649,7 +649,7 @@ impl crate::App {
             })
             .stroke(Stroke::new(1.0_f32, pal().border))
             .corner_radius(12)
-            .shadow(ctx.style().visuals.window_shadow)
+            .shadow(ctx.global_style().visuals.window_shadow)
             .inner_margin(egui::Margin {
                 left: 20,
                 right: 20,
@@ -664,7 +664,7 @@ impl crate::App {
             .resizable(false)
             .default_width(640.0)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center())
+            .default_pos(ctx.content_rect().center())
             .show(ctx, |ui| {
                 ui.set_width(640.0);
                 // header: page title and close button
@@ -764,7 +764,7 @@ impl crate::App {
                 ui.add_space(14.0);
                 // Every page gets the same height so the window doesn't jump
                 // when switching tabs; taller pages scroll inside it.
-                let page_h = (ctx.screen_rect().height() - 220.0).clamp(240.0, 560.0);
+                let page_h = (ctx.content_rect().height() - 220.0).clamp(240.0, 560.0);
                 egui::ScrollArea::vertical()
                     .id_salt(("settings-page", self.settings_page as u8))
                     .max_height(page_h)
