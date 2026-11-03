@@ -37,7 +37,7 @@ mkdir -p "$here/build" "$out"
 
 if [[ ! -f "$src_tar" ]]; then
   echo "Downloading FFmpeg $FFMPEG_VERSION source…"
-  curl -fL --retry 3 -o "$src_tar.part" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+  curl -fL --retry 5 --retry-all-errors --retry-delay 10 -o "$src_tar.part" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
   mv "$src_tar.part" "$src_tar"
 fi
 actual="$( (shasum -a 256 "$src_tar" 2>/dev/null || sha256sum "$src_tar") | cut -d' ' -f1)"
