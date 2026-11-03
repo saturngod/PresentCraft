@@ -3300,11 +3300,19 @@ fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
         .order(egui::Order::Foreground)
         .fixed_pos(r.left_bottom() + vec2(0.0, 4.0))
         .show(ui.ctx(), |ui| {
-            ui.spacing_mut().slider_width = 275.0;
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                hex_field(ui, popup_id.with("hex"), c);
+                ui.set_width(PICKER_W);
+                ui.horizontal(|ui| {
+                    hex_field(ui, popup_id.with("hex"), c);
+                    let (r, _) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::hover());
+                    if icon_button(ui, r, Icon::Copy, "Copy hex value").clicked() {
+                        ui.copy_text(format!("#{:02X}{:02X}{:02X}", c.r(), c.g(), c.b()));
+                    }
+                });
                 ui.add_space(4.0);
-                egui::color_picker::color_picker_color32(ui, c, egui::color_picker::Alpha::Opaque);
+                color_field(ui, popup_id.with("field"), c);
+                ui.add_space(4.0);
+                rgb_fields(ui, c);
             });
         })
         .response;
@@ -3312,6 +3320,20 @@ fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
         && (ui.input(|i| i.key_pressed(egui::Key::Escape)) || area.clicked_elsewhere())
     {
         egui::Popup::close_all(ui.ctx());
+    }
+}
+
+/// R, G and B number fields (0–255) for exact values.
+fn rgb_fields(ui: &mut egui::Ui, c: &mut Color32) {
+    let mut rgb = [c.r(), c.g(), c.b()];
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        for (v, name) in rgb.iter_mut().zip(["R ", "G ", "B "]) {
+            changed |= ui.add(egui::DragValue::new(v).speed(0.5).prefix(name)).changed();
+        }
+    });
+    if changed {
+        *c = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
     }
 }
 

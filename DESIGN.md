@@ -310,6 +310,14 @@ Style every menu with `tabletools::style_menu(ui)`:
 ## 6. Icons
 
 - Draw icons with `paint_icon` (vector strokes). Don't add image icons.
+- **No emoji anywhere in the UI** — not in buttons, labels, menus, tooltips or
+  status messages. Draw the icon with `paint_icon` instead, modelled on the
+  matching SF Symbol (for example `Icon::Copy` follows `doc.on.doc`).
+- egui's stock widgets can bring emoji with them (the built-in colour picker shows
+  a 📋 copy button and a "U8" toggle). Don't use those widgets; build the control
+  from our helpers (`color_field`, `hex_field`, `icon_button`).
+- Monochrome text symbols that are part of typography are fine: keyboard symbols
+  (⌘ ⇧ ⌥), the menu tick ✓, bullets and list markers.
 - Stroke weight 1.3–2.0 px, round and simple; match the existing set
   (Picture, Palette, Play, chevrons, magnifier).
 - Colour `icon` at rest, `text_hi` on hover, white on an accent fill.
@@ -342,6 +350,7 @@ Style every menu with `tabletools::style_menu(ui)`:
 - [ ] Looks right in **both** light and dark mode.
 - [ ] Rest, hover, pressed, focus and disabled states are all handled.
 - [ ] Icon-only controls have a tooltip with the shortcut (`kbd()`).
+- [ ] No emoji in the UI; icons are drawn with `paint_icon`.
 - [ ] Sizes, radii and fonts come from the tables above.
 - [ ] Reuses an existing helper (`icon_button`, `flat_button`, `segmented`,
       `section`, `labeled`, `style_menu`, …) where one fits.

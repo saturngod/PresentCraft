@@ -36,6 +36,8 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 
 Follow `DESIGN.md` for colours, typography, spacing and component rules (buttons, text fields, menus, inspector rows) when adding or changing UI.
 
+Never use emoji in the UI (buttons, labels, menus, tooltips, status text). Draw icons with `paint_icon` in `src/main.rs`, modelled on SF Symbols, and avoid egui stock widgets that show emoji, such as `egui::color_picker`.
+
 ## Evidence and maintenance
 
 Preserve the existing appearance during unrelated changes. Avoid hand-editing `target/` build products or treating old screenshots as fresh validation. Keep `Cargo.lock` consistent with intentional dependency changes and update the README when build commands or launch options change.

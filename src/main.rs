@@ -3016,6 +3016,7 @@ pub enum Icon {
     ChevronUp,
     Pause,
     Gear,
+    Copy,
 }
 
 pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
@@ -3038,6 +3039,22 @@ pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
                     color,
                 );
             }
+        }
+        Icon::Copy => {
+            // two stacked sheets, like SF Symbols "doc.on.doc"
+            let front = Rect::from_min_max(c + vec2(-2.0, -3.0), c + vec2(7.0, 8.0));
+            p.rect_stroke(front, 2.0, s, egui::StrokeKind::Inside);
+            // the back sheet shows only where the front one doesn't cover it
+            p.add(egui::Shape::line(
+                vec![
+                    c + vec2(-2.0, 4.0),
+                    c + vec2(-6.0, 4.0),
+                    c + vec2(-6.0, -7.0),
+                    c + vec2(3.0, -7.0),
+                    c + vec2(3.0, -3.0),
+                ],
+                s,
+            ));
         }
         Icon::Gear => {
             for k in 0..8 {
