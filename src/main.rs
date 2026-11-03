@@ -2523,7 +2523,20 @@ impl App {
                                     Rect::from_min_size(pos2(out.galley_pos.x, y), vec2(1.0, 1.0));
                                 ui.scroll_to_rect(target, Some(egui::Align::TOP));
                             }
-                            if !changed {
+                            {
+                                // After a keystroke the slide starts above are
+                                // stale; read them from the new text so the
+                                // numbers stay put instead of blinking out.
+                                let fresh: Vec<usize>;
+                                let starts = if changed {
+                                    fresh = parse_document(&self.text)
+                                        .iter()
+                                        .map(|s| s.start_char)
+                                        .collect();
+                                    &fresh
+                                } else {
+                                    &starts
+                                };
                                 for (i, start) in starts.iter().enumerate().skip(1) {
                                     let first = first_content_char(&self.text, *start);
                                     let r = out.galley.pos_from_cursor(CCursor::new(first));
