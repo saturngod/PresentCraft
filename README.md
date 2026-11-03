@@ -71,11 +71,22 @@ A package is stored in one of two forms with the same contents:
 
 On macOS, Finder shows a folder package as one file. Saving only rewrites `text.md`, `info.json` and `Theme/`, so large videos in `assets/` are never rewritten. On Windows and Linux there is no package concept, so a zip file is what lets you double-click a presentation. A zipped document is edited in a private working folder in the temporary directory and zipped again on each save. The new archive replaces the old one only once it is complete. Pictures and videos are stored uncompressed, because they are already compressed and this keeps saving quick.
 
-Saving copies media that lives outside the package into `assets/` and points the script at the copy. Media added to a saved package is copied in straight away. Files in the package that PresentCraft doesn't write are left alone, and unknown `info.json` keys are kept.
+Every picture and video lives inside the presentation. Adding one (dropping it on the editor or the Media panel, Add Images or Videos…, or Select Logo) copies it into `assets/` straight away and writes `/assets/<name>` in the script, never a path like `/Users/…/Downloads/photo.png`. A presentation that hasn't been saved yet keeps its media in a private working folder, and Save copies it into the new package. Opening a Markdown file copies the pictures and videos it uses in the same way. If a script still points outside the package, Save copies those files in too.
+
+The **Media** panel lists everything in the package under **Images** and **Videos**, with a thumbnail and the slides that use each file (or *Not used*). Click a file to go to its slide, and double-click it to put it at the cursor. Right-click for Show in Finder, Copy into Presentation (for files outside the package), and Remove from Presentation (for unused files only). Files in the package that PresentCraft doesn't write are left alone, and unknown `info.json` keys are kept.
 
 Open also accepts `.iapresenter` documents (folder or zip) and plain Markdown (`.md`, `.markdown`, `.txt`). These are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
 
 Themes use iA Presenter's `template.json` + `presets.json` format. Settings → Themes → Import Theme… adds any such folder (including iA Presenter's installed themes); Duplicate Theme saves your design as a theme folder. Saved themes live in `Themes/` next to the settings file.
+
+AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:
+
+```sh
+python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Midnight
+python3 .claude/skills/create-prcraft/scripts/prcraft.py check Talk.prcraft
+```
+
+When a package has no `Theme/` folder, `info.json`'s `Theme` key picks an installed theme by name.
 
 ### Opening documents by double-click
 

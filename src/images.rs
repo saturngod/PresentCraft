@@ -260,6 +260,11 @@ impl ImageCache {
         }
     }
 
+    /// Forgets loaded pictures so they are read and decoded again.
+    pub fn clear_cache(&mut self) {
+        self.map.clear();
+    }
+
     pub fn resolve(&self, src: &str) -> Option<PathBuf> {
         if is_web(src) {
             return None;

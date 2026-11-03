@@ -35,3 +35,7 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 ## Evidence and maintenance
 
 Preserve the existing appearance during unrelated changes. Avoid hand-editing `target/` build products or treating old screenshots as fresh validation. Keep `Cargo.lock` consistent with intentional dependency changes and update the README when build commands or launch options change.
+
+## Creating presentations
+
+To create, edit or validate a `.prcraft` presentation package, follow `.claude/skills/create-prcraft/SKILL.md`. It documents the package layout, the Markdown slide rules, `info.json` and theme files. It also provides `scripts/prcraft.py` (`build`, `check`, `zip`, `unzip`; Python standard library only).

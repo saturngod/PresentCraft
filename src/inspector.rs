@@ -1,5 +1,5 @@
 //! The right-hand panel: Format (Markdown cheat sheet that inserts what you
-//! click, plus table and chart maker), Pictures, and Design (theme, fonts,
+//! click, plus table and chart maker), Media, and Design (theme, fonts,
 //! colours, header & footer).
 
 use crate::parse::Block;
@@ -10,13 +10,14 @@ use crate::{
     INSPECTOR_W, IS_MAC, SIZES,
 };
 use eframe::egui;
+use std::path::PathBuf;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{pos2, vec2, Color32, FontId, Key, Modifiers, Rect, RichText, Sense, Stroke};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Tab {
     Format,
-    Pictures,
+    Media,
     Design,
     Share,
 }
@@ -639,7 +640,7 @@ impl App {
                         ui.set_width(ui.available_width());
                         match self.tab {
                             Tab::Format => self.format_tab(ui),
-                            Tab::Pictures => self.pictures_tab(ui),
+                            Tab::Media => self.pictures_tab(ui),
                             Tab::Design => self.design_tab(ui),
                             Tab::Share => self.share_tab(ui),
                         }
@@ -659,13 +660,13 @@ impl App {
         let widths: Vec<f32> = if self.tab == Tab::Share {
             vec![54.0, 54.0, 56.0]
         } else {
-            [Tab::Format, Tab::Pictures, Tab::Design]
+            [Tab::Format, Tab::Media, Tab::Design]
                 .iter()
                 .map(|t| if *t == self.tab { 80.0 } else { 42.0 })
                 .collect()
         };
         let mut x = seg.left() + 2.0;
-        for (k, t) in [Tab::Format, Tab::Pictures, Tab::Design]
+        for (k, t) in [Tab::Format, Tab::Media, Tab::Design]
             .into_iter()
             .enumerate()
         {
@@ -675,7 +676,7 @@ impl App {
                 .interact(r, ui.id().with(("seg", k)), Sense::click())
                 .on_hover_text(match t {
                     Tab::Format => "Format: Markdown cheat sheet, tables and charts",
-                    Tab::Pictures => "Pictures in this presentation",
+                    Tab::Media => "Media: pictures and videos in this presentation",
                     _ => "Design: theme, fonts, colours, header and footer",
                 });
             let selected = t == self.tab;
@@ -689,7 +690,7 @@ impl App {
                 p.rect_filled(r, 14.0, fill);
                 let label = match t {
                     Tab::Format => "Format",
-                    Tab::Pictures => "Pictures",
+                    Tab::Media => "Media",
                     _ => "Design",
                 };
                 p.text(
@@ -713,7 +714,7 @@ impl App {
                             crate::settings::pal().text_hi,
                         );
                     }
-                    Tab::Pictures => {
+                    Tab::Media => {
                         paint_icon(p, r, Icon::Picture, crate::settings::pal().text_hi)
                     }
                     _ => paint_icon(p, r, Icon::Palette, crate::settings::pal().text_hi),
@@ -1123,84 +1124,9 @@ impl App {
     }
 
     fn pictures_tab(&mut self, ui: &mut egui::Ui) {
-        if section(ui, "Pictures in this Presentation") {
-            let mut pics = Vec::new();
-            for (i, s) in self.slides.iter().enumerate() {
-                for b in &s.backgrounds {
-                    pics.push((i, b.clone()));
-                }
-                for g in &s.groups {
-                    for bl in g {
-                        if let Block::Image(img) = bl {
-                            pics.push((i, img.clone()));
-                        }
-                    }
-                }
-            }
-            if pics.is_empty() {
-                ui.label(RichText::new("No pictures yet. Put a picture's path or web address on its own line, or drop a file onto the editor.").color(crate::settings::pal().text_dim));
-            }
-            let w = (ui.available_width() - 10.0) / 2.0;
-            let accents = self.theme().accents;
-            let mut jump = None;
-            for chunk in pics.chunks(2) {
-                ui.horizontal(|ui| {
-                    for (i, img) in chunk {
-                        let (r, resp) =
-                            ui.allocate_exact_size(vec2(w, w / ASPECT + 22.0), Sense::click());
-                        let pr = Rect::from_min_size(r.min, vec2(w, w / ASPECT));
-                        let painter = ui.painter_at(r);
-                        let mut spec = img.clone();
-                        spec.caption = None;
-                        spec.opacity = 1.0;
-                        spec.background = false;
-                        crate::images::draw_image(
-                            &painter,
-                            pr,
-                            &spec,
-                            &mut self.images,
-                            &accents,
-                            Some(false),
-                        );
-                        let name = img.src.rsplit('/').next().unwrap_or(&img.src).to_string();
-                        painter.text(
-                            pos2(r.left(), pr.bottom() + 4.0),
-                            egui::Align2::LEFT_TOP,
-                            format!("{}  ·  slide {}", name, i + 1),
-                            FontId::proportional(11.0),
-                            crate::settings::pal().text_dim,
-                        );
-                        if resp.hovered() {
-                            painter.rect_stroke(
-                                pr,
-                                2.0,
-                                Stroke::new(2.0_f32, FORMAT_BLUE),
-                                egui::StrokeKind::Inside,
-                            );
-                        }
-                        if resp.clicked() {
-                            jump = Some(*i);
-                        }
-                    }
-                });
-                ui.add_space(6.0);
-            }
-            if let Some(i) = jump {
-                self.select_slide(i);
-            }
-            ui.add_space(8.0);
-            if ui
-                .add_sized(
-                    [ui.available_width(), 28.0],
-                    egui::Button::new("Add Picture…"),
-                )
-                .clicked()
-            {
-                self.add_media(false);
-            }
-        }
+        self.media_library(ui);
         divider(ui);
-        if section(ui, "Picture Settings") {
+        if section(ui, "Media Settings") {
             for (k, v) in [
                 ("size:", "cover · contain"),
                 ("x:", "left · center · right"),
@@ -1217,10 +1143,431 @@ impl App {
                 });
             }
             ui.label(
-                RichText::new("Write these on the lines right under a picture.")
+                RichText::new("Write these on the lines right under a picture or video.")
                     .color(crate::settings::pal().text_dim)
                     .size(12.0),
             );
+        }
+    }
+
+    /// Every picture and video in the package (and any the script uses from
+    /// elsewhere), rebuilt only when the script, logo or files change.
+    fn media_items(&mut self) -> Vec<MediaItem> {
+        use std::hash::{Hash, Hasher};
+        let root = self.images.doc_dir.clone();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.text, &root, &self.logo, self.media_epoch).hash(&mut h);
+        let key = h.finish();
+        if let Some((k, items)) = &self.media_cache {
+            if *k == key {
+                return items.clone();
+            }
+        }
+        let canon = |p: PathBuf| p.canonicalize().unwrap_or(p);
+        let mut items: Vec<MediaItem> = match &root {
+            Some(r) => crate::package::list_assets(r)
+                .into_iter()
+                .map(|p| MediaItem {
+                    name: file_label(&p.to_string_lossy()),
+                    src: crate::package::asset_ref(r, &p),
+                    video: crate::package::is_video_file(&p),
+                    path: Some(canon(p)),
+                    slides: Vec::new(),
+                    logo: false,
+                    place: Place::Package,
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        let mut refs: Vec<(Option<usize>, String)> = Vec::new();
+        for (i, s) in self.slides.iter().enumerate() {
+            for b in &s.backgrounds {
+                refs.push((Some(i), b.src.clone()));
+            }
+            for g in &s.groups {
+                for bl in g {
+                    if let Block::Image(img) = bl {
+                        refs.push((Some(i), img.src.clone()));
+                    }
+                }
+            }
+        }
+        if !self.logo.trim().is_empty() {
+            refs.push((None, self.logo.trim().to_string()));
+        }
+        let root_canon = root.clone().map(canon);
+        for (slide, src) in refs {
+            let resolved = self.images.resolve(&src).filter(|p| p.is_file()).map(canon);
+            let found = match &resolved {
+                Some(p) => items.iter().position(|it| it.path.as_ref() == Some(p)),
+                None => items.iter().position(|it| it.src == src),
+            };
+            let idx = found.unwrap_or_else(|| {
+                let place = if crate::images::is_web(&src) {
+                    Place::Web
+                } else {
+                    match &resolved {
+                        Some(p) if root_canon.as_ref().is_some_and(|r| p.starts_with(r)) => {
+                            Place::Package
+                        }
+                        Some(_) => Place::Outside,
+                        None => Place::Missing,
+                    }
+                };
+                items.push(MediaItem {
+                    name: file_label(&src),
+                    video: crate::images::is_video(&src),
+                    src: src.clone(),
+                    path: resolved.clone(),
+                    slides: Vec::new(),
+                    logo: false,
+                    place,
+                });
+                items.len() - 1
+            });
+            match slide {
+                Some(i) if !items[idx].slides.contains(&i) => items[idx].slides.push(i),
+                Some(_) => {}
+                None => items[idx].logo = true,
+            }
+        }
+        self.media_cache = Some((key, items.clone()));
+        items
+    }
+
+    /// Asks for pictures or videos and adds them to the package.
+    fn pick_media(&mut self) {
+        let files = rfd::FileDialog::new()
+            .set_title("Add images and videos to the presentation")
+            .add_filter(
+                "Images and videos",
+                &[
+                    "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "svg", "heic",
+                    "avif", "mp4", "mov", "m4v", "webm",
+                ],
+            )
+            .pick_files()
+            .unwrap_or_default();
+        for f in &files {
+            let _ = self.media_ref(f);
+        }
+        if !files.is_empty() {
+            self.status = format!(
+                "Added {} file{}. Double-click one to put it on the current slide.",
+                files.len(),
+                if files.len() == 1 { "" } else { "s" }
+            );
+        }
+    }
+
+    /// The media library: drop box, search, and Images / Videos lists.
+    fn media_library(&mut self, ui: &mut egui::Ui) {
+        let pal = crate::settings::pal();
+        ui.add_space(14.0);
+        let full = ui.available_width();
+        let (area, _) = ui.allocate_exact_size(vec2(full, 72.0), Sense::hover());
+        let zone_w = (full - 120.0).clamp(140.0, 220.0);
+        let zone = Rect::from_center_size(
+            pos2(area.left() + full / 2.0, area.center().y),
+            vec2(zone_w, 62.0),
+        );
+        let zone_resp = ui
+            .interact(zone, ui.id().with("media-drop"), Sense::click())
+            .on_hover_text("Click to choose files, or drop them here");
+        let dragging_here = ui.ctx().input(|i| {
+            !i.raw.hovered_files.is_empty()
+                && i.pointer.latest_pos().is_some_and(|p| zone.expand(6.0).contains(p))
+        });
+        if dragging_here || zone_resp.hovered() {
+            ui.painter().rect_filled(zone, 12.0, pal.hover);
+        }
+        dashed_round_rect(
+            ui.painter(),
+            zone,
+            12.0,
+            Stroke::new(2.0_f32, if dragging_here { FORMAT_BLUE } else { pal.text_dim }),
+        );
+        ui.painter().text(
+            zone.center(),
+            egui::Align2::CENTER_CENTER,
+            "Drop Images\nand Videos Here",
+            FontId::proportional(14.0),
+            pal.text_dim,
+        );
+        self.media_drop_rect = Some(zone.expand(6.0).intersect(ui.clip_rect()));
+        if zone_resp.clicked() {
+            self.pick_media();
+        }
+
+        // Gear menu, bottom right of the drop box.
+        let gear = Rect::from_min_size(
+            pos2(area.right() - 46.0, zone.bottom() - 30.0),
+            vec2(44.0, 28.0),
+        );
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(gear));
+        let btn = egui::Button::new(RichText::new("       ").size(14.0))
+            .min_size(gear.size())
+            .corner_radius(7.0);
+        let menu = egui::menu::menu_custom_button(&mut child, btn, |ui| {
+            crate::tabletools::style_menu(ui);
+            if ui.button("Add Images or Videos…").clicked() {
+                ui.close_menu();
+                self.pick_media();
+            }
+            let assets = self
+                .images
+                .doc_dir
+                .as_ref()
+                .map(|d| d.join(crate::package::ASSETS))
+                .filter(|d| d.is_dir());
+            if ui
+                .add_enabled(assets.is_some(), egui::Button::new("Show Media Folder"))
+                .clicked()
+            {
+                ui.close_menu();
+                if let Some(d) = assets {
+                    crate::open_external(d.as_os_str());
+                }
+            }
+            ui.separator();
+            if ui.button("Clear Thumbnails Cache").clicked() {
+                ui.close_menu();
+                self.images.clear_cache();
+                self.media_cache = None;
+            }
+        });
+        let gr = menu.response.rect;
+        paint_icon(
+            ui.painter(),
+            Rect::from_min_size(gr.min, vec2(28.0, gr.height())),
+            Icon::Gear,
+            pal.text_hi,
+        );
+        paint_icon(
+            ui.painter(),
+            Rect::from_min_size(pos2(gr.left() + 22.0, gr.top()), vec2(20.0, gr.height())),
+            Icon::ChevronDown,
+            pal.text_hi,
+        );
+        menu.response.on_hover_text("Media options");
+
+        ui.add_space(10.0);
+        ui.add(
+            egui::TextEdit::singleline(&mut self.media_search)
+                .hint_text("🔍  Search Media")
+                .desired_width(f32::INFINITY)
+                .margin(vec2(10.0, 6.0)),
+        );
+        ui.add_space(6.0);
+
+        let items = self.media_items();
+        let needle = self.media_search.trim().to_lowercase();
+        let outside = items
+            .iter()
+            .filter(|it| it.place == Place::Outside)
+            .count();
+        if outside > 0 {
+            ui.label(
+                RichText::new(format!(
+                    "{outside} file{} outside the presentation. Saving copies {} in.",
+                    if outside == 1 { " is" } else { "s are" },
+                    if outside == 1 { "it" } else { "them" }
+                ))
+                .color(pal.text_dim)
+                .size(12.0),
+            );
+        }
+        if items.is_empty() {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(
+                    "No media yet. Drop pictures or videos above, or onto the editor to put them on a slide.",
+                )
+                .color(pal.text_dim),
+            );
+            return;
+        }
+        let accents = self.theme().accents;
+        let mut action = None;
+        for (title, video) in [("Images", false), ("Videos", true)] {
+            let list: Vec<&MediaItem> = items
+                .iter()
+                .filter(|it| it.video == video)
+                .filter(|it| needle.is_empty() || it.name.to_lowercase().contains(&needle))
+                .collect();
+            let total = items.iter().filter(|it| it.video == video).count();
+            if total == 0 {
+                continue;
+            }
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(format!("{title} ({})", list.len()))
+                    .size(15.0)
+                    .strong()
+                    .color(pal.text_hi),
+            );
+            let (line, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
+            ui.painter().rect_filled(line, 0.0, pal.divider);
+            ui.add_space(4.0);
+            for it in list {
+                if let Some(a) = self.media_row(ui, it, &accents) {
+                    action = Some(a);
+                }
+            }
+        }
+        if let Some(a) = action {
+            self.run_media_action(a);
+        }
+    }
+
+    fn media_row(
+        &mut self,
+        ui: &mut egui::Ui,
+        it: &MediaItem,
+        accents: &[Color32; 6],
+    ) -> Option<MediaAction> {
+        let pal = crate::settings::pal();
+        let w = ui.available_width();
+        let (row, resp) = ui.allocate_exact_size(vec2(w, 74.0), Sense::click());
+        let painter = ui.painter_at(row);
+        if resp.hovered() {
+            painter.rect_filled(row, 6.0, pal.hover);
+        }
+        let thumb = Rect::from_min_size(row.min + vec2(4.0, 5.0), vec2(96.0, 64.0));
+        let mut spec = crate::parse::new_image(it.src.clone(), None);
+        spec.contain = false;
+        crate::images::draw_image(&painter, thumb, &spec, &mut self.images, accents, Some(false));
+        let tx = thumb.right() + 14.0;
+        let name_galley = painter.layout_no_wrap(
+            it.name.clone(),
+            FontId::proportional(14.5),
+            pal.text_hi,
+        );
+        let clip = Rect::from_min_max(pos2(tx, row.top()), pos2(row.right() - 4.0, row.bottom()));
+        painter
+            .with_clip_rect(clip)
+            .galley(pos2(tx, row.top() + 16.0), name_galley, pal.text_hi);
+        let mut sub = match it.place {
+            Place::Web => "Web address".to_string(),
+            Place::Missing => "Missing file".to_string(),
+            Place::Outside => "Not in package".to_string(),
+            Place::Package => String::new(),
+        };
+        let mut used = Vec::new();
+        if !it.slides.is_empty() {
+            let nums: Vec<String> = it.slides.iter().map(|i| (i + 1).to_string()).collect();
+            used.push(format!(
+                "Slide{} {}",
+                if nums.len() == 1 { "" } else { "s" },
+                nums.join(", ")
+            ));
+        }
+        if it.logo {
+            used.push("Logo".into());
+        }
+        let usage = if used.is_empty() {
+            "Not used".to_string()
+        } else {
+            used.join(" · ")
+        };
+        if sub.is_empty() {
+            sub = usage;
+        } else {
+            sub = format!("{sub} · {usage}");
+        }
+        painter.with_clip_rect(clip).text(
+            pos2(tx, row.top() + 42.0),
+            egui::Align2::LEFT_TOP,
+            sub,
+            FontId::proportional(12.5),
+            if it.place == Place::Missing {
+                Color32::from_rgb(0xD9, 0x48, 0x3B)
+            } else {
+                pal.text_dim
+            },
+        );
+        let mut action = None;
+        if resp.double_clicked() {
+            action = Some(MediaAction::Insert(it.src.clone()));
+        } else if resp.clicked() {
+            if let Some(&i) = it.slides.first() {
+                action = Some(MediaAction::Show(i));
+            }
+        }
+        let removable = it.place == Place::Package && it.slides.is_empty() && !it.logo;
+        resp.on_hover_text("Double-click to put it on the current slide")
+            .context_menu(|ui| {
+                crate::tabletools::style_menu(ui);
+                if ui.button("Insert at Cursor").clicked() {
+                    ui.close_menu();
+                    action = Some(MediaAction::Insert(it.src.clone()));
+                }
+                if let Some(p) = &it.path {
+                    if ui.button(REVEAL_LABEL).clicked() {
+                        ui.close_menu();
+                        reveal(p);
+                    }
+                    if it.place == Place::Outside && ui.button("Copy into Presentation").clicked() {
+                        ui.close_menu();
+                        action = Some(MediaAction::CopyIn(it.src.clone(), p.clone()));
+                    }
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(removable, egui::Button::new("Remove from Presentation…"))
+                    .on_disabled_hover_text("Only media no slide uses can be removed")
+                    .clicked()
+                {
+                    ui.close_menu();
+                    if let Some(p) = &it.path {
+                        action = Some(MediaAction::Remove(p.clone()));
+                    }
+                }
+            });
+        action
+    }
+
+    fn run_media_action(&mut self, a: MediaAction) {
+        match a {
+            MediaAction::Show(i) => self.select_slide(i),
+            MediaAction::Insert(src) => self.insert_block(&src),
+            MediaAction::CopyIn(old, path) => {
+                let new = self.media_ref(&path);
+                if new != old {
+                    self.text = crate::package::replace_media_ref(&self.text, &old, &new);
+                    if self.logo.trim() == old {
+                        self.logo = new;
+                    }
+                    let n = self.text.chars().count();
+                    let c = self.cursor.min(n);
+                    self.after_edit(c, c);
+                }
+            }
+            MediaAction::Remove(path) => {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let ok = rfd::MessageDialog::new()
+                    .set_title("Remove from presentation?")
+                    .set_description(format!(
+                        "{name} will be deleted from the presentation's media folder."
+                    ))
+                    .set_buttons(rfd::MessageButtons::OkCancel)
+                    .show();
+                if ok == rfd::MessageDialogResult::Ok {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => {
+                            self.media_epoch += 1;
+                            if self.doc_form == Some(crate::package::Form::Zip) {
+                                self.dirty = true;
+                            }
+                            self.status = format!("Removed {name}");
+                        }
+                        Err(e) => self.status = format!("Couldn't remove {name}: {e}"),
+                    }
+                }
+            }
         }
     }
 
@@ -1750,7 +2097,7 @@ impl App {
                 .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "bmp"])
                 .pick_file()
             {
-                self.logo = path.to_string_lossy().into_owned();
+                self.logo = self.media_ref(&path);
             }
         }
         if flat_button(ui, remove, "Remove Logo", !self.logo.is_empty()).clicked() {
@@ -1792,6 +2139,74 @@ fn dashed_round_rect(p: &egui::Painter, r: Rect, radius: f32, stroke: Stroke) {
     }
     pts.push(pts[0]);
     p.extend(egui::Shape::dashed_line(&pts, stroke, 4.0, 3.5));
+}
+
+/// One picture or video in the Media panel.
+#[derive(Clone)]
+pub struct MediaItem {
+    pub name: String,
+    /// How the script refers to it.
+    pub src: String,
+    pub path: Option<PathBuf>,
+    pub video: bool,
+    /// Slides (0-based) that show it.
+    pub slides: Vec<usize>,
+    pub logo: bool,
+    pub place: Place,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Place {
+    Package,
+    Outside,
+    Web,
+    Missing,
+}
+
+enum MediaAction {
+    Show(usize),
+    Insert(String),
+    CopyIn(String, PathBuf),
+    Remove(PathBuf),
+}
+
+/// The file name a reference shows, with `%20` turned back into spaces.
+fn file_label(src: &str) -> String {
+    let last = src.trim_end_matches('/').rsplit(['/', '\\']).next().unwrap_or(src);
+    let last = last.split(['?', '#']).next().unwrap_or(last);
+    last.replace("%20", " ")
+}
+
+const REVEAL_LABEL: &str = if cfg!(target_os = "macos") {
+    "Show in Finder"
+} else if cfg!(windows) {
+    "Show in Explorer"
+} else {
+    "Show in Folder"
+};
+
+/// Shows a file selected in the system file browser.
+fn reveal(path: &std::path::Path) {
+    let mut cmd = if cfg!(target_os = "macos") {
+        let mut c = std::process::Command::new("open");
+        c.arg("-R").arg(path);
+        c
+    } else if cfg!(windows) {
+        let mut c = std::process::Command::new("explorer");
+        let mut arg = std::ffi::OsString::from("/select,");
+        arg.push(path);
+        c.arg(arg);
+        c
+    } else {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(path.parent().unwrap_or(path));
+        c
+    };
+    let _ = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 /// Flat rounded button that fills a given rect.

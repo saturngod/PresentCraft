@@ -422,6 +422,23 @@ struct Bundler<'a> {
 }
 
 impl Bundler<'_> {
+    /// The media reference on `line`, tracking fenced code blocks.
+    fn media_src(&self, line: &str, fenced: &mut bool) -> Option<String> {
+        let t = line.trim_start_matches('\t').trim();
+        if t.starts_with("```") || t.starts_with("~~~") {
+            *fenced = !*fenced;
+        }
+        if *fenced {
+            None
+        } else if let Some((_, src)) = crate::parse::markdown_image(t) {
+            Some(src)
+        } else if crate::parse::is_image_src(t) {
+            Some(t.to_string())
+        } else {
+            None
+        }
+    }
+
     /// Rewrites each media line whose file sits outside the package.
     fn bundle_text(&mut self, text: &str) -> Result<String, String> {
         let mut out = String::with_capacity(text.len());
@@ -430,19 +447,7 @@ impl Bundler<'_> {
             if i > 0 {
                 out.push('\n');
             }
-            let t = line.trim_start_matches('\t').trim();
-            if t.starts_with("```") || t.starts_with("~~~") {
-                fenced = !fenced;
-            }
-            let src = if fenced {
-                None
-            } else if let Some((_, src)) = crate::parse::markdown_image(t) {
-                Some(src)
-            } else if crate::parse::is_image_src(t) {
-                Some(t.to_string())
-            } else {
-                None
-            };
+            let src = self.media_src(line, &mut fenced);
             match src.filter(|s| !crate::images::is_web(s)) {
                 Some(src) => {
                     let new = self.bundle_ref(&src)?;
@@ -465,8 +470,10 @@ impl Bundler<'_> {
         let file = file.canonicalize().unwrap_or(file);
         let dest = self.dest.canonicalize().unwrap_or(self.dest.to_path_buf());
         if let Ok(rel) = file.strip_prefix(&dest) {
-            // Already inside: a package-relative reference keeps working.
-            return Ok(if src.starts_with("./") || src.starts_with('/') {
+            // Already inside: a package-relative reference keeps working,
+            // but a full path to the file becomes a package reference.
+            let full_path = Path::new(src).is_absolute() && Path::new(src).exists();
+            return Ok(if (src.starts_with("./") || src.starts_with('/')) && !full_path {
                 src.to_string()
             } else {
                 to_ref(rel)
@@ -540,6 +547,108 @@ pub fn add_asset(package: &Path, file: &Path) -> Result<String, String> {
         done: Vec::new(),
     };
     b.bundle_ref(&file.to_string_lossy())
+}
+
+/// Root of the private working folders (zipped and unsaved documents).
+fn work_root() -> PathBuf {
+    std::env::temp_dir().join("presentcraft-work")
+}
+
+/// True for a working folder this app made.
+pub fn is_work_dir(dir: &Path) -> bool {
+    dir.starts_with(work_root())
+}
+
+/// A new, empty working folder for a document that isn't saved yet, so
+/// media added to it is already inside "the package".
+pub fn new_work_dir() -> std::io::Result<PathBuf> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = work_root().join(format!("untitled-{}-{nanos}", std::process::id()));
+    std::fs::create_dir_all(dir.join(ASSETS))?;
+    Ok(dir)
+}
+
+/// Copies the media `text` mentions into `dest/assets/` and returns the
+/// text pointing at the copies, plus how many files were copied.
+pub fn import_media(
+    text: &str,
+    dest: &Path,
+    resolve: &dyn Fn(&str) -> Option<PathBuf>,
+) -> Result<(String, usize), String> {
+    let mut b = Bundler {
+        dest,
+        resolve,
+        copied: 0,
+        done: Vec::new(),
+    };
+    let t = b.bundle_text(text)?;
+    Ok((t, b.copied))
+}
+
+/// Points every media line that uses `old` at `new` instead.
+pub fn replace_media_ref(text: &str, old: &str, new: &str) -> String {
+    let b = Bundler {
+        dest: Path::new(""),
+        resolve: &|_| None,
+        copied: 0,
+        done: Vec::new(),
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut fenced = false;
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        match b.media_src(line, &mut fenced) {
+            Some(src) if src == old => out.push_str(&line.replacen(old, new, 1)),
+            _ => out.push_str(line),
+        }
+    }
+    out
+}
+
+const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "webm"];
+const PICTURE_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp", "svg", "apng", "heic", "avif",
+];
+
+pub fn is_video_file(p: &Path) -> bool {
+    ext_in(p, VIDEO_EXTS)
+}
+
+pub fn is_media_file(p: &Path) -> bool {
+    ext_in(p, VIDEO_EXTS) || ext_in(p, PICTURE_EXTS)
+}
+
+fn ext_in(p: &Path, list: &[&str]) -> bool {
+    p.extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .is_some_and(|e| list.contains(&e.as_str()))
+}
+
+/// Every picture and video in `root/assets`, sorted by name.
+pub fn list_assets(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_files(&root.join(ASSETS), &root.join(ASSETS), &mut files);
+    let mut out: Vec<PathBuf> = files
+        .into_iter()
+        .map(|rel| root.join(ASSETS).join(rel))
+        .filter(|p| is_media_file(p))
+        .collect();
+    out.sort_by_key(|p| {
+        p.file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    });
+    out
+}
+
+/// The script reference for a file inside the package at `root`.
+pub fn asset_ref(root: &Path, file: &Path) -> String {
+    to_ref(file.strip_prefix(root).unwrap_or(file))
 }
 
 /// A package path for `name`: adds `.prcraft` when missing.
@@ -687,6 +796,24 @@ mod tests {
         assert!(reopened.text.starts_with("# Two"));
         assert!(reopened.root.join("assets/pic.jpg").is_file());
         let _ = std::fs::remove_dir_all(work_dir(&pkg));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn added_media_always_gets_a_package_reference() {
+        let dir = scratch("add");
+        let pkg = new_work_dir().unwrap();
+        let outside = dir.join("a b.png");
+        std::fs::write(&outside, b"x").unwrap();
+        assert_eq!(add_asset(&pkg, &outside).unwrap(), "/assets/a%20b.png");
+        // adding the copy again (by full path) reuses it
+        let inside = pkg.join("assets/a b.png");
+        assert_eq!(add_asset(&pkg, &inside).unwrap(), "/assets/a%20b.png");
+        assert_eq!(list_assets(&pkg), vec![inside]);
+        assert!(is_work_dir(&pkg));
+        let t = replace_media_ref("x\n/old.png\n```\n/old.png\n```", "/old.png", "/assets/n.png");
+        assert_eq!(t, "x\n/assets/n.png\n```\n/old.png\n```");
+        let _ = std::fs::remove_dir_all(&pkg);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

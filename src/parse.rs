@@ -275,7 +275,7 @@ const CHART_KEYS: &[&str] = &[
     "chart", "type", "title", "caption", "xlabel", "ylabel", "colors", "xformat", "legend",
 ];
 
-fn new_image(src: String, caption: Option<String>) -> ImageSpec {
+pub(crate) fn new_image(src: String, caption: Option<String>) -> ImageSpec {
     ImageSpec {
         src,
         contain: false,

@@ -312,7 +312,7 @@ fn main() -> eframe::Result<()> {
             "--tab" => {
                 tab = Some(match next.as_str() {
                     "format" => inspector::Tab::Format,
-                    "pictures" => inspector::Tab::Pictures,
+                    "media" | "pictures" => inspector::Tab::Media,
                     "share" => inspector::Tab::Share,
                     _ => inspector::Tab::Design,
                 });
@@ -440,6 +440,13 @@ pub struct App {
     pub logo: String,
     pub logo_size: f32,
     pub logo_drop_rect: Option<egui::Rect>,
+    /// The Media panel's drop box, and its search text.
+    pub media_drop_rect: Option<egui::Rect>,
+    pub media_search: String,
+    /// Media list and the state it was built from.
+    pub media_cache: Option<(u64, Vec<inspector::MediaItem>)>,
+    /// Bumped when files are added to or removed from the package.
+    pub media_epoch: u64,
     /// Today's date (refreshed when it is shown in the inspector).
     pub today: String,
     pub author: String,
@@ -533,6 +540,10 @@ impl App {
             logo: String::new(),
             logo_size: 0.05,
             logo_drop_rect: None,
+            media_drop_rect: None,
+            media_search: String::new(),
+            media_cache: None,
+            media_epoch: 0,
             today: theme::today(),
             author: String::new(),
             audience: String::new(),
@@ -659,11 +670,33 @@ impl App {
             }
         };
         self.text = doc.text;
-        self.images.set_doc_dir(Some(doc.root));
-        self.status = format!(
-            "Opened {}",
-            p.file_name().unwrap_or_default().to_string_lossy()
-        );
+        self.images.set_doc_dir(Some(doc.root.clone()));
+        let mut imported = 0;
+        if doc.kind != package::Kind::PrCraft && !package::is_work_dir(&doc.root) {
+            // Copy the media it uses into a package of its own right away,
+            // so the presentation never points at files outside it.
+            if let Ok(work) = package::new_work_dir() {
+                let images = &self.images;
+                let resolve = |src: &str| images.resolve(src);
+                match package::import_media(&self.text, &work, &resolve) {
+                    Ok((text, n)) => {
+                        self.text = text;
+                        imported = n;
+                        self.images.set_doc_dir(Some(work));
+                    }
+                    Err(e) => self.status = format!("Couldn't copy media: {e}"),
+                }
+            }
+        }
+        self.media_epoch += 1;
+        self.status = match imported {
+            0 => format!("Opened {}", p.file_name().unwrap_or_default().to_string_lossy()),
+            n => format!(
+                "Opened {} and copied {n} media file{} into the presentation",
+                p.file_name().unwrap_or_default().to_string_lossy(),
+                if n == 1 { "" } else { "s" }
+            ),
+        };
         self.recent_files.retain(|recent| recent != &p);
         self.recent_files.insert(0, p.clone());
         self.recent_files.truncate(10);
@@ -679,6 +712,13 @@ impl App {
         }
         if let Some(theme) = doc.theme {
             self.use_doc_theme(theme);
+        } else if let Some(i) = doc.info.as_ref().and_then(|j| j.str("Theme")).and_then(|name| {
+            // No Theme/ folder: pick an installed theme by name.
+            self.presets
+                .iter()
+                .position(|p| p.name.eq_ignore_ascii_case(name.trim()))
+        }) {
+            self.apply_preset(i);
         }
         if let Some(info) = &doc.info {
             self.apply_doc_info(info);
@@ -961,14 +1001,36 @@ impl App {
     /// How a dropped or chosen media file is written in the script: `./name`
     /// when it sits in the saved document's folder (or below), otherwise the
     /// full path. Spaces are written as %20 so the line stays one word.
-    /// In a saved package the file is copied into its `assets/` folder.
-    pub fn media_ref(&self, file: &std::path::Path) -> String {
-        if let (Some(_), Some(root)) = (&self.path, &self.images.doc_dir) {
-            if let Ok(r) = package::add_asset(root, file) {
-                return r;
+    /// Copies the file into the presentation's `assets/` folder and returns
+    /// its `/assets/…` reference. Unsaved documents use a private working
+    /// folder that Save copies into the new package.
+    pub fn media_ref(&mut self, file: &std::path::Path) -> String {
+        if let Some(root) = self.media_root() {
+            match package::add_asset(&root, file) {
+                Ok(r) => {
+                    self.media_epoch += 1;
+                    if self.doc_form == Some(package::Form::Zip) {
+                        // The zip is rewritten on the next save.
+                        self.dirty = true;
+                    }
+                    return r;
+                }
+                Err(e) => self.status = format!("Couldn't add the file: {e}"),
             }
         }
         media_ref_for(self.images.doc_dir.as_deref(), file)
+    }
+
+    /// The folder holding this presentation's `assets/`.
+    pub fn media_root(&mut self) -> Option<PathBuf> {
+        if let Some(d) = self.images.doc_dir.clone() {
+            if self.path.is_some() || package::is_work_dir(&d) {
+                return Some(d);
+            }
+        }
+        let work = package::new_work_dir().ok()?;
+        self.images.set_doc_dir(Some(work.clone()));
+        Some(work)
     }
 
     /// Opens a slide's video in the system's video player.
@@ -1430,7 +1492,23 @@ impl App {
                     "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp"
                 )
             {
-                self.logo = p.to_string_lossy().into_owned();
+                self.logo = self.media_ref(&p);
+                continue;
+            }
+            if self.tab == inspector::Tab::Media
+                && !self.presenting
+                && !self.settings_open
+                && package::is_media_file(&p)
+                && self.media_drop_rect.is_some_and(|r| {
+                    ctx.input(|i| i.pointer.latest_pos().is_some_and(|p| r.contains(p)))
+                })
+            {
+                // Dropped on the Media panel: add to the presentation only.
+                let _ = self.media_ref(&p);
+                self.status = format!(
+                    "Added {}. Double-click it to put it on the current slide.",
+                    p.file_name().unwrap_or_default().to_string_lossy()
+                );
                 continue;
             }
             if matches!(
@@ -2504,12 +2582,27 @@ pub enum Icon {
     Palette,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
+    Gear,
 }
 
 pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
     let s = Stroke::new(1.6_f32, color);
     let c = r.center();
     match icon {
+        Icon::ChevronDown => {
+            p.line_segment([c + vec2(-4.0, -2.0), c + vec2(0.0, 2.0)], s);
+            p.line_segment([c + vec2(0.0, 2.0), c + vec2(4.0, -2.0)], s);
+        }
+        Icon::Gear => {
+            for k in 0..8 {
+                let a = std::f32::consts::TAU * k as f32 / 8.0;
+                let d = vec2(a.cos(), a.sin());
+                p.line_segment([c + d * 5.5, c + d * 8.0], Stroke::new(2.4_f32, color));
+            }
+            p.circle_stroke(c, 5.5, s);
+            p.circle_stroke(c, 2.2, Stroke::new(1.3_f32, color));
+        }
         Icon::Sidebar => {
             let b = Rect::from_center_size(c, vec2(18.0, 14.0));
             let pane = Rect::from_min_max(b.min, pos2(b.left() + 6.5, b.bottom()));
