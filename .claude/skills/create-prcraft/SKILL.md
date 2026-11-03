@@ -1,6 +1,6 @@
 ---
 name: create-prcraft
-description: Create, edit or check PresentCraft presentation packages (.prcraft). Use when asked to make a presentation, slide deck or talk for PresentCraft, to turn notes or Markdown into a .prcraft file, to add slides, pictures, tables or charts to one, or to validate or convert (folder/zip) a .prcraft package. Also covers importing iA Presenter-style content.
+description: Create, edit or check PresentCraft presentation packages (.prcraft) and PresentCraft/iA Presenter themes. Use when asked to make a presentation, slide deck or talk for PresentCraft, to turn notes or Markdown into a .prcraft file, to add slides, pictures, tables or charts, to pick or design a theme (colours, fonts, gradients), or to validate or convert (folder/zip) a .prcraft package. Also covers iA Presenter documents and theme folders.
 ---
 
 # Creating PresentCraft packages (.prcraft)
@@ -12,7 +12,7 @@ Talk.prcraft/
 ├── text.md        the script (required, UTF-8)
 ├── info.json      document settings (optional)
 ├── assets/        pictures and videos, referenced as /assets/<name>
-└── Theme/         optional custom theme: template.json + presets.json
+└── Theme/         optional theme folder (iA Presenter format, see Themes)
 ```
 
 The same members can also be stored as a **single zip file** named `Talk.prcraft`, with the members at the zip's top level. PresentCraft opens both forms on every platform. Choose the form like this:
@@ -40,6 +40,8 @@ The same members can also be stored as a **single zip file** named `Talk.prcraft
 Other helper commands:
 - `zip FOLDER.prcraft [OUT.prcraft]` converts a folder to a zip.
 - `unzip FILE.prcraft OUT.prcraft` converts a zip to a folder.
+- `theme-check THEME_DIR` validates a theme folder (see **Themes**).
+- `font "FAMILY" THEME_DIR/fonts` downloads a Google Fonts family for a theme.
 
 You can also write the package by hand. Create the folder, write `text.md` and `info.json`, and put media in `assets/`. Then run `check`.
 
@@ -165,12 +167,12 @@ All settings are optional. Write strict JSON. Unknown keys and blocks are kept w
 
 | Key (under `app.myanmars.presentcraft`) | Meaning |
 | --- | --- |
-| `theme` | A theme name. It is used only when there is no `Theme/` folder. Built-in themes (Southeast Asian cities): `Yangon` (the default), `Mandalay`, `Bagan`, `Singapore`, `Bangkok`, `Chiang Mai`, `Hanoi`, `Hoi An`, `Kuala Lumpur`, `Penang`, `Siem Reap`, `Luang Prabang`, `Bali`, `Manila` |
+| `theme` | A built-in theme name (see **Themes**). It is used only when there is no `Theme/` folder. |
 | `appearance` | `"light"` or `"dark"`: which colour variant the slides use |
 | `author`, `audience` | Metadata shown in the Design panel |
 | `logo`, `logoSize` | The logo picture (put it in `assets/`), and its height as a fraction of slide height (about 0.02–0.08). The logo appears in slots set to `Logo` |
 | `slots` | Six header/footer places, in this order: leading, middle and trailing header, then leading, middle and trailing footer. Each `kind` is `Empty`, `Number` (slide number), `Date`, `Logo` or `Custom` (uses `text`) |
-| `deckGradient` | Background colours that blend from the first to the last slide, set separately for light and dark slides. `colors` needs 2 or more `#RRGGBB` values |
+| `deckGradient` | A per-deck gradient, set separately for light and dark slides; `colors` needs 2 or more `#RRGGBB` values. Gradient themes set this themselves, so leave it out unless you want to override one |
 
 ### iA Presenter's block
 
@@ -191,80 +193,193 @@ The app reads iA Presenter's settings and keeps them up to date when it saves. Y
 - **`logo-size`:** a percentage of slide height, written as text (`"7.5"` means 0.075).
 - **Header and footer places:** the keys are `headerleading`, `headermiddle`, `headertrailing`, `footerleading`, `footermiddle` and `footertrailing`. Each value is `logo`, `date`, `slideNumber`, or your own custom text.
 
-## Custom theme (Theme/)
+## Themes
 
-Include a `Theme/` folder only for a look the built-in themes can't give. A `Theme/` folder overrides `info.json`'s `theme`. The format is iA Presenter's, so an iA Presenter theme folder can be copied in as it is.
+A theme is the design of a deck: colours, typography and optional slide gradients. There are no pictures in a theme's look. PresentCraft themes use **iA Presenter's theme folder format**, as described in [iA's Custom Themes guide](https://ia.net/presenter/support/visuals/themes?platform=mac). The same folder works in both apps.
+
+### Choosing a theme
+
+Usually pick a built-in theme by name in `info.json` (`"theme": "Bagan"`) or with `build --theme Bagan`. Write a `Theme/` folder only when no built-in theme fits. A `Theme/` folder always wins over the `theme` name.
+
+The built-in themes are named after Southeast Asian cities. Each has its own colours and its own Google Fonts pairing:
+
+| Theme | Look | Titles / body | Style |
+| --- | --- | --- | --- |
+| Yangon (default) | lacquer maroon on ivory; gold on twilight indigo | Cormorant Garamond / Lato | covers in the dark look |
+| Mandalay | vermilion on warm paper; gold on teak | Cinzel / EB Garamond | solid |
+| Bagan | dawn: rose, apricot, amber | Marcellus / Nunito Sans | gradient |
+| Singapore | Singapore red on white; night-bay navy | Space Grotesk / Inter | covers in the dark look |
+| Bangkok | emerald, sapphire, ruby, gold; white titles | Prompt / Sarabun | gradient |
+| Chiang Mai | forest green on mist; lantern orange on night | Lora / Source Sans 3 | solid |
+| Hanoi | shutter green on mustard; mustard on deep green | Be Vietnam Pro | covers in the dark look |
+| Hoi An | silk-lantern colours, dark by default | Playfair Display / Mulish | gradient |
+| Kuala Lumpur | navy on cool white; steel on night, dark by default | Archivo / IBM Plex Sans | solid |
+| Penang | Peranakan pastels; jewel tones when dark | Fraunces / Karla | gradient |
+| Siem Reap | temple brown on sandstone; sunrise on pre-dawn | Spectral / Kantumruy Pro | covers in the dark look |
+| Luang Prabang | saffron on temple white and dark teak | Libre Baskerville / Work Sans | solid |
+| Bali | terrace greens to ripe gold | DM Serif Display / DM Sans | gradient |
+| Manila | bay blue to sunset; white titles | Oswald / Poppins | gradient |
+
+Choose by mood and by the deck's text:
+- **Formal** decks: Yangon, Mandalay, Luang Prabang.
+- **Modern** decks: Singapore, Kuala Lumpur.
+- **Warm and colourful** decks: Bagan, Bangkok, Hoi An, Penang, Bali, Manila.
+- **Calm** decks: Chiang Mai, Siem Reap.
+- **Vietnamese** text: Hanoi or Hoi An, whose fonts cover Vietnamese.
+
+Use `"appearance": "dark"` for a dark deck.
+
+Only Latin-script text renders well. Burmese, Thai, Khmer and Lao need text shaping PresentCraft doesn't do yet.
+
+In this repository the built-in themes live in `themes/<City>/` and make good starting points for a custom theme.
+
+### Theme folder
 
 ```text
-Theme/
-├── template.json    required
-├── presets.json     colour variants
-├── <name>.css       stylesheet named by template.json "Css" (the app writes one if missing)
-├── template.png     500 × 281 preview, optional (the app draws one if missing)
-├── fonts/           optional .ttf/.otf files named by TitleFont/BodyFont
-└── image1.webp …    optional pictures, referenced from slides as /Theme/image1.webp
+Harbor/                     (or Theme/ inside a package)
+├── template.json           required: identity, fonts, layouts
+├── presets.json            colour variants (light and dark)
+├── harbor.css              stylesheet named by "Css": @font-face rules, iA styling
+├── fonts/                  .ttf/.otf files + their licence files
+│   ├── Lora-Bold.ttf
+│   ├── SourceSans3-Regular.ttf, -Bold.ttf, -Italic.ttf
+│   └── Lora-OFL.txt, SourceSans3-OFL.txt
+├── template.png            500 × 281 preview (also template.webp); the app draws one if missing
+└── image1.webp …           optional pictures, usable in slides as /Theme/image1.webp
 ```
 
-`Theme/template.json`:
+When an app saves a theme from a folder, it keeps every file and every key it doesn't use. It only rewrites values that changed, and colours keep their original spelling (`#000` or `transparent` stay as written).
+
+### template.json
+
 ```json
 {
   "Name": "Harbor",
   "Version": "1.0",
-  "Author": "PresentCraft",
-  "TitleFont": "Serif",
-  "BodyFont": "System",
-  "ShortDescription": "Calm blues",
-  "LongDescription": "",
+  "Author": "Your name",
+  "ShortDescription": "Calm blues by the water.",
+  "LongDescription": "Calm blues by the water.\n- Navy on sea-salt white\n- Fonts: Lora and Source Sans 3",
   "Css": "harbor.css",
-  "CssClasses": "",
+  "TitleFont": "Lora",
+  "BodyFont": "Source Sans 3",
+  "CssClasses": "variable-size-headings",
   "LayoutExamples": [],
-  "Decoration": "Bar",
-  "TextSize": 1,
-  "InvertTitles": false
+  "Layouts": [
+    { "Name": "Cover", "Classes": "invert" },
+    { "Name": "Title", "Classes": "invert" }
+  ],
+  "TextSize": 1
 }
 ```
 
-`Theme/presets.json`:
+| Key | Meaning |
+| --- | --- |
+| `Name`, `Version`, `Author` | Identity; `Name` appears in the theme menu. |
+| `ShortDescription`, `LongDescription` | One line, then details with `- ` bullet lines. |
+| `Css` | The stylesheet, named after the theme in lower case (`"My Theme"` → `my theme.css`). |
+| `TitleFont`, `BodyFont` | **Display names** of the fonts (`Lora`, `System`, `Serif`). |
+| `CssClasses` | iA classes. `variable-size-headings` is usual; add `has-graph-background` for gradient themes. |
+| `Layouts` | Per-layout classes. `invert` on `Cover` and `Title` shows those slides in the other appearance. |
+| `LayoutExamples` | Optional examples for iA's layout picker (`{"Name", "Markdown"}`). |
+| `TextSize` | PresentCraft only: 0 small to 3 extra large; 1 is medium. |
+
+PresentCraft also accepts two shorthand keys. `InvertTitles: true` means the same as the two `invert` layouts, and `Decoration` (`None`, `Bar`, `Glow`, `Frame`, `Band`, `Shapes`) adds a simple ornament; leave it `None` for a pure design theme. iA Presenter ignores both.
+
+### presets.json
+
 ```json
 {
   "Presets": [
     {
       "Name": "Light",
       "Appearance": "light",
+      "TitleFont": "Lora",
+      "BodyFont": "Source Sans 3",
+      "LightBackgroundColor": "#F6F8FA",
       "DarkTitleTextColor": "#0B2545",
-      "DarkBodyTextColor": "#13315C",
-      "LightBackgroundColor": "#F4F7FB",
-      "LightTitleTextColor": "#FFFFFF",
-      "LightBodyTextColor": "#DCE6F2",
+      "DarkBodyTextColor": "#2E3A48",
       "DarkBackgroundColor": "#0B2545",
-      "Accent1": "#EF8354", "Accent2": "#4F5D75", "Accent3": "#2D3142",
-      "Accent4": "#BFC0C0", "Accent5": "#8DA9C4", "Accent6": "#134074"
+      "LightTitleTextColor": "#FFFFFF",
+      "LightBodyTextColor": "#D5DEE8",
+      "Accent1": "#EF8354", "Accent2": "#2A9D8F", "Accent3": "#E9C46A",
+      "Accent4": "#8DA9C4", "Accent5": "#4F5D75", "Accent6": "#D96C75"
     },
-    { "Name": "Dark", "Appearance": "dark", "...": "same colour keys" }
+    { "Name": "Dark", "Appearance": "dark", "…": "the same keys and values" }
   ]
 }
 ```
 
-- **`Dark…` and `Light…` colours:**
-  - **Light slides** use `LightBackgroundColor` with the `Dark…Text` colours.
-  - **Dark slides** use `DarkBackgroundColor` with the `Light…Text` colours.
-  - Write the same colour values in both presets.
-- **Which variant shows first:** the first preset listed is the one the deck starts in.
-- **Colour values:** `#RGB` or `#RRGGBB`.
-- **Background gradients:** add `"LightBgGradient": [...]` and/or `"DarkBgGradient": [...]`, each a list of 2 or more colours.
-- **Inverted cover and title slides:** write `"Layouts": [{"Name": "Cover", "Classes": "invert"}, {"Name": "Title", "Classes": "invert"}]` in `template.json`, following [iA's theme guide](https://ia.net/presenter/support/visuals/themes?platform=mac). `InvertTitles` is the PresentCraft shorthand for the same thing.
-- **Per-look accents:** `DarkAccent1` / `LightAccent1` set the first accent for light and dark slides.
-- **Chart colours:** `LightGraphDataColors` / `DarkGraphDataColors` take an object such as `{"data-0": "#EA3E55", "data-1": "#FFC400"}`.
-- **Transparency:** colours may include it, as `#RRGGBBAA`.
-- **Fonts:**
-  - `template.json` takes display names: `System` is the built-in sans and `Serif` the built-in serif.
-  - `presets.json` takes CSS names: `system-ui`, `ui-serif`, or a list like `-apple-system-ui-serif, ui-serif`.
-  - Another name, such as `Helvetica`, is used if that font is installed on the computer.
-  - Serif-sounding names otherwise fall back to the built-in serif.
-- **PresentCraft-only keys** (iA Presenter ignores them):
-  - `Decoration`: `None`, `Bar`, `Glow`, `Frame`, `Band` or `Shapes`.
-  - `TextSize`: 0–3, small to extra large.
-  - `InvertTitles`: cover and title slides swap the text and background colours.
+**Colour naming is the tricky part.** The names say what colour the value is, not which slides use it:
+- **Light slides** use `LightBackgroundColor`, with the `DarkTitleTextColor` and `DarkBodyTextColor` text colours.
+- **Dark slides** use `DarkBackgroundColor`, with the `LightTitleTextColor` and `LightBodyTextColor` text colours.
+- Write the **same colour values in every preset**. Presets differ only in `Name`, `Appearance` and, optionally, accents.
+- **The first preset listed** is the look the deck starts in. iA themes often have a single `"Default"` preset.
+
+| Key | Meaning |
+| --- | --- |
+| `TitleFont`, `BodyFont` | **CSS names**: the `font-family` from your `@font-face` rules (`Lora`), or a CSS list such as `-apple-system-ui-serif, ui-serif`. |
+| `Accent1`–`Accent6` | Accent colours. They are used for highlights, bullets, chart series and rules. A `Dark` preset may use its own set. |
+| `DarkAccent1`, `LightAccent1` | The first accent for light slides and for dark slides (New York uses `#FFC400` for both). |
+| `LightBgGradient`, `DarkBgGradient` | 2 or more colours. Each slide takes the next colour along the gradient, from the first slide to the last. Set the background colours to `"transparent"` when you use these. |
+| `LightGraphDataColors`, `DarkGraphDataColors` | Chart series colours: `{"data-0": "#EA3E55", "data-1": "#FFC400", …}`. Without them, charts use the accents. |
+| `LightFrameColor`, `DarkFrameColor` | Used by iA Presenter; kept as written. |
+
+Colours are written `#RGB`, `#RRGGBB`, `#RRGGBBAA` (see-through, for example `#000000b3` is 70% black) or `transparent`.
+
+### Fonts
+
+Typography matters as much as colour. Give every theme its own pairing:
+- A **title face** with character: a serif, a display face, or a condensed sans.
+- A **readable body face** in regular, bold and italic.
+
+1. **Download from Google Fonts.** The helper fetches static `.ttf` files and the licence, and prints the `@font-face` rules:
+   ```bash
+   python3 .claude/skills/create-prcraft/scripts/prcraft.py font "Lora" Harbor/fonts --weights 700
+   python3 .claude/skills/create-prcraft/scripts/prcraft.py font "Source Sans 3" Harbor/fonts --weights 400,700 --italic
+   ```
+   Paste the printed rules at the top of the theme's CSS file.
+2. **Use `.ttf` or `.otf` files.** PresentCraft draws text itself and can't read `.woff`/`.woff2` web fonts. iA Presenter reads `.ttf` too.
+3. **Keep the licence file** next to the fonts. Google Fonts are SIL OFL or Apache licensed, which allows bundling.
+4. **Use the same family name** in `template.json` (display name), `presets.json` (CSS name) and the `@font-face` rules. It must match the name inside the font file. `theme-check` reports a mismatch.
+5. Without bundled files, `System`/`system-ui` is the built-in sans and `Serif`/`ui-serif` the built-in serif. Another name works only if the font is installed on the computer showing the deck.
+
+### Designing a theme
+
+- **Readability first.** Aim for these contrast ratios against every background the text can sit on:
+  - Body text: at least 4.5:1.
+  - Titles: at least 3:1.
+  - Gradients: check every stop, because each slide uses a different one. `theme-check` measures all of these.
+- **Both looks.** Design the light and the dark look together. Same hues, with lightness reversed.
+- **Gradients:**
+  - Use 5–11 stops that change hue gradually while keeping similar lightness, so one text colour works on every slide.
+  - Use white text on mid-to-deep stops, or dark text on pastels.
+- **Inverted covers** (`invert` layouts) give a deck a strong opening, for example a dark cover before light content slides.
+- **Accents:** pick six that work on both backgrounds. `Accent1` is the most visible.
+
+### Checking a theme
+
+```bash
+python3 .claude/skills/create-prcraft/scripts/prcraft.py theme-check Harbor
+```
+
+It reports:
+- missing or invalid JSON and malformed colours;
+- the stylesheet's status;
+- fonts that aren't bundled or are web-only;
+- `@font-face` rules missing for bundled fonts;
+- low-contrast text in either look.
+
+`check` runs the same checks on a package's `Theme/` folder. Fix every `error:` and read every `warning:`.
+
+To see a theme, put it in a package as `Theme/` (or build with `--theme-dir Harbor`), then screenshot both looks:
+1. Set `"appearance": "light"` in `info.json` and take a screenshot.
+2. Set `"appearance": "dark"` and take another.
+
+```bash
+cargo run --locked --bin PresentCraft -- Talk.prcraft --present --slide 1 --screenshot shots/cover.png
+```
+
+To use it in the app for every deck, add it with Settings → Themes → Import Theme….
 
 ## Rules that keep packages working
 

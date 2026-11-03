@@ -15,10 +15,20 @@ Standard library only. Commands:
 
   zip    FOLDER.prcraft [OUT.prcraft]    folder package -> single zip file
   unzip  FILE.prcraft OUT_FOLDER.prcraft  zip file -> folder package
+
+  theme-check THEME_DIR
+      Validates a theme folder (template.json, presets.json, stylesheet,
+      fonts) and warns about hard-to-read colour combinations.
+
+  font "FAMILY" FONTS_DIR [--weights 400,700] [--italic]
+      Downloads static .ttf files of a Google Fonts family plus its licence
+      into FONTS_DIR and prints matching @font-face rules for the theme CSS.
 """
 
 import argparse
 import json
+import struct
+import urllib.request
 import os
 import re
 import shutil
@@ -271,15 +281,11 @@ def cmd_check(a):
             errors.append(f"logo not found: {logo}")
         theme_dir = root / "Theme"
         if theme_dir.is_dir():
-            for name in ("template.json", "presets.json"):
-                p = theme_dir / name
-                if not p.is_file():
-                    (errors if name == "template.json" else warnings).append(f"Theme/{name} missing")
-                    continue
-                try:
-                    lenient_json(p.read_text(encoding="utf-8"))
-                except ValueError as e:
-                    errors.append(f"Theme/{name}: {e}")
+            e2, w2, s2 = check_theme(theme_dir)
+            errors += e2
+            warnings += w2
+            for line in s2:
+                print(f"Theme: {line}")
         elif ours.get("theme") and ours["theme"] not in BUILTIN_THEMES:
             warnings.append(
                 f'theme "{ours["theme"]}" is not built in; it is used only if the person '
@@ -317,6 +323,232 @@ def cmd_check(a):
     finally:
         if tmp:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------- themes ----------
+
+GENERIC_FONTS = {
+    "system", "system-ui", "-apple-system", "blinkmacsystemfont", "ui-sans-serif",
+    "sans", "sans-serif", "ui-rounded", "ui-monospace", "monospace", "serif",
+    "ui-serif", "-apple-system-ui-serif",
+}
+COLOR_KEYS = [
+    "DarkBodyTextColor", "LightBodyTextColor", "DarkTitleTextColor",
+    "LightTitleTextColor", "DarkBackgroundColor", "LightBackgroundColor",
+]
+
+
+def parse_color(s):
+    """(r, g, b, a) from #RGB, #RGBA, #RRGGBB or #RRGGBBAA; None otherwise."""
+    if not isinstance(s, str) or not s.startswith("#"):
+        return None
+    h = s[1:]
+    if not re.fullmatch(r"[0-9a-fA-F]+", h) or len(h) not in (3, 4, 6, 8):
+        return None
+    if len(h) in (3, 4):
+        h = "".join(c * 2 for c in h)
+    v = [int(h[i:i + 2], 16) for i in range(0, len(h), 2)]
+    return tuple(v + [255] * (4 - len(v)))
+
+
+def luminance(c):
+    def lin(v):
+        v /= 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+
+
+def contrast(fg, bg):
+    a = fg[3] / 255  # see-through text is blended over the background
+    fg = tuple(round(fg[i] * a + bg[i] * (1 - a)) for i in range(3))
+    x, y = luminance(fg) + 0.05, luminance(bg) + 0.05
+    return max(x, y) / min(x, y)
+
+
+def font_families(path):
+    """Family names in a .ttf/.otf/.ttc (typographic name first)."""
+    try:
+        b = open(path, "rb").read()
+    except OSError:
+        return set()
+    offsets = [0]
+    if b[:4] == b"ttcf":
+        n = struct.unpack(">I", b[8:12])[0]
+        offsets = list(struct.unpack(f">{n}I", b[12:12 + 4 * n]))
+    names = set()
+    for base in offsets:
+        try:
+            num = struct.unpack(">H", b[base + 4:base + 6])[0]
+            found = {}
+            for i in range(num):
+                tag, _, off, _ = struct.unpack(">4sIII", b[base + 12 + 16 * i:base + 28 + 16 * i])
+                if tag != b"name":
+                    continue
+                count, strings = struct.unpack(">HH", b[off + 2:off + 6])
+                for j in range(count):
+                    pid, _, lid, nid, ln, o = struct.unpack(">6H", b[off + 6 + 12 * j:off + 18 + 12 * j])
+                    if nid in (1, 16) and pid == 3 and lid == 0x409:
+                        found[nid] = b[off + strings + o:off + strings + o + ln].decode("utf-16-be", "ignore")
+            if found:
+                names.add(found.get(16, found.get(1)))
+        except struct.error:
+            continue
+    return names
+
+
+def check_theme(theme_dir, label="Theme"):
+    """(errors, warnings, summary lines) for a theme folder."""
+    d = Path(theme_dir)
+    errors, warnings, summary = [], [], []
+    try:
+        template = lenient_json((d / "template.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return [f"{label}/template.json missing"], [], []
+    except ValueError as e:
+        return [f"{label}/template.json: {e}"], [], []
+    try:
+        presets = lenient_json((d / "presets.json").read_text(encoding="utf-8")).get("Presets", [])
+    except FileNotFoundError:
+        presets = []
+        warnings.append(f"{label}/presets.json missing: default colours are used")
+    except ValueError as e:
+        return [f"{label}/presets.json: {e}"], warnings, []
+    if not str(template.get("Name", "")).strip():
+        errors.append(f"{label}/template.json needs a Name")
+    css = template.get("Css") or ""
+    css_text = ""
+    if not css or not (d / css).is_file():
+        warnings.append(f"{label}: stylesheet {css or '(none)'} missing; the app writes one on save")
+    else:
+        css_text = (d / css).read_text(encoding="utf-8", errors="ignore")
+    for i, layout in enumerate(template.get("Layouts", []) or []):
+        if not isinstance(layout, dict) or "Name" not in layout:
+            errors.append(f"{label}/template.json Layouts[{i}] needs a Name")
+
+    # Fonts: files anywhere in the folder, matched by their family name.
+    bundled, web_only = {}, set()
+    for f in d.rglob("*"):
+        ext = f.suffix.lower()
+        if ext in (".ttf", ".otf", ".ttc", ".otc"):
+            for fam in font_families(f):
+                bundled.setdefault(fam.lower(), fam)
+        elif ext in (".woff", ".woff2"):
+            web_only.add(f.stem.split("-")[0].lower())
+    wanted = []
+    for src in [template] + presets:
+        for key in ("TitleFont", "BodyFont"):
+            value = src.get(key)
+            if value:
+                first = next((n.strip(" '\"") for n in str(value).split(",")
+                              if n.strip(" '\"").lower() not in GENERIC_FONTS), None)
+                if first and first.lower() not in (w.lower() for w in wanted):
+                    wanted.append(first)
+    for fam in wanted:
+        if fam.lower() in bundled:
+            if css_text and fam.lower() not in css_text.lower():
+                warnings.append(f"{label}: {fam} is bundled but has no @font-face rule in {css}")
+        elif fam.replace(" ", "").lower() in web_only:
+            warnings.append(f"{label}: {fam} is only .woff/.woff2; add .ttf files for PresentCraft")
+        else:
+            warnings.append(f"{label}: font {fam!r} is not bundled; PresentCraft uses an installed font "
+                            "of that name or falls back to the built-in sans/serif")
+    summary.append(f"{template.get('Name')}: fonts {', '.join(wanted) or 'System'}; "
+                   f"bundled {', '.join(sorted(bundled.values())) or 'none'}")
+
+    # Colours and readability.
+    if not presets:
+        return errors, warnings, summary
+    looks = set()
+    for i, pr in enumerate(presets):
+        name = pr.get("Name", f"#{i}")
+        app = str(pr.get("Appearance", "light")).lower()
+        if app not in ("light", "dark"):
+            errors.append(f"{label}/presets.json {name}: Appearance must be light or dark")
+        looks.add(app)
+        for key in COLOR_KEYS + [f"Accent{k}" for k in range(1, 7)] + ["DarkAccent1", "LightAccent1"]:
+            v = pr.get(key)
+            if v is not None and v != "transparent" and parse_color(v) is None:
+                errors.append(f"{label}/presets.json {name}: {key} {v!r} is not a #RGB/#RRGGBB(AA) colour")
+        for key in ("LightBgGradient", "DarkBgGradient"):
+            stops = pr.get(key)
+            if stops is not None and (not isinstance(stops, list) or len(stops) < 2
+                                      or any(parse_color(c) is None for c in stops)):
+                errors.append(f"{label}/presets.json {name}: {key} needs 2+ colours")
+        for key in ("LightGraphDataColors", "DarkGraphDataColors"):
+            g = pr.get(key)
+            if g is not None and (not isinstance(g, dict) or not all(re.fullmatch(r"data-\d+", k) for k in g)):
+                errors.append(f"{label}/presets.json {name}: {key} must look like {{\"data-0\": \"#...\"}}")
+    first = presets[0]
+    summary.append(f"starts {str(first.get('Appearance', 'light')).lower()}; looks: {', '.join(sorted(looks))}")
+    # Light slides: Dark… text on LightBackground (or the light gradient).
+    for look, bg_key, grad_key, title_key, body_key, fallback in (
+        ("light", "LightBackgroundColor", "LightBgGradient", "DarkTitleTextColor", "DarkBodyTextColor", (255, 255, 255, 255)),
+        ("dark", "DarkBackgroundColor", "DarkBgGradient", "LightTitleTextColor", "LightBodyTextColor", (0, 0, 0, 255)),
+    ):
+        stops = first.get(grad_key)
+        bgs = [parse_color(c) for c in stops] if stops else [parse_color(first.get(bg_key)) or fallback]
+        bgs = [b for b in bgs if b]
+        for text_key, need in ((title_key, 3.0), (body_key, 4.5)):
+            fg = parse_color(first.get(text_key))
+            if not fg:
+                continue
+            worst = min(contrast(fg, b) for b in bgs)
+            if worst < need:
+                warnings.append(f"{label}: {look} slides: {text_key} {first.get(text_key)} has contrast "
+                                f"{worst:.2f}:1 on its {'gradient' if stops else 'background'} (aim for {need}:1)")
+    return errors, warnings, summary
+
+
+def cmd_theme_check(a):
+    errors, warnings, summary = check_theme(a.theme_dir, Path(a.theme_dir).name)
+    for line in summary:
+        print(line)
+    for w in warnings:
+        print(f"warning: {w}")
+    for e in errors:
+        print(f"error: {e}")
+    print("OK" if not errors else f"{len(errors)} error(s)")
+    return 1 if errors else 0
+
+
+def cmd_font(a):
+    family = a.family
+    weights = [int(w) for w in a.weights.split(",")]
+    faces = [(0, w) for w in weights] + ([(1, 400)] if a.italic else [])
+    spec = "ital,wght@" + ";".join(f"{i},{w}" for i, w in sorted(faces))
+    url = "https://fonts.googleapis.com/css2?family=" + urllib.parse.quote(family) + ":" + spec
+
+    def get(u):
+        # An old user agent makes Google Fonts serve plain .ttf files.
+        req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/4.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read()
+
+    out = Path(a.fonts_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    slug = family.replace(" ", "")
+    rules = []
+    for block in re.findall(r"@font-face\s*{([^}]*)}", get(url).decode()):
+        style = re.search(r"font-style:\s*(\w+)", block).group(1)
+        weight = int(re.search(r"font-weight:\s*(\d+)", block).group(1))
+        src = re.search(r"url\((https://[^)]+\.ttf)\)", block).group(1)
+        name = {400: "Regular", 700: "Bold"}.get(weight, str(weight))
+        fname = f"{slug}-{'Italic' if style == 'italic' and weight == 400 else name + ('Italic' if style == 'italic' else '')}.ttf"
+        (out / fname).write_bytes(get(src))
+        rules.append(f"@font-face {{\n  font-family: '{family}';\n  font-style: {style};\n"
+                     f"  font-weight: {weight};\n  src: url('{out.name}/{fname}') format('truetype');\n}}")
+    lic = family.lower().replace(" ", "")
+    for base, file in (("ofl", "OFL.txt"), ("apache", "LICENSE.txt"), ("ufl", "LICENCE.txt")):
+        try:
+            (out / f"{slug}-{file}").write_bytes(
+                get(f"https://raw.githubusercontent.com/google/fonts/main/{base}/{lic}/{file}"))
+            break
+        except Exception:
+            continue
+    else:
+        print(f"warning: no licence file found for {family}; add it by hand", file=sys.stderr)
+    print("\n".join(rules))
+    return 0
 
 
 def cmd_zip(a):
@@ -371,8 +603,16 @@ def main():
     u = sub.add_parser("unzip")
     u.add_argument("file")
     u.add_argument("out")
+    t = sub.add_parser("theme-check")
+    t.add_argument("theme_dir")
+    f = sub.add_parser("font")
+    f.add_argument("family")
+    f.add_argument("fonts_dir")
+    f.add_argument("--weights", default="400,700")
+    f.add_argument("--italic", action="store_true")
     a = ap.parse_args()
-    return {"build": cmd_build, "check": cmd_check, "zip": cmd_zip, "unzip": cmd_unzip}[a.cmd](a)
+    return {"build": cmd_build, "check": cmd_check, "zip": cmd_zip, "unzip": cmd_unzip,
+            "theme-check": cmd_theme_check, "font": cmd_font}[a.cmd](a)
 
 
 if __name__ == "__main__":
