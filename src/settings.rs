@@ -657,7 +657,7 @@ impl crate::App {
                 bottom: 18,
             });
         egui::Window::new("Settings")
-            .id(egui::Id::new("settings-window"))
+            .id(egui::Id::unique("settings-window"))
             .title_bar(false)
             .frame(frame)
             .collapsible(false)
@@ -681,7 +681,7 @@ impl crate::App {
                     vec2(26.0, 26.0),
                 );
                 let c = ui
-                    .interact(close, ui.id().with("settings-close"), Sense::click())
+                    .interact(close, ui.scope_id().with("settings-close"), Sense::click())
                     .on_hover_text("Close (Esc)");
                 if c.hovered() {
                     ui.painter()
@@ -720,7 +720,7 @@ impl crate::App {
                         pos2(x0 + w * k as f32 + 2.0, bar.top()),
                         vec2(w - 4.0, 56.0),
                     );
-                    let resp = ui.interact(r, ui.id().with(("settings-tab", k)), Sense::click());
+                    let resp = ui.interact(r, ui.scope_id().with(("settings-tab", k)), Sense::click());
                     let on = self.settings_page == *pg;
                     let p = ui.painter();
                     if on {

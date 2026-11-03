@@ -317,7 +317,7 @@ impl TableEditor {
             .corner_radius(12)
             .shadow(ctx.global_style().visuals.window_shadow)
             .inner_margin(egui::Margin::same(0));
-        egui::Modal::new(Id::new("table-editor"))
+        egui::Modal::new(Id::unique("table-editor"))
             .frame(frame)
             .show(ctx, |ui| {
                 ui.set_width(w);
@@ -380,7 +380,7 @@ impl TableEditor {
                         // corner: transpose
                         let corner = Rect::from_min_size(o, vec2(NUM_W, HEAD_H));
                         let t = ui
-                            .interact(corner, Id::new("te-transpose"), Sense::click())
+                            .interact(corner, Id::unique("te-transpose"), Sense::click())
                             .on_hover_text("Transpose table");
                         if t.hovered() {
                             p.rect_filled(corner, 0.0, pal.hover);
@@ -393,7 +393,7 @@ impl TableEditor {
                         // column headers
                         for j in 0..widths.len() {
                             let r = Rect::from_min_size(pos2(col_x(j), o.y), vec2(widths[j], HEAD_H));
-                            let resp = ui.interact(r, Id::new(("te-col", j)), Sense::click());
+                            let resp = ui.interact(r, Id::unique(("te-col", j)), Sense::click());
                             let on = self.sel == Some(Sel::Col(j));
                             if on {
                                 p.rect_filled(r, 0.0, sel_fill);
@@ -416,7 +416,7 @@ impl TableEditor {
                                     Stroke::new(1.5_f32, col),
                                 );
                             }
-                            let pid = Id::new(("te-col-menu", j));
+                            let pid = Id::unique(("te-col-menu", j));
                             if resp.clicked() {
                                 self.sel = Some(Sel::Col(j));
                                 egui::Popup::toggle_id(ui.ctx(), pid);
@@ -456,7 +456,7 @@ impl TableEditor {
                                 );
                                 continue;
                             };
-                            let resp = ui.interact(r, Id::new(("te-row", i)), Sense::click());
+                            let resp = ui.interact(r, Id::unique(("te-row", i)), Sense::click());
                             let on = self.sel == Some(Sel::Row(i));
                             if on {
                                 p.rect_filled(r, 0.0, sel_fill);
@@ -470,7 +470,7 @@ impl TableEditor {
                                 FontId::proportional(13.0),
                                 if on { accent } else { pal.text_dim },
                             );
-                            let pid = Id::new(("te-row-menu", i));
+                            let pid = Id::unique(("te-row-menu", i));
                             if resp.clicked() {
                                 self.sel = Some(Sel::Row(i));
                                 egui::Popup::toggle_id(ui.ctx(), pid);
@@ -551,14 +551,14 @@ impl TableEditor {
                                 let resp = ui.put(
                                     r,
                                     egui::TextEdit::singleline(&mut self.rows[i][j])
-                                        .id(Id::new(("te-cell", i, j)))
+                                        .id(Id::unique(("te-cell", i, j)))
                                         .frame(
                                             egui::Frame::NONE
                                                 .inner_margin(egui::Margin::symmetric(4, 2)),
                                         )
                                         .font(font.clone())
                                         .text_color(pal.text_hi)
-                                        .horizontal_align(align)
+                                        .align(egui::Align2([align, egui::Align::TOP]))
                                         .desired_width(r.width())
                                         .margin(vec2(0.0, 0.0)),
                                 );
@@ -640,7 +640,7 @@ fn round_button(
     column: bool,
 ) -> bool {
     let resp = ui
-        .interact(Rect::from_center_size(c, vec2(26.0, 26.0)), Id::new(id), Sense::click())
+        .interact(Rect::from_center_size(c, vec2(26.0, 26.0)), Id::unique(id), Sense::click())
         .on_hover_text(tip);
     let pal = crate::settings::pal();
     if resp.hovered() {

@@ -174,7 +174,7 @@ impl App {
         let caption =
             block.get(&lines, "title").is_some() || block.get(&lines, "caption").is_some();
         let mut act: Option<(&'static str, Option<String>)> = None;
-        egui::Area::new(egui::Id::new("image-toolbar"))
+        egui::Area::new(egui::Id::unique("image-toolbar"))
             .order(egui::Order::Foreground)
             .fixed_pos(bar.min)
             .movable(false)

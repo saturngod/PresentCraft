@@ -199,7 +199,7 @@ pub(crate) fn round_button(
     let resp = ui
         .interact(
             Rect::from_center_size(c, vec2(36.0, 36.0)),
-            ui.id().with(id),
+            ui.scope_id().with(id),
             Sense::click(),
         )
         .on_hover_text(tip);
@@ -364,7 +364,7 @@ impl App {
         // Keep the overlay above TextEdit for both painting and hit testing.
         // Sharing the editor layer lets its cursor handling consume toolbar clicks.
         let mut act: Option<Act> = None;
-        egui::Area::new(egui::Id::new("table-toolbar"))
+        egui::Area::new(egui::Id::unique("table-toolbar"))
             .order(egui::Order::Foreground)
             .fixed_pos(bar.min)
             .movable(false)

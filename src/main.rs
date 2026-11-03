@@ -2074,7 +2074,7 @@ impl App {
                         continue;
                     }
                     let v = ui
-                        .interact(r, egui::Id::new(("present-video", k)), Sense::click())
+                        .interact(r, egui::Id::unique(("present-video", k)), Sense::click())
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                     if v.clicked() {
                         play = Some((vs.src.clone(), vs.filter));
@@ -2229,7 +2229,7 @@ impl App {
                                     vec2(22.0, 22.0),
                                 );
                                 let b = ui
-                                    .interact(btn, ui.id().with(("play-slide", i)), Sense::click())
+                                    .interact(btn, ui.scope_id().with(("play-slide", i)), Sense::click())
                                     .on_hover_text("Present from this slide");
                                 painter.circle_filled(
                                     btn.center(),
@@ -2403,7 +2403,7 @@ impl App {
                 };
                 ui.interact(
                     title_rect.expand(4.0),
-                    egui::Id::new("doc-title"),
+                    egui::Id::unique("doc-title"),
                     Sense::hover(),
                 )
                 .on_hover_text(title_tip);
@@ -2448,7 +2448,7 @@ impl App {
                 let mut menu_ui = ui.new_child(egui::UiBuilder::new().max_rect(menu_rect));
                 menu_ui.style_mut().spacing.interact_size.y = 26.0;
                 self.menus(&mut menu_ui, ctx);
-                let id = egui::Id::new(EDITOR_ID);
+                let id = egui::Id::unique(EDITOR_ID);
                 if let Some((a, b)) = self.jump_to.take() {
                     let mut st = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
                     st.cursor
@@ -2606,7 +2606,7 @@ impl App {
                         g,
                         pal.text_hi,
                     );
-                    ui.interact(pill, egui::Id::new("speaking-time"), Sense::hover())
+                    ui.interact(pill, egui::Id::unique("speaking-time"), Sense::hover())
                         .on_hover_text(format!(
                             "Estimated speaking time at {} words per minute",
                             self.settings.wpm
@@ -2774,7 +2774,7 @@ pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
 
 pub fn icon_button(ui: &mut egui::Ui, r: Rect, icon: Icon, tip: &str) -> egui::Response {
     let resp = ui
-        .interact(r, ui.id().with(tip), Sense::click())
+        .interact(r, ui.scope_id().with(tip), Sense::click())
         .on_hover_text(tip);
     let pal = crate::settings::pal();
     if resp.is_pointer_button_down_on() {
@@ -3061,7 +3061,7 @@ impl eframe::App for App {
             self.present_ui(ui);
             return;
         }
-        if !self.settings_open && ctx.memory(|m| m.has_focus(egui::Id::new(EDITOR_ID))) {
+        if !self.settings_open && ctx.memory(|m| m.has_focus(egui::Id::unique(EDITOR_ID))) {
             let settings = self.settings.clone();
             ctx.input_mut(|i| {
                 for event in &mut i.events {

@@ -88,7 +88,7 @@ fn dimmed(prefix: &str, t: &str, c: Color32, bold: bool) -> LayoutJob {
 fn section(ui: &mut egui::Ui, title: &str) -> bool {
     let pal = crate::settings::pal();
     section_end(ui);
-    let key = egui::Id::new(("inspector_section", title));
+    let key = egui::Id::unique(("inspector_section", title));
     let open_id = key.with("open");
     let area_id = key.with("area");
     let mut open = ui.data(|d| d.get_temp::<bool>(open_id)).unwrap_or(true);
@@ -140,7 +140,7 @@ fn section(ui: &mut egui::Ui, title: &str) -> bool {
     }
     ui.data_mut(|d| {
         d.insert_temp(open_id, open);
-        d.insert_temp(egui::Id::new("inspector_section_current"), (area_id, top));
+        d.insert_temp(egui::Id::unique("inspector_section_current"), (area_id, top));
     });
     ui.add_space(4.0);
     open
@@ -148,7 +148,7 @@ fn section(ui: &mut egui::Ui, title: &str) -> bool {
 
 /// Records where the current section ends, for the hover-only toggle.
 fn section_end(ui: &mut egui::Ui) {
-    let cur = egui::Id::new("inspector_section_current");
+    let cur = egui::Id::unique("inspector_section_current");
     let Some((area_id, top)) = ui.data(|d| d.get_temp::<(egui::Id, f32)>(cur)) else {
         return;
     };
@@ -684,7 +684,7 @@ impl App {
             let r = Rect::from_min_size(pos2(x, seg.top() + 2.0), vec2(widths[k], 28.0));
             x += widths[k];
             let resp = ui
-                .interact(r, ui.id().with(("seg", k)), Sense::click())
+                .interact(r, ui.scope_id().with(("seg", k)), Sense::click())
                 .on_hover_text(match t {
                     Tab::Format => "Format: Markdown cheat sheet, tables and charts",
                     Tab::Media => "Media: pictures and videos in this presentation",
@@ -738,7 +738,7 @@ impl App {
         // Share
         let share_r = Rect::from_min_size(pos2(seg.right() + 6.0, cy - 16.0), vec2(62.0, 32.0));
         let resp = ui
-            .interact(share_r, ui.id().with("share"), Sense::click())
+            .interact(share_r, ui.scope_id().with("share"), Sense::click())
             .on_hover_text("Export as PDF, PowerPoint, pictures, web page or Markdown");
         let on = self.tab == Tab::Share;
         let fill = if on {
@@ -766,7 +766,7 @@ impl App {
         // Play
         let play = Rect::from_center_size(pos2(top.right() - 18.0, cy), vec2(34.0, 34.0));
         let resp = ui
-            .interact(play, ui.id().with("play"), Sense::click())
+            .interact(play, ui.scope_id().with("play"), Sense::click())
             .on_hover_text(format!("Present ({})", kbd("⌘↵")));
         let p = ui.painter();
         p.circle_filled(
@@ -1042,7 +1042,7 @@ impl App {
                     pos2(row.left() + w * k as f32 + 4.0, row.top()),
                     vec2(w - 8.0, 56.0),
                 );
-                let resp = ui.interact(r, ui.id().with(("disp", k)), Sense::click());
+                let resp = ui.interact(r, ui.scope_id().with(("disp", k)), Sense::click());
                 let sel = self.table_display == k;
                 let p = ui.painter();
                 if sel {
@@ -1283,7 +1283,7 @@ impl App {
             vec2(zone_w, 62.0),
         );
         let zone_resp = ui
-            .interact(zone, ui.id().with("media-drop"), Sense::click())
+            .interact(zone, ui.scope_id().with("media-drop"), Sense::click())
             .on_hover_text("Click to choose files, or drop them here");
         let dragging_here = ui.ctx().input(|i| {
             !i.raw.hovered_files.is_empty()
@@ -1754,7 +1754,7 @@ impl App {
             );
         }
         if ui
-            .interact(card, ui.id().with("design-preview"), Sense::click())
+            .interact(card, ui.scope_id().with("design-preview"), Sense::click())
             .on_hover_text("Double-click to present")
             .double_clicked()
         {
@@ -1956,7 +1956,7 @@ impl App {
             let cell =
                 Rect::from_min_size(pos2(r.left() + col as f32 * col_w, y), vec2(col_w, row_h));
             let resp = ui
-                .interact(cell, ui.id().with(("hf-slot", i)), Sense::click())
+                .interact(cell, ui.scope_id().with(("hf-slot", i)), Sense::click())
                 .on_hover_text(SLOT_NAMES[i]);
             if resp.clicked() {
                 self.slot_sel = i;
@@ -2037,7 +2037,7 @@ impl App {
             labeled(ui, "Text", |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut slot.text)
-                        .id(ui.id().with(("hf-text", i)))
+                        .id(ui.scope_id().with(("hf-text", i)))
                         .desired_width(ui.available_width())
                         .hint_text("Footer text"),
                 );
@@ -2224,7 +2224,7 @@ fn reveal(path: &std::path::Path) {
 fn flat_button(ui: &mut egui::Ui, r: Rect, label: &str, enabled: bool) -> egui::Response {
     let pal = crate::settings::pal();
     let sense = if enabled { Sense::click() } else { Sense::hover() };
-    let resp = ui.interact(r, ui.id().with(("flat_button", label)), sense);
+    let resp = ui.interact(r, ui.scope_id().with(("flat_button", label)), sense);
     let fill = if !enabled {
         pal.button.gamma_multiply(0.55)
     } else if resp.is_pointer_button_down_on() {
@@ -2319,7 +2319,7 @@ fn export_row(
         pos2(r.right() - btn_w - pad, r.center().y - 13.0),
         vec2(btn_w, 26.0),
     );
-    let b = ui.interact(btn, ui.id().with(("export", k)), Sense::click());
+    let b = ui.interact(btn, ui.scope_id().with(("export", k)), Sense::click());
     let row_hover = ui.rect_contains_pointer(r);
     let p = ui.painter();
     if row_hover {
@@ -2440,7 +2440,7 @@ fn menu_combo<T: PartialEq + Copy>(
         .map(|(_, l)| *l)
         .unwrap_or("");
     let width = ui.available_width();
-    let salt = egui::Id::new(id_salt);
+    let salt = egui::Id::unique(id_salt);
     egui::ComboBox::from_id_salt(salt)
         .truncate()
         .width(width)
@@ -2528,7 +2528,7 @@ fn font_combo(
     label: &dyn Fn(FontChoice) -> String,
 ) {
     let pal = crate::settings::pal();
-    let filter_id = ui.id().with(id).with("font_filter");
+    let filter_id = ui.scope_id().with(id).with("font_filter");
     let hl_id = filter_id.with("hl");
     let mut filter: Option<String> = ui.data(|d| d.get_temp(filter_id));
     let closed_text = {
@@ -2697,7 +2697,7 @@ fn font_combo(
                     if keyed && hl >= offset {
                         let row = (hl - offset) as f32 * row_h;
                         let top = egui::scroll_area::State::load(ui.ctx(), scroll_id)
-                            .map(|s| s.offset().y)
+                            .map(|s| s.unclamped_offset().y)
                             .unwrap_or(0.0);
                         if row < top {
                             area = area.vertical_scroll_offset(row);
@@ -2822,7 +2822,7 @@ fn segmented(ui: &mut egui::Ui, value: &mut bool, labels: [&str; 2]) {
     let half = r.width() / 2.0;
     for (i, label) in labels.iter().enumerate() {
         let seg = Rect::from_min_size(pos2(r.left() + half * i as f32, r.top()), vec2(half, r.height()));
-        let resp = ui.interact(seg, ui.id().with(("seg", i)), Sense::click());
+        let resp = ui.interact(seg, ui.scope_id().with(("seg", i)), Sense::click());
         let active = *value == (i == 1);
         if active {
             let inner = seg.shrink(2.0);
