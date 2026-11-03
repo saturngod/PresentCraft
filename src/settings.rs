@@ -614,31 +614,241 @@ fn page_icon(p: &egui::Painter, c: egui::Pos2, page: Page, col: Color32) {
     }
 }
 
-fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
-    ui.horizontal_top(|ui| {
-        let (r, _) = ui.allocate_exact_size(vec2(190.0, 22.0), Sense::hover());
-        if !label.is_empty() {
-            ui.painter().text(
-                pos2(r.right(), r.center().y),
-                egui::Align2::RIGHT_CENTER,
-                label,
-                FontId::proportional(14.0),
-                pal().text_hi,
-            );
-        }
-        ui.add_space(6.0);
-        ui.vertical(|ui| add(ui));
-    });
+// ---------- Settings components ----------
+//
+// Pages are built from grouped cards: each card holds rows with a label (and
+// an optional one-line description) on the left and the control on the right.
+
+/// Settings window background (cards sit on top in `field`).
+fn window_fill() -> Color32 {
+    pal().inspector_bg
 }
 
+/// Hairline between rows inside a card.
+fn row_line() -> Color32 {
+    if is_dark() {
+        pal().border
+    } else {
+        pal().divider
+    }
+}
+
+/// Small bold title above a card.
+fn heading(ui: &mut egui::Ui, t: &str) {
+    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    ui.painter().text(
+        pos2(r.left() + 4.0, r.bottom() - 7.0),
+        egui::Align2::LEFT_CENTER,
+        t,
+        FontId::new(12.0, crate::theme::family(false, true, false)),
+        crate::inspector::text_mid(),
+    );
+    ui.add_space(4.0);
+}
+
+/// A rounded group of rows. Rows add their own vertical padding.
+fn card(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    let p = pal();
+    egui::Frame::new()
+        .fill(p.field)
+        .stroke(Stroke::new(1.0_f32, p.border))
+        .corner_radius(10)
+        .inner_margin(egui::Margin::symmetric(14, 0))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            add(ui);
+        });
+    ui.add_space(16.0);
+}
+
+/// Hairline between two rows of a card.
+fn row_div(ui: &mut egui::Ui) {
+    let r = ui.max_rect();
+    let y = ui.cursor().top();
+    ui.painter()
+        .hline(r.left()..=r.right(), y, Stroke::new(1.0_f32, row_line()));
+}
+
+/// One settings row: title (and optional description) on the left, the
+/// control right-aligned in a column `ctrl_w` wide. Returns the row's
+/// response when `click_row` is set, so the whole row can act as the control.
+fn row(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    title: &str,
+    desc: Option<&str>,
+    ctrl_w: f32,
+    click_row: bool,
+    add: impl FnOnce(&mut egui::Ui),
+) -> Option<egui::Response> {
+    let p = pal();
+    let w = ui.available_width();
+    let text_w = (w - ctrl_w - 20.0).max(120.0);
+    let fg = if enabled { p.text_hi } else { p.text_dim };
+    let tg = ui
+        .painter()
+        .layout(title.to_owned(), FontId::proportional(14.0), fg, text_w);
+    let dg = desc.map(|d| {
+        ui.painter()
+            .layout(d.to_owned(), FontId::proportional(12.0), p.text_dim, text_w)
+    });
+    let text_h = tg.size().y + dg.as_ref().map_or(0.0, |g| 2.0 + g.size().y);
+    let h = (text_h.max(26.0) + 20.0).max(46.0);
+    let (r, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+    let resp = (click_row && enabled).then(|| {
+        let resp = ui.interact(r, ui.scope_id().with(("settings-row", title)), Sense::click());
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        resp
+    });
+    let mut y = r.center().y - text_h / 2.0;
+    let th = tg.size().y;
+    ui.painter().galley(pos2(r.left(), y), tg, fg);
+    y += th + 2.0;
+    if let Some(g) = dg {
+        ui.painter().galley(pos2(r.left(), y), g, p.text_dim);
+    }
+    let ctrl = Rect::from_min_max(pos2(r.right() - ctrl_w, r.top()), r.max);
+    let mut cui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(ctrl)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+    );
+    cui.spacing_mut().item_spacing = vec2(8.0, 6.0);
+    if !enabled {
+        cui.disable();
+    }
+    add(&mut cui);
+    resp
+}
+
+/// A row whose control is an on/off switch; clicking anywhere on it toggles.
+fn switch_row(ui: &mut egui::Ui, enabled: bool, title: &str, desc: Option<&str>, on: &mut bool) {
+    let mut flip = false;
+    let r = row(ui, enabled, title, desc, 60.0, true, |ui| {
+        flip = switch(ui, *on, title).clicked();
+    });
+    if flip || r.is_some_and(|r| r.clicked()) {
+        *on = !*on;
+    }
+}
+
+/// macOS-style on/off switch: accent track when on, grey when off.
+fn switch(ui: &mut egui::Ui, on: bool, label: &str) -> egui::Response {
+    let (r, resp) = ui.allocate_exact_size(vec2(34.0, 20.0), Sense::click());
+    let enabled = ui.is_enabled();
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Switch, enabled, on, label));
+    if enabled && resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let t = ui.ctx().animate_bool_with_time(resp.id, on, 0.12);
+    let p = pal();
+    let off = if is_dark() { p.tab_grey } else { p.border };
+    let mut track = off.lerp_to_gamma(crate::inspector::MENU_ACCENT, t);
+    let mut knob = Color32::WHITE;
+    if !enabled {
+        track = track.gamma_multiply(0.55);
+        knob = knob.gamma_multiply(0.8);
+    }
+    let painter = ui.painter();
+    painter.rect_filled(r, 10.0, track);
+    let kx = egui::lerp((r.left() + 10.0)..=(r.right() - 10.0), t);
+    let kc = pos2(kx, r.center().y);
+    painter.circle_filled(kc + vec2(0.0, 0.8), 8.2, Color32::from_black_alpha(45));
+    painter.circle_filled(kc, 8.0, knob);
+    if resp.has_focus() {
+        painter.rect_stroke(
+            r.expand(2.0),
+            12.0,
+            Stroke::new(2.0_f32, crate::FORMAT_BLUE),
+            egui::StrokeKind::Outside,
+        );
+    }
+    resp
+}
+
+/// Segmented control for two to four exclusive choices.
+fn seg(ui: &mut egui::Ui, value: &mut usize, labels: &[&str]) {
+    let p = pal();
+    let dark = is_dark();
+    let enabled = ui.is_enabled();
+    let font = FontId::proportional(12.5);
+    let widths: Vec<f32> = labels
+        .iter()
+        .map(|l| {
+            let g = ui.painter().layout_no_wrap((*l).to_owned(), font.clone(), p.text_hi);
+            (g.size().x + 24.0).max(60.0)
+        })
+        .collect();
+    let total: f32 = widths.iter().sum::<f32>() + 4.0;
+    let (r, resp) = ui.allocate_exact_size(vec2(total, 26.0), Sense::hover());
+    let fade = |c: Color32| if enabled { c } else { c.gamma_multiply(0.55) };
+    ui.painter().rect_filled(r, 7.0, fade(p.control));
+    let mut x = r.left() + 2.0;
+    for (i, label) in labels.iter().enumerate() {
+        let s = Rect::from_min_size(pos2(x, r.top() + 2.0), vec2(widths[i], r.height() - 4.0));
+        x += widths[i];
+        let sense = if enabled { Sense::click() } else { Sense::hover() };
+        let sr = ui.interact(s, resp.id.with(i), sense);
+        let active = *value == i;
+        if active {
+            ui.painter()
+                .rect_filled(s, 5.0, fade(if dark { p.tab_grey } else { p.field }));
+            ui.painter().rect_stroke(
+                s,
+                5.0,
+                Stroke::new(1.0_f32, fade(p.border)),
+                egui::StrokeKind::Inside,
+            );
+        } else if enabled && sr.hovered() {
+            ui.painter().rect_filled(s, 5.0, p.hover);
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        let fg = if !enabled {
+            p.text_dim
+        } else if active {
+            p.text_hi
+        } else {
+            p.icon
+        };
+        ui.painter()
+            .text(s.center(), egui::Align2::CENTER_CENTER, *label, font.clone(), fg);
+        if sr.clicked() {
+            *value = i;
+        }
+    }
+}
+
+/// Two-choice segmented control for a bool (`false` is the first label).
+fn seg_bool(ui: &mut egui::Ui, value: &mut bool, labels: [&str; 2]) {
+    let mut i = *value as usize;
+    seg(ui, &mut i, &labels);
+    *value = i == 1;
+}
+
+/// Dropdown of names, `w` wide, with a checkmark on the current one.
+fn dropdown(ui: &mut egui::Ui, id: &str, value: &mut usize, names: &[&str], w: f32) {
+    let opts: Vec<(usize, &str)> = names.iter().copied().enumerate().collect();
+    ui.allocate_ui_with_layout(
+        vec2(w, 26.0),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.set_width(w);
+            crate::inspector::menu_combo(ui, id, value, &opts);
+        },
+    );
+}
+
+/// Dim helper text under a control or below a card.
 fn note(ui: &mut egui::Ui, t: &str) {
     ui.label(RichText::new(t).size(12.0).color(pal().text_dim));
 }
 
-fn sep(ui: &mut egui::Ui) {
-    ui.add_space(6.0);
-    ui.separator();
-    ui.add_space(6.0);
+/// Settings button: standard look, 28 high.
+fn button(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    ui.add(egui::Button::new(label).min_size(vec2(0.0, 28.0)))
 }
 
 impl crate::App {
@@ -657,11 +867,7 @@ impl crate::App {
         };
         let dark = is_dark();
         let frame = egui::Frame::new()
-            .fill(if dark {
-                crate::theme::hex(0x262626)
-            } else {
-                Color32::WHITE
-            })
+            .fill(window_fill())
             .stroke(Stroke::new(1.0_f32, pal().border))
             .corner_radius(12)
             .shadow(ctx.global_style().visuals.window_shadow)
@@ -810,44 +1016,73 @@ impl crate::App {
 
     fn page_general(&mut self, ui: &mut egui::Ui) {
         let s = &mut self.settings;
-        row(ui, "Appearance:", |ui| {
-            ui.checkbox(&mut s.match_system, "Match system appearance");
-            ui.add_enabled_ui(!s.match_system, |ui| {
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut s.dark, false, "Light");
-                    ui.radio_value(&mut s.dark, true, "Dark");
-                });
+        heading(ui, "Appearance");
+        card(ui, |ui| {
+            row(ui, true, "Window appearance", None, 260.0, false, |ui| {
+                let mut mode = if s.match_system { 0 } else if s.dark { 2 } else { 1 };
+                seg(ui, &mut mode, &["System", "Light", "Dark"]);
+                s.match_system = mode == 0;
+                if mode != 0 {
+                    s.dark = mode == 2;
+                }
             });
         });
-        sep(ui);
-        row(ui, "New presentations:", |ui| {
-            egui::ScrollArea::vertical()
-                .max_height(180.0)
+        heading(ui, "New Presentations");
+        card(ui, |ui| {
+            row(
+                ui,
+                true,
+                "Starting text",
+                Some("The Markdown every new presentation begins with."),
+                300.0,
+                false,
+                |ui| {
+                    if button(ui, "Clear").clicked() {
+                        s.new_template.clear();
+                    }
+                    if button(ui, "Restore Default").clicked() {
+                        s.new_template = crate::SAMPLE.to_string();
+                    }
+                },
+            );
+            let p = pal();
+            egui::Frame::new()
+                .fill(p.editor_bg)
+                .stroke(Stroke::new(1.0_f32, p.border))
+                .corner_radius(8)
+                .inner_margin(egui::Margin::symmetric(10, 8))
                 .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut s.new_template)
-                            .code_editor()
-                            .desired_width(360.0)
-                            .desired_rows(8),
-                    );
+                    egui::ScrollArea::vertical()
+                        .id_salt("new-template")
+                        .max_height(170.0)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut s.new_template)
+                                    .code_editor()
+                                    .frame(egui::Frame::NONE)
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(8),
+                            );
+                        });
                 });
-            ui.horizontal(|ui| {
-                if ui.button("Restore Default").clicked() {
-                    s.new_template = crate::SAMPLE.to_string();
-                }
-                if ui.button("Clear").clicked() {
-                    s.new_template.clear();
-                }
-            });
+            ui.add_space(14.0);
         });
-        sep(ui);
         let mut check_now = false;
-        row(ui, "Updates:", |ui| {
-            ui.checkbox(&mut s.check_updates, "Check for updates automatically");
-            ui.horizontal(|ui| {
-                let checking = self.update_check.is_some();
+        heading(ui, "Updates");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Check for updates automatically",
+                None,
+                &mut s.check_updates,
+            );
+            row_div(ui);
+            let version = format!("You're using PresentCraft {}.", crate::update::CURRENT);
+            let checking = self.update_check.is_some();
+            row(ui, true, "Version", Some(&version), 160.0, false, |ui| {
                 if ui
-                    .add_enabled(!checking, egui::Button::new("Check Now"))
+                    .add_enabled(!checking, egui::Button::new("Check Now").min_size(vec2(0.0, 28.0)))
                     .clicked()
                 {
                     check_now = true;
@@ -856,10 +1091,6 @@ impl crate::App {
                     ui.spinner();
                 }
             });
-            note(
-                ui,
-                &format!("You're using PresentCraft {}.", crate::update::CURRENT),
-            );
         });
         if check_now {
             self.check_for_updates(ui.ctx(), true);
@@ -868,118 +1099,157 @@ impl crate::App {
 
     fn page_editor(&mut self, ui: &mut egui::Ui) {
         let s = &mut self.settings;
-        ui.horizontal(|ui| {
-            ui.add_space(150.0);
-            ui.label(RichText::new("A").size(13.0));
-            ui.spacing_mut().slider_width = 240.0;
-            ui.add(
-                egui::Slider::new(&mut s.editor_font, 13.0..=26.0)
-                    .step_by(0.5)
-                    .show_value(false),
-            );
-            ui.label(RichText::new("A").size(22.0));
-        });
-        sep(ui);
-        row(ui, "Typography:", |ui| {
-            egui::ComboBox::from_id_salt("typography")
-                .selected_text(TYPOGRAPHY[s.typography])
-                .show_ui(ui, |ui| {
-                    for (i, n) in TYPOGRAPHY.iter().enumerate() {
-                        ui.selectable_value(&mut s.typography, i, *n);
-                    }
-                });
-        });
-        row(ui, "Line length limit:", |ui| {
-            ui.horizontal(|ui| {
-                ui.add(egui::DragValue::new(&mut s.line_length).range(40..=120));
-                ui.label("characters per line");
+        heading(ui, "Text");
+        card(ui, |ui| {
+            row(ui, true, "Text size", None, 280.0, false, |ui| {
+                ui.label(RichText::new("A").size(19.0).color(pal().text_hi));
+                ui.allocate_ui_with_layout(
+                    vec2(200.0, 28.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        crate::inspector::pill_slider(ui, &mut s.editor_font, 13.0..=26.0, 0);
+                        s.editor_font = (s.editor_font * 2.0).round() / 2.0;
+                    },
+                );
+                ui.label(RichText::new("A").size(12.0).color(pal().text_hi));
+            });
+            row_div(ui);
+            row(ui, true, "Typography", None, 200.0, false, |ui| {
+                dropdown(ui, "typography", &mut s.typography, &TYPOGRAPHY, 140.0);
+            });
+            row_div(ui);
+            row(ui, true, "Line length limit", None, 240.0, false, |ui| {
+                ui.label(RichText::new("characters").color(pal().text_dim));
+                ui.add_sized(
+                    [56.0, 26.0],
+                    egui::DragValue::new(&mut s.line_length).range(40..=120),
+                );
             });
         });
-        sep(ui);
-        row(ui, "Focus:", |ui| {
-            ui.checkbox(&mut s.focus_slide, "Focus on current slide");
+        heading(ui, "Writing");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Focus on current slide",
+                Some("Dim every slide except the one you're editing."),
+                &mut s.focus_slide,
+            );
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Three returns start a new slide",
+                None,
+                &mut s.three_returns,
+            );
         });
-        sep(ui);
-        row(ui, "Completed tasks:", |ui| {
-            ui.checkbox(&mut s.fade_tasks, "Fade");
-            ui.checkbox(&mut s.strike_tasks, "Strikethrough");
+        heading(ui, "Completed Tasks");
+        card(ui, |ui| {
+            switch_row(ui, true, "Fade", None, &mut s.fade_tasks);
+            row_div(ui);
+            switch_row(ui, true, "Strikethrough", None, &mut s.strike_tasks);
         });
-        sep(ui);
-        row(ui, "Typing:", |ui| {
-            ui.checkbox(&mut s.three_returns, "Three returns to start a new slide");
-        });
-        sep(ui);
-        row(ui, "Smart substitutions:", |ui| {
-            ui.checkbox(&mut s.smart_quotes, "Quotes");
-            ui.checkbox(&mut s.smart_dashes, "Dashes");
+        heading(ui, "Smart Substitutions");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Quotes",
+                Some("Replace straight quotes with curly quotes as you type."),
+                &mut s.smart_quotes,
+            );
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Dashes",
+                Some("Replace two hyphens with a long dash as you type."),
+                &mut s.smart_dashes,
+            );
         });
     }
 
     fn page_presentation(&mut self, ui: &mut egui::Ui) {
         let s = &mut self.settings;
-        row(ui, "Layout:", |ui| {
-            ui.radio_value(&mut s.responsive, true, "Responsive");
-            note(ui, "Automatically adapt slides to the presentation screen.");
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut s.responsive, false, "Fixed aspect ratio");
-                ui.add_enabled_ui(!s.responsive, |ui| {
-                    egui::ComboBox::from_id_salt("aspect")
-                        .selected_text(ASPECTS[s.aspect].0)
-                        .show_ui(ui, |ui| {
-                            for (i, (n, _)) in ASPECTS.iter().enumerate() {
-                                ui.selectable_value(&mut s.aspect, i, *n);
-                            }
-                        });
-                });
+        heading(ui, "Layout");
+        card(ui, |ui| {
+            let desc = if s.responsive {
+                "Slides adapt to the presentation screen."
+            } else {
+                "Slides keep one shape on every screen."
+            };
+            row(ui, true, "Slide layout", Some(desc), 240.0, false, |ui| {
+                let mut fixed = !s.responsive;
+                seg_bool(ui, &mut fixed, ["Responsive", "Fixed"]);
+                s.responsive = !fixed;
+            });
+            row_div(ui);
+            let names: Vec<&str> = ASPECTS.iter().map(|(n, _)| *n).collect();
+            row(ui, !s.responsive, "Aspect ratio", None, 200.0, false, |ui| {
+                dropdown(ui, "aspect", &mut s.aspect, &names, 140.0);
+            });
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Reduce text size to fit in slide",
+                None,
+                &mut s.fit_text,
+            );
+        });
+        heading(ui, "Presenting");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Focus on current speaker note",
+                None,
+                &mut s.focus_note,
+            );
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Warn on empty slides with speaker notes",
+                None,
+                &mut s.warn_empty,
+            );
+        });
+        heading(ui, "Navigation");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Use custom navigation keys",
+                None,
+                &mut s.custom_keys,
+            );
+            row_div(ui);
+            row(ui, s.custom_keys, "Previous slide", None, 200.0, false, |ui| {
+                dropdown(ui, "prev-key", &mut s.prev_key, &KEYS, 140.0);
+            });
+            row_div(ui);
+            row(ui, s.custom_keys, "Next slide", None, 200.0, false, |ui| {
+                dropdown(ui, "next-key", &mut s.next_key, &KEYS, 140.0);
             });
         });
-        sep(ui);
-        row(ui, "Content:", |ui| {
-            ui.checkbox(&mut s.fit_text, "Reduce text size to fit in slide");
-        });
-        sep(ui);
-        row(ui, "Focus:", |ui| {
-            ui.checkbox(&mut s.focus_note, "Focus on current speaker note");
-        });
-        sep(ui);
-        row(ui, "Navigation:", |ui| {
-            ui.checkbox(&mut s.custom_keys, "Use custom navigation keys");
-            ui.add_enabled_ui(s.custom_keys, |ui| {
-                ui.horizontal(|ui| {
-                    ui.add_sized([100.0, 22.0], egui::Label::new("Previous slide"));
-                    egui::ComboBox::from_id_salt("prev-key")
-                        .width(100.0)
-                        .selected_text(KEYS[s.prev_key])
-                        .show_ui(ui, |ui| {
-                            for (i, n) in KEYS.iter().enumerate() {
-                                ui.selectable_value(&mut s.prev_key, i, *n);
-                            }
-                        });
-                });
-                ui.horizontal(|ui| {
-                    ui.add_sized([100.0, 22.0], egui::Label::new("Next slide"));
-                    egui::ComboBox::from_id_salt("next-key")
-                        .width(100.0)
-                        .selected_text(KEYS[s.next_key])
-                        .show_ui(ui, |ui| {
-                            for (i, n) in KEYS.iter().enumerate() {
-                                ui.selectable_value(&mut s.next_key, i, *n);
-                            }
-                        });
-                });
-            });
-        });
-        sep(ui);
-        row(ui, "Warnings:", |ui| {
-            ui.checkbox(&mut s.warn_empty, "Warn on empty slides with speaker notes");
-        });
-        sep(ui);
-        row(ui, "Speaking Rate:", |ui| {
-            ui.horizontal(|ui| {
-                ui.add(egui::DragValue::new(&mut s.wpm).range(40..=400));
-                ui.label("words/minute");
-            });
-            ui.checkbox(&mut s.show_speaking_time, "Show speaking time");
+        heading(ui, "Speaking Time");
+        card(ui, |ui| {
+            row(
+                ui,
+                true,
+                "Speaking rate",
+                Some("Used to estimate how long each slide takes."),
+                240.0,
+                false,
+                |ui| {
+                    ui.label(RichText::new("words/minute").color(pal().text_dim));
+                    ui.add_sized([56.0, 26.0], egui::DragValue::new(&mut s.wpm).range(40..=400));
+                },
+            );
+            row_div(ui);
+            switch_row(ui, true, "Show speaking time", None, &mut s.show_speaking_time);
         });
     }
 
@@ -999,10 +1269,11 @@ impl crate::App {
         if let Some(i) = chosen {
             self.apply_preset(i);
         }
+        ui.add_space(4.0);
+        note(ui, "Pick a theme to use it. To make your own, change colours, fonts and size in the Design panel, then choose Duplicate Theme.");
         ui.add_space(10.0);
         ui.horizontal(|ui| {
-            if ui
-                .add(egui::Button::new("Duplicate Theme").min_size(vec2(130.0, 28.0)))
+            if button(ui, "Duplicate Theme")
                 .on_hover_text(
                     "Save a copy of the selected theme with its current colours, fonts and size",
                 )
@@ -1026,8 +1297,7 @@ impl crate::App {
                 self.light_override = None;
                 self.dark_override = None;
             }
-            if ui
-                .add(egui::Button::new("Import Theme…").min_size(vec2(120.0, 28.0)))
+            if button(ui, "Import Theme…")
                 .on_hover_text("Add a theme folder with template.json and presets.json (iA Presenter themes work too)")
                 .clicked()
             {
@@ -1044,25 +1314,8 @@ impl crate::App {
                     }
                 }
             }
-            let can_remove = self.presets[self.preset_idx].custom;
-            if ui
-                .add_enabled(
-                    can_remove,
-                    egui::Button::new("Delete").min_size(vec2(80.0, 28.0)),
-                )
-                .on_hover_text("Delete the selected custom theme")
-                .on_disabled_hover_text("Built-in themes can't be deleted")
-                .clicked()
-            {
-                let removed = self.presets.remove(self.preset_idx);
-                if let Some(dir) = removed.file {
-                    crate::themefile::remove(&dir);
-                }
-                self.apply_preset(0);
-            }
             if let Some(dir) = crate::themefile::user_dir() {
-                if ui
-                    .button("Show Themes Folder")
+                if button(ui, "Show Themes Folder")
                     .on_hover_text(dir.display().to_string())
                     .clicked()
                 {
@@ -1070,9 +1323,31 @@ impl crate::App {
                     crate::open_external(dir.as_os_str());
                 }
             }
+            // Destructive action sits apart, on the right.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let can_remove = self.presets[self.preset_idx].custom;
+                if ui
+                    .add_enabled(
+                        can_remove,
+                        egui::Button::new(RichText::new("Delete Theme").color(if can_remove {
+                            hex(0xD9483B)
+                        } else {
+                            pal().text_dim
+                        }))
+                        .min_size(vec2(0.0, 28.0)),
+                    )
+                    .on_hover_text("Delete the selected custom theme")
+                    .on_disabled_hover_text("Built-in themes can't be deleted")
+                    .clicked()
+                {
+                    let removed = self.presets.remove(self.preset_idx);
+                    if let Some(dir) = removed.file {
+                        crate::themefile::remove(&dir);
+                    }
+                    self.apply_preset(0);
+                }
+            });
         });
-        ui.add_space(6.0);
-        note(ui, "Pick a theme to use it. To make your own, change colours, fonts and size in the Design panel, then choose Duplicate Theme. Themes are saved as folders with template.json and presets.json, the same layout iA Presenter uses.");
     }
 
     /// A titled grid of theme previews (cover slide drawn in each theme).
@@ -1083,50 +1358,47 @@ impl crate::App {
         items: &[usize],
         chosen: &mut Option<usize>,
     ) {
-        ui.label(
-            RichText::new(title)
-                .size(12.0)
-                .strong()
-                .color(pal().text_dim),
-        );
-        ui.add_space(4.0);
+        heading(ui, title);
         let cols = 4;
-        let gap = 12.0;
+        let gap = 14.0;
         let cw = (ui.available_width() - gap * (cols as f32 - 1.0)) / cols as f32;
         let ch = cw / crate::render::ASPECT;
         for row in items.chunks(cols) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = gap;
                 for &i in row {
-                    let (cell, resp) = ui.allocate_exact_size(vec2(cw, ch + 24.0), Sense::click());
-                    let thumb = Rect::from_min_size(cell.min + vec2(0.0, 2.0), vec2(cw, ch));
+                    let (cell, resp) = ui.allocate_exact_size(vec2(cw, ch + 26.0), Sense::click());
+                    let thumb = Rect::from_min_size(cell.min + vec2(0.0, 3.0), vec2(cw, ch));
                     let theme = self.theme_for(i, self.presets[i].starts_dark);
                     let painter = ui.painter_at(cell.expand(4.0));
                     self.paint_slide_with(&painter, thumb, 0, &theme);
                     let sel = i == self.preset_idx;
+                    if resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
                     painter.rect_stroke(
                         thumb,
-                        3.0,
+                        4.0,
                         Stroke::new(1.0_f32, pal().border),
                         egui::StrokeKind::Outside,
                     );
                     if sel {
                         painter.rect_stroke(
-                            thumb.expand(2.0),
-                            5.0,
-                            Stroke::new(2.0_f32, crate::ACCENT_BLUE),
+                            thumb.expand(2.5),
+                            6.0,
+                            Stroke::new(2.0_f32, crate::inspector::MENU_ACCENT),
                             egui::StrokeKind::Outside,
                         );
                     } else if resp.hovered() {
                         painter.rect_stroke(
-                            thumb.expand(2.0),
-                            5.0,
+                            thumb.expand(2.5),
+                            6.0,
                             Stroke::new(2.0_f32, pal().hover),
                             egui::StrokeKind::Outside,
                         );
                     }
                     painter.text(
-                        pos2(thumb.left() + 1.0, thumb.bottom() + 12.0),
+                        pos2(thumb.left() + 1.0, thumb.bottom() + 13.0),
                         egui::Align2::LEFT_CENTER,
                         self.presets[i].name,
                         if sel {
@@ -1134,58 +1406,75 @@ impl crate::App {
                         } else {
                             FontId::proportional(12.5)
                         },
-                        if sel { pal().text_hi } else { pal().text_dim },
+                        if sel {
+                            pal().text_hi
+                        } else {
+                            crate::inspector::text_mid()
+                        },
                     );
                     if resp.clicked() {
                         *chosen = Some(i);
                     }
                 }
             });
-            ui.add_space(6.0);
+            ui.add_space(8.0);
         }
     }
 
     fn page_markdown(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.add_space(220.0);
-            ui.selectable_value(&mut self.markdown_processing, false, "Editing");
-            ui.selectable_value(&mut self.markdown_processing, true, "Processing");
-        });
-        ui.add_space(8.0);
         let s = &mut self.settings;
-        if !self.markdown_processing {
-            row(ui, "List bullet:", |ui| {
-                ui.radio_value(&mut s.bullet, 0, "Hyphen");
-                ui.radio_value(&mut s.bullet, 1, "Asterisk");
-                ui.radio_value(&mut s.bullet, 2, "Plus");
+        heading(ui, "Lists");
+        card(ui, |ui| {
+            row(ui, true, "Bullet", Some("Used when PresentCraft writes a list."), 340.0, false, |ui| {
+                seg(ui, &mut s.bullet, &["-  Hyphen", "*  Asterisk", "+  Plus"]);
             });
-            row(ui, "Ordered list delimiter:", |ui| {
-                ui.radio_value(&mut s.ordered_paren, false, "Period");
-                ui.radio_value(&mut s.ordered_paren, true, "Parenthesis");
+            row_div(ui);
+            row(ui, true, "Numbered list", None, 260.0, false, |ui| {
+                seg_bool(ui, &mut s.ordered_paren, ["1.  Period", "1)  Parenthesis"]);
             });
-            sep(ui);
-            row(ui, "Table columns:", |ui| {
-                ui.radio_value(&mut s.table_padded, false, "Compact");
-                ui.radio_value(&mut s.table_padded, true, "Padded");
+        });
+        heading(ui, "Emphasis");
+        card(ui, |ui| {
+            row(ui, true, "Italic", None, 260.0, false, |ui| {
+                seg_bool(ui, &mut s.italic_underscore, ["*Asterisks*", "_Underscores_"]);
             });
-            sep(ui);
-            row(ui, "Italic:", |ui| {
-                ui.radio_value(&mut s.italic_underscore, false, "Asterisks");
-                ui.radio_value(&mut s.italic_underscore, true, "Underscores");
+            row_div(ui);
+            row(ui, true, "Bold", None, 260.0, false, |ui| {
+                seg_bool(ui, &mut s.bold_underscore, ["**Asterisks**", "__Underscores__"]);
             });
-            row(ui, "Bold:", |ui| {
-                ui.radio_value(&mut s.bold_underscore, false, "Double asterisks");
-                ui.radio_value(&mut s.bold_underscore, true, "Double underscores");
-            });
-        } else {
-            row(ui, "", |ui| {
-                ui.checkbox(&mut s.single_return, "Single return starts a new paragraph");
-                note(ui, "When on, each line you show on a slide (tab in front) is its own paragraph.\nWhen off, lines join until an empty line, as in standard Markdown.");
-                ui.add_space(8.0);
-                ui.checkbox(&mut s.smart_punct, "Apply smart punctuation");
-                note(ui, "Show straight quotes and plain dashes as curly quotes and long dashes on slides.");
-            });
-        }
+        });
+        heading(ui, "Tables");
+        card(ui, |ui| {
+            row(
+                ui,
+                true,
+                "Columns",
+                Some("Padded lines up the pipes so tables read well as text."),
+                260.0,
+                false,
+                |ui| {
+                    seg_bool(ui, &mut s.table_padded, ["Compact", "Padded"]);
+                },
+            );
+        });
+        heading(ui, "Slides");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Single return starts a new paragraph",
+                Some("On: each line shown on a slide (tab in front) is its own paragraph. Off: lines join until an empty line, as in standard Markdown."),
+                &mut s.single_return,
+            );
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Apply smart punctuation",
+                Some("Show straight quotes and plain dashes as curly quotes and long dashes on slides."),
+                &mut s.smart_punct,
+            );
+        });
     }
 }
 

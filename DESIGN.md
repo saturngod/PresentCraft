@@ -54,7 +54,8 @@ palette slot.
 | `pill`         | `#2A2A2A` | `#FFFFFF` | Floating pills and banners |
 | `tab_grey`     | `#515151` | `#BDBDBD` | Selected segment (dark) |
 
-Popups and windows use `#262626` (dark) / `#FFFFFF` (light).
+Popups use `#262626` (dark) / `#FFFFFF` (light). The Settings window uses
+`inspector_bg` with `field` cards on top.
 
 For secondary text that must stay readable (more than `text_dim`), use
 `text_mid()` in the inspector: `#B4B4B8` dark / `#4A4A4F` light.
@@ -232,8 +233,9 @@ radius 7, 26 high. The selected segment is inset 2 px, radius 5, filled `field`
 **Dropdown** — `menu_combo` / `font_combo`. Full-width button, checkmark on the
 current value, left-aligned rows. Style the popup with `tabletools::style_menu`.
 
-**Checkbox / toggle** — use egui's checkbox (16 px icon, 6 px gap). Label is a
-short statement of what turns on: "Show speaking time".
+**Checkbox / toggle** — use egui's checkbox (16 px icon, 6 px gap) in the inspector,
+and `switch_row` in Settings (see 5.8). Label is a short statement of what turns
+on: "Show speaking time".
 
 **Slider** — `pill_slider`: 6 px track in `control`, filled part `MENU_ACCENT`,
 white 22 × 16 knob with a soft shadow and 0.5 px border, optional tick dots below.
@@ -276,6 +278,21 @@ Style every menu with `tabletools::style_menu(ui)`:
 
 - In-app windows (Settings): no title bar, radius 12, 1 px border, window shadow,
   padding 20 / 14 / 18. Not resizable unless content needs it.
+- **Settings pages** (`settings.rs`) are built from grouped cards on an
+  `inspector_bg` window:
+  - `heading`: bold 12.0 `text_mid()` title above each card, Title Case.
+  - `card`: `field` fill, 1 px `border`, radius 10, 14 px side padding.
+  - `row`: title 14.0 `text_hi` with an optional 12.0 `text_dim` description on
+    the left, control right-aligned; at least 46 high. Rows are separated by
+    `row_div` hairlines (`divider` light / `border` dark). A disabled row dims its
+    title to `text_dim` and its control to 55 %.
+  - `switch_row` / `switch`: on/off settings use a 34 × 20 switch (track
+    `MENU_ACCENT` when on, `border` light / `tab_grey` dark when off, white knob).
+    The whole row toggles it.
+  - `seg` / `seg_bool`: two to four exclusive choices, same look as `segmented`.
+  - `dropdown`: `menu_combo` at a fixed width (140). Numbers use a 56 × 26
+    `DragValue` with a dim unit label after it.
+  - Prefer these over radio buttons and plain checkboxes in Settings.
 - Questions that block work ("Save changes?") use native `rfd::MessageDialog` with
   a clear title and a one-sentence description that says what each choice does.
 - File pickers use native `rfd` dialogs.

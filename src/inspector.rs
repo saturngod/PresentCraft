@@ -35,7 +35,7 @@ fn on_slide() -> Color32 {
 }
 
 /// Secondary text that must stay readable (stronger than `pal().text_dim`).
-fn text_mid() -> Color32 {
+pub(crate) fn text_mid() -> Color32 {
     if crate::settings::is_dark() {
         Color32::from_rgb(0xB4, 0xB4, 0xB8)
     } else {
@@ -2343,7 +2343,7 @@ fn flat_button(ui: &mut egui::Ui, r: Rect, label: &str, enabled: bool) -> egui::
 }
 
 /// Slider with a blue filled track, white pill knob and tick marks below.
-fn pill_slider(
+pub(crate) fn pill_slider(
     ui: &mut egui::Ui,
     value: &mut f32,
     range: std::ops::RangeInclusive<f32>,
@@ -2525,7 +2525,7 @@ fn stepper(ui: &mut egui::Ui, v: &mut usize, min: usize, max: usize) {
 
 /// Menu-style dropdown matching the font picker: full-width button,
 /// checkmark on the current value, left-aligned rows with a hover bar.
-fn menu_combo<T: PartialEq + Copy>(
+pub(crate) fn menu_combo<T: PartialEq + Copy>(
     ui: &mut egui::Ui,
     id_salt: impl std::hash::Hash + std::fmt::Debug,
     value: &mut T,
@@ -2613,7 +2613,7 @@ fn menu_row(
 }
 
 /// Accent used for highlighted menu rows (macOS-style selection blue).
-const MENU_ACCENT: Color32 = Color32::from_rgb(0x1F, 0x6F, 0xEB);
+pub(crate) const MENU_ACCENT: Color32 = Color32::from_rgb(0x1F, 0x6F, 0xEB);
 
 /// Font dropdown: built-in choices plus every installed family, with a
 /// search box at the top that filters as you type. Arrow keys move the
