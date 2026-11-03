@@ -2863,7 +2863,7 @@ impl App {
                                 } else {
                                     &starts
                                 };
-                                for (i, start) in starts.iter().enumerate().skip(1) {
+                                for (i, start) in starts.iter().enumerate() {
                                     let first = first_content_char(&self.text, *start);
                                     let r = out.galley.pos_from_cursor(CCursor::new(first));
                                     circles.push((
