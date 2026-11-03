@@ -15,6 +15,8 @@ mod mechanics;
 mod optionicons;
 #[cfg(target_os = "macos")]
 mod macos_open;
+#[cfg(target_os = "macos")]
+mod macos_present;
 mod package;
 mod parse;
 mod render;
@@ -518,6 +520,10 @@ pub struct App {
     /// From the command line: start presenting / play the first video.
     pending_present: bool,
     pending_play: bool,
+    /// Frames the presentation window has waited to be sized (macOS),
+    /// or `None` once it is showing.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    present_wait: Option<u8>,
     title_sent: String,
     shot_path: Option<PathBuf>,
     frame: u32,
@@ -613,6 +619,7 @@ impl App {
             video_slide: usize::MAX,
             pending_present: false,
             pending_play: false,
+            present_wait: None,
             title_sent: String::new(),
             shot_path: shot,
             frame: 0,
@@ -1773,6 +1780,7 @@ impl App {
             self.status = mechanics::EMPTY_SLIDE_GUIDANCE.into();
         }
         self.presenting = true;
+        self.present_wait = Some(0);
         // Inline presenting (screenshot runs, or a backend without separate
         // windows) still takes over the main window, so go fullscreen there.
         if self.shot_path.is_none() && ctx.embed_viewports() {
@@ -1782,6 +1790,11 @@ impl App {
 
     fn stop_presenting(&mut self, ctx: &egui::Context) {
         self.images.stop_videos();
+        #[cfg(target_os = "macos")]
+        if self.presenting {
+            macos_present::exit();
+        }
+        self.present_wait = None;
         if self.presenting && self.shot_path.is_none() && ctx.embed_viewports() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
         }
@@ -1790,16 +1803,39 @@ impl App {
         self.select_slide(i);
     }
 
+const PRESENT_TITLE: &str = "Presentation";
+
     /// Shows the presentation in its own fullscreen window so the editor
     /// stays open behind it. Closing that window stops presenting.
     fn present_window(&mut self, ctx: &egui::Context) {
         let id = egui::ViewportId::from_hash_of("presentation-window");
         let builder = egui::ViewportBuilder::default()
-            .with_title("Presentation")
-            .with_inner_size([1280.0, 720.0])
-            .with_fullscreen(true);
+            .with_title(Self::PRESENT_TITLE)
+            .with_inner_size([1280.0, 720.0]);
+        // macOS: stay hidden and borderless until the window covers the
+        // screen, rather than animating into native full screen.
+        #[cfg(target_os = "macos")]
+        let builder = builder.with_decorations(false).with_visible(false);
+        #[cfg(not(target_os = "macos"))]
+        let builder = builder.with_fullscreen(true);
         ctx.show_viewport_immediate(id, builder, |pui, _class| {
             let pctx = &pui.ctx().clone();
+            #[cfg(target_os = "macos")]
+            if let Some(n) = self.present_wait {
+                if macos_present::enter(Self::PRESENT_TITLE) {
+                    self.present_wait = None;
+                    pctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                    pctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                } else if n >= 30 {
+                    // Couldn't find the window: fall back to native full screen.
+                    self.present_wait = None;
+                    pctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                    pctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+                } else {
+                    self.present_wait = Some(n + 1);
+                }
+                pctx.request_repaint();
+            }
             if pctx.input(|i| i.viewport().close_requested()) {
                 self.stop_presenting(pctx);
                 return;
@@ -2226,24 +2262,6 @@ impl App {
                         self.play_video(&src);
                     }
                     ctx.request_repaint();
-                }
-                if resp.hovered() {
-                    painter.text(
-                        avail.right_bottom() - vec2(16.0, 12.0),
-                        egui::Align2::RIGHT_BOTTOM,
-                        format!(
-                            "{} / {}{}   ·   T notes   ·   Esc stop",
-                            self.current + 1,
-                            self.slides.len(),
-                            if videos.is_empty() {
-                                ""
-                            } else {
-                                "   ·   V play / pause video"
-                            }
-                        ),
-                        FontId::proportional(13.0),
-                        Color32::from_gray(140),
-                    );
                 }
             });
     }
