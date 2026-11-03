@@ -134,7 +134,7 @@ rm -f "$zip"
 if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
   # Developer ID signature with the hardened runtime (needed for notarization).
   # The certificate must already be in a keychain.
-  echo "Signing with $APPLE_SIGNING_IDENTITY…"
+  echo "Signing with ${APPLE_SIGNING_IDENTITY}…"
   codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
     "$app/Contents/Resources/ffmpeg/ffmpeg"
   codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$app"

@@ -81,7 +81,7 @@ case "$target" in
   *) echo "Unknown target $target" >&2; exit 1 ;;
 esac
 
-echo "Configuring FFmpeg $FFMPEG_VERSION for $target…"
+echo "Configuring FFmpeg $FFMPEG_VERSION for ${target}…"
 (cd "$work" && ./configure "${flags[@]}" >"$work/configure.log" 2>&1) || {
   tail -30 "$work/configure.log" >&2
   exit 1

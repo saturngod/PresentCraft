@@ -22,7 +22,7 @@ if [[ ! -x "$ff/ffmpeg" && "${FETCH_FFMPEG:-}" == 1 ]]; then
   esac
   name="ffmpeg-n9.0-latest-$asset-lgpl-9.0"
   mkdir -p "$here/build" "$ff"
-  echo "Downloading $name…"
+  echo "Downloading ${name}…"
   curl -fL --retry 3 -o "$here/build/$name.tar.xz" \
     "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$name.tar.xz"
   tar -xf "$here/build/$name.tar.xz" -C "$here/build"
