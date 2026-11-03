@@ -27,6 +27,9 @@ version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$root/Cargo.toml" | head -1)"
 # "-" starts the revision in deb and is not allowed in rpm versions; "~" sorts before the release.
 pkgver="${version//-/\~}"
 id=app.myanmars.presentcraft
+# Oldest glibc the program runs on: the newest GLIBC_x.y symbol version it
+# uses, read from the binary (falls back to the build machine's, Ubuntu 22.04).
+glibc_min=2.35
 
 case "$arch" in
   x86_64) deb_arch=amd64 ;;
@@ -40,8 +43,21 @@ if [[ ! -x "$stage/PresentCraft" ]]; then
   exit 1
 fi
 
+if command -v objdump >/dev/null; then
+  found="$( (objdump -T "$stage/PresentCraft" || true) | (grep -o 'GLIBC_[0-9][0-9.]*' || true) |
+    sed 's/GLIBC_//' | sort -t. -k1,1n -k2,2n -k3,3n -u | tail -1)"
+  if [[ -n "$found" ]]; then glibc_min="$found"; fi
+fi
+echo "Needs glibc $glibc_min or newer."
+
 wanted=("$@")
 [[ ${#wanted[@]} -gt 0 ]] || wanted=(deb rpm appimage)
+for f in "${wanted[@]}"; do
+  case "$f" in
+    deb|rpm|appimage) ;;
+    *) echo "Unknown format '$f'. Use deb, rpm or appimage." >&2; exit 1 ;;
+  esac
+done
 explicit=$([[ $# -gt 0 ]] && echo 1 || echo 0)
 
 want() { local f; for f in "${wanted[@]}"; do [[ "$f" == "$1" ]] && return 0; done; return 1; }
@@ -94,7 +110,7 @@ Section: graphics
 Priority: optional
 Architecture: $deb_arch
 Installed-Size: $size_kb
-Depends: libc6 (>= 2.35), libgl1, libxkbcommon0, libwayland-client0
+Depends: libc6 (>= $glibc_min), libgl1, libegl1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0
 Recommends: xdg-desktop-portal
 Maintainer: PresentCraft <noreply@presentcraft.invalid>
 Description: Markdown presentation editor
@@ -125,7 +141,7 @@ Release: 1
 Summary: Markdown presentation editor
 License: Proprietary
 URL: https://github.com/saturngod/PresentCraft
-Requires: mesa-libGL, libxkbcommon, libwayland-client
+Requires: glibc >= $glibc_min, libglvnd-glx, libglvnd-egl, libxkbcommon, libxkbcommon-x11, libwayland-client
 Recommends: xdg-desktop-portal
 
 %description
@@ -134,7 +150,7 @@ design, and presents or exports the deck. Includes a small LGPL build of
 FFmpeg for inline video.
 
 %install
-cp -a $r/root/. %{buildroot}/
+cp -a "$r/root/." "%{buildroot}/"
 
 %files
 /usr/lib/presentcraft
@@ -149,10 +165,13 @@ $refresh_script
 %postun
 $refresh_script
 EOF
-  rpmbuild -bb --quiet --define "_topdir $r/top" --define "_rpmdir $r/out" \
-    --buildroot "$r/buildroot" "$r/SPECS/presentcraft.spec"
+  # Paths in --define values can't contain spaces, so build in a space-free temp folder.
+  rpmtop="$(mktemp -d)"
+  rpmbuild -bb --quiet --define "_topdir $rpmtop/top" --define "_rpmdir $rpmtop/out" \
+    --buildroot "$rpmtop/buildroot" "$r/SPECS/presentcraft.spec"
   out="$root/dist/presentcraft-$pkgver-1.$arch.rpm"
-  cp "$r"/out/*/*.rpm "$out"
+  cp "$rpmtop"/out/*/*.rpm "$out"
+  rm -rf "$rpmtop"
   echo "Done: $out ($(du -h "$out" | cut -f1))"
 fi
 
