@@ -172,6 +172,18 @@ fn font_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Font families in one folder (a theme's `fonts/`), read once per folder.
+/// Only TrueType and OpenType files can be used; web fonts (.woff/.woff2)
+/// are skipped.
+pub fn families_in(dir: &Path) -> Vec<Family> {
+    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, Vec<Family>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let mut map = cache.lock().unwrap();
+    map.entry(dir.to_path_buf())
+        .or_insert_with(|| scan(&[dir.to_path_buf()]))
+        .clone()
+}
+
 fn scan(dirs: &[PathBuf]) -> Vec<Family> {
     let mut files = Vec::new();
     for d in dirs {

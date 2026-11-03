@@ -79,7 +79,22 @@ The **Media** panel lists everything in the package under **Images** and **Video
 
 Open also accepts `.iapresenter` documents (folder or zip) and plain Markdown (`.md`, `.markdown`, `.txt`). These are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
 
-Themes use iA Presenter's `template.json` + `presets.json` format. Settings → Themes → Import Theme… adds any such folder (including iA Presenter's installed themes); Duplicate Theme saves your design as a theme folder. Saved themes live in `Themes/` next to the settings file.
+Themes are folders laid out like iA Presenter's (compare `iA Presenter.app/Contents/Resources/Themes/New York`):
+
+```text
+New York/
+├── template.json    name, version, author, descriptions, Css, TitleFont, BodyFont, CssClasses, LayoutExamples
+├── presets.json     colour variants (Dark…/Light… text and background colours, Accent1–6, gradients)
+├── newyork.css      stylesheet named by template.json's "Css"
+├── template.png     500 × 281 preview (also template.webp)
+├── fonts/           the theme's font files
+└── image1.webp …    example pictures, used as /Theme/image1.webp
+```
+
+- **Saving a theme** (Duplicate Theme, or the `Theme/` folder in a package) writes this whole structure. A theme that came from a folder (an imported or iA Presenter theme) keeps everything in it, including its CSS, fonts, pictures, preview, layout examples and keys like `DarkAccent1`. PresentCraft only updates the values you changed, and colours written as `#000` or `transparent` stay as they were.
+- **New themes** get a stylesheet named after the theme and a preview drawn in its colours. PresentCraft also adds `Decoration`, `TextSize` and `InvertTitles` to `template.json`; iA Presenter ignores these keys.
+- **Fonts:** `.ttf` and `.otf` files in a theme's `fonts/` folder are used for its slides. Web-only fonts (`.woff`, `.woff2`) can't be drawn natively, so those themes use an installed font with the same name, or the built-in sans or serif.
+- **Importing:** Settings → Themes → Import Theme… adds any such folder, including iA Presenter's installed themes. Saved themes live in `Themes/` next to the settings file.
 
 AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:
 

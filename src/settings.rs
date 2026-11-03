@@ -973,10 +973,11 @@ impl crate::App {
                 let n = self.presets.iter().filter(|p| p.custom).count() + 1;
                 p.name = Box::leak(format!("Custom {n}").into_boxed_str());
                 p.custom = true;
-                p.file = None;
+                // A theme from a folder brings its stylesheet, fonts and pictures.
+                let source = p.file.take();
                 if let Some(parent) = crate::themefile::user_dir() {
                     let dir = crate::themefile::unique_dir(&parent, p.name);
-                    match crate::themefile::save(&dir, &p, self.dark) {
+                    match crate::themefile::save(&dir, &p, self.dark, source.as_deref()) {
                         Ok(()) => p.file = Some(dir),
                         Err(e) => self.status = format!("Couldn't save the theme: {e}"),
                     }

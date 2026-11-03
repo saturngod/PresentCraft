@@ -193,7 +193,17 @@ The app reads iA Presenter's settings and keeps them up to date when it saves. Y
 
 ## Custom theme (Theme/)
 
-Include a `Theme/` folder only for a look the built-in themes can't give. A `Theme/` folder overrides `info.json`'s `Theme`. The format is iA Presenter's, so iA Presenter theme folders work as they are.
+Include a `Theme/` folder only for a look the built-in themes can't give. A `Theme/` folder overrides `info.json`'s `theme`. The format is iA Presenter's, so an iA Presenter theme folder can be copied in as it is.
+
+```text
+Theme/
+├── template.json    required
+├── presets.json     colour variants
+├── <name>.css       stylesheet named by template.json "Css" (the app writes one if missing)
+├── template.png     500 × 281 preview, optional (the app draws one if missing)
+├── fonts/           optional .ttf/.otf files named by TitleFont/BodyFont
+└── image1.webp …    optional pictures, referenced from slides as /Theme/image1.webp
+```
 
 `Theme/template.json`:
 ```json
@@ -203,7 +213,11 @@ Include a `Theme/` folder only for a look the built-in themes can't give. A `The
   "Author": "PresentCraft",
   "TitleFont": "Serif",
   "BodyFont": "System",
+  "ShortDescription": "Calm blues",
+  "LongDescription": "",
+  "Css": "harbor.css",
   "CssClasses": "",
+  "LayoutExamples": [],
   "Decoration": "Bar",
   "TextSize": 1,
   "InvertTitles": false

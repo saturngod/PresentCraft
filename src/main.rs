@@ -594,6 +594,10 @@ impl App {
     /// Apply the complete theme bundle, replacing manual design overrides.
     pub fn apply_preset(&mut self, i: usize) {
         self.preset_idx = i;
+        if self.images.theme_dir != self.presets[i].file {
+            self.images.theme_dir = self.presets[i].file.clone();
+            self.images.clear_cache();
+        }
         self.dark = self.presets[i].starts_dark;
         self.light_override = None;
         self.dark_override = None;

@@ -397,7 +397,13 @@ fn save_folder(dest: &Path, req: SaveRequest) -> Result<Saved, String> {
     }
     write_atomic(&dest.join(TEXT), text.as_bytes())?;
     write_atomic(&dest.join(INFO), info.to_pretty().as_bytes())?;
-    crate::themefile::save(&dest.join(THEME), req.theme, req.dark).map_err(|e| e.to_string())?;
+    crate::themefile::save(
+        &dest.join(THEME),
+        req.theme,
+        req.dark,
+        req.theme.file.as_deref(),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(Saved {
         text,
         logo,

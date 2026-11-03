@@ -22,6 +22,8 @@ enum Web {
 pub struct ImageCache {
     map: HashMap<Key, Option<(TextureHandle, [usize; 2])>>,
     pub doc_dir: Option<PathBuf>,
+    /// Folder of the theme in use, for `/Theme/…` pictures.
+    pub theme_dir: Option<PathBuf>,
     web: Arc<Mutex<HashMap<String, Web>>>,
     /// Videos playing inline (while presenting), by source.
     players: HashMap<String, crate::video::Player>,
@@ -281,8 +283,21 @@ impl ImageCache {
                 return Some(PathBuf::from(h).join(home));
             }
         }
-        let dir = self.doc_dir.as_ref()?;
         let rel = src.trim_start_matches('/');
+        // "/Theme/x.webp": the package's copy of its theme, else the theme
+        // folder itself (before the theme has been saved into the package).
+        if let Some(inner) = rel.strip_prefix("Theme/") {
+            if let Some(c) = self
+                .doc_dir
+                .as_ref()
+                .map(|d| d.join(rel))
+                .filter(|c| c.exists())
+                .or_else(|| self.theme_dir.as_ref().map(|t| t.join(inner)).filter(|c| c.exists()))
+            {
+                return Some(c);
+            }
+        }
+        let dir = self.doc_dir.as_ref()?;
         let candidate = dir.join(rel);
         if candidate.exists() {
             return Some(candidate);

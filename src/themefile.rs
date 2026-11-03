@@ -13,6 +13,11 @@ use std::path::{Path, PathBuf};
 
 pub const TEMPLATE: &str = "template.json";
 pub const PRESETS: &str = "presets.json";
+/// Preview pictures iA Presenter shows in its theme list (500 × 281).
+pub const PREVIEW_PNG: &str = "template.png";
+pub const PREVIEW_WEBP: &str = "template.webp";
+/// Font files that come with a theme.
+pub const FONTS: &str = "fonts";
 
 /// True when `dir` looks like a theme folder.
 pub fn is_theme_dir(dir: &Path) -> bool {
@@ -49,7 +54,9 @@ pub fn load_variant(dir: &Path, preset: Option<&str>) -> Result<Preset, String> 
             presets.set("Presets", Json::Arr(list));
         }
     }
-    Ok(from_json(&template, &presets, dir))
+    let mut p = from_json(&template, &presets, dir);
+    p.file = Some(dir.to_path_buf());
+    Ok(p)
 }
 
 /// Builds a preset from parsed `template.json` and `presets.json`.
@@ -84,7 +91,7 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
         template
             .str(key)
             .or_else(|| light_p.and_then(|p| p.str(key)))
-            .map(face_named)
+            .map(|n| face_named_in(n, Some(&dir.join(FONTS))))
             .unwrap_or(Face::SANS)
     };
     let name = template
@@ -122,63 +129,274 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
     }
 }
 
-/// Writes `preset` as a theme folder (`template.json` and `presets.json`).
-/// `dark` says which variant the deck shows, written first in the list.
-pub fn save(dir: &Path, p: &Preset, dark: bool) -> std::io::Result<()> {
+/// Writes `p` as a theme folder laid out like iA Presenter's:
+///
+/// ```text
+/// Name/
+/// ├── template.json    identity, fonts, stylesheet name, layout examples
+/// ├── presets.json     colour variants
+/// ├── name.css         stylesheet (iA Presenter reads it)
+/// ├── template.png     preview, 500 × 281 (also template.webp)
+/// ├── fonts/           font files, when the theme has its own
+/// └── image1.webp …    example pictures, when the theme has them
+/// ```
+///
+/// When the theme came from another folder (`source`), everything in it is
+/// copied first. Our values are then merged into its JSON, so keys this app
+/// doesn't use, and colours written as `#000`, stay as they were.
+/// `dark` says which variant the deck shows, listed first.
+pub fn save(dir: &Path, p: &Preset, dark: bool, source: Option<&Path>) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let (template, presets) = to_json(p, dark);
+    if let Some(src) = source.filter(|s| s.is_dir() && !same_dir(s, dir)) {
+        copy_dir(src, dir)?;
+    }
+    let read = |name: &str| {
+        std::fs::read_to_string(dir.join(name))
+            .ok()
+            .and_then(|t| Json::parse(&t).ok())
+    };
+    let fonts = dir.join(FONTS);
+    let (mut template, presets) = merge_json(p, dark, read(TEMPLATE), read(PRESETS), &fonts);
+    let has_css = template
+        .str("Css")
+        .is_some_and(|c| !c.trim().is_empty() && dir.join(c).is_file());
+    if !has_css {
+        let name = format!("{}.css", css_slug(p.name));
+        if !dir.join(&name).exists() {
+            std::fs::write(dir.join(&name), default_css(p.name))?;
+        }
+        template.set("Css", name.into());
+    }
+    // Keep a theme's own preview art; redraw the ones we made.
+    if template.bool("PreviewGenerated").unwrap_or(false) || !dir.join(PREVIEW_PNG).is_file() {
+        write_previews(dir, p).map_err(std::io::Error::other)?;
+        template.set("PreviewGenerated", true.into());
+    }
     std::fs::write(dir.join(TEMPLATE), template.to_pretty())?;
     std::fs::write(dir.join(PRESETS), presets.to_pretty())
 }
 
+/// `template.json` and `presets.json` for a new theme folder.
+#[cfg(test)]
 pub fn to_json(p: &Preset, dark: bool) -> (Json, Json) {
-    let title_font = face_name(p.title_face);
-    let body_font = face_name(p.body_face);
-    let template = obj([
-        ("Name", p.name.into()),
-        ("Version", "1.0".into()),
-        ("Author", "PresentCraft".into()),
-        ("ShortDescription", "".into()),
-        ("LongDescription", "".into()),
-        ("Css", "".into()),
-        ("TitleFont", title_font.clone().into()),
-        ("BodyFont", body_font.clone().into()),
-        (
-            "CssClasses",
-            if p.invert_titles { "invert" } else { "" }.into(),
-        ),
-        ("LayoutExamples", Json::Arr(Vec::new())),
-        ("Decoration", decor_name(p.decor).into()),
-        ("TextSize", p.size_idx.into()),
-        ("InvertTitles", p.invert_titles.into()),
-    ]);
-    let variant = |look: &str| {
-        let mut v = obj([
-            ("Name", if look == "dark" { "Dark" } else { "Light" }.into()),
-            ("TitleFont", title_font.clone().into()),
-            ("BodyFont", body_font.clone().into()),
-            ("DarkBodyTextColor", color_hex(p.light.body).into()),
-            ("LightBodyTextColor", color_hex(p.dark.body).into()),
-            ("DarkTitleTextColor", color_hex(p.light.title).into()),
-            ("LightTitleTextColor", color_hex(p.dark.title).into()),
-            ("DarkBackgroundColor", color_hex(p.dark.bg).into()),
-            ("LightBackgroundColor", color_hex(p.light.bg).into()),
-            ("Appearance", look.into()),
-        ]);
+    merge_json(p, dark, None, None, Path::new(""))
+}
+
+/// Our values merged into an existing `template.json` / `presets.json`.
+fn merge_json(
+    p: &Preset,
+    dark: bool,
+    base_template: Option<Json>,
+    base_presets: Option<Json>,
+    fonts: &Path,
+) -> (Json, Json) {
+    let mut t = match base_template {
+        Some(j @ Json::Obj(_)) => j,
+        _ => Json::Obj(Vec::new()),
+    };
+    let set_default = |t: &mut Json, key: &str, v: Json| {
+        if t.get(key).is_none() {
+            t.set(key, v);
+        }
+    };
+    t.set("Name", p.name.into());
+    set_default(&mut t, "Version", "1.0".into());
+    set_default(&mut t, "Author", "PresentCraft".into());
+    set_default(&mut t, "ShortDescription", "".into());
+    set_default(&mut t, "LongDescription", "".into());
+    set_default(&mut t, "Css", "".into());
+    let title_font = keep_font(t.str("TitleFont"), p.title_face, fonts);
+    let body_font = keep_font(t.str("BodyFont"), p.body_face, fonts);
+    t.set("TitleFont", title_font.clone().into());
+    t.set("BodyFont", body_font.clone().into());
+    let mut classes: Vec<String> = t
+        .str("CssClasses")
+        .unwrap_or("")
+        .split_whitespace()
+        .filter(|c| *c != "invert")
+        .map(str::to_string)
+        .collect();
+    if p.invert_titles {
+        classes.push("invert".into());
+    }
+    t.set("CssClasses", classes.join(" ").into());
+    set_default(&mut t, "LayoutExamples", Json::Arr(Vec::new()));
+    t.set("Decoration", decor_name(p.decor).into());
+    t.set("TextSize", p.size_idx.into());
+    t.set("InvertTitles", p.invert_titles.into());
+
+    let mut list = base_presets
+        .as_ref()
+        .map(|j| j.arr("Presets").to_vec())
+        .unwrap_or_default();
+    if list.is_empty() {
+        list = ["Light", "Dark"]
+            .map(|n| obj([("Name", n.into()), ("Appearance", n.to_ascii_lowercase().into())]))
+            .to_vec();
+    }
+    let defaults = crate::theme::presets()[0].accents;
+    for v in &mut list {
+        let tf = keep_font(v.str("TitleFont"), p.title_face, fonts);
+        let bf = keep_font(v.str("BodyFont"), p.body_face, fonts);
+        v.set("TitleFont", tf.into());
+        v.set("BodyFont", bf.into());
+        // "Dark…" colours are used on light slides, "Light…" on dark ones.
+        for (key, ours, fallback) in [
+            ("DarkBodyTextColor", p.light.body, Color32::BLACK),
+            ("LightBodyTextColor", p.dark.body, Color32::WHITE),
+            ("DarkTitleTextColor", p.light.title, Color32::BLACK),
+            ("LightTitleTextColor", p.dark.title, Color32::WHITE),
+            ("DarkBackgroundColor", p.dark.bg, Color32::BLACK),
+            ("LightBackgroundColor", p.light.bg, Color32::WHITE),
+        ] {
+            keep_color(v, key, ours, fallback);
+        }
+        if v.get("Appearance").is_none() {
+            v.set("Appearance", "light".into());
+        }
         for (i, a) in p.accents.iter().enumerate() {
-            v.set(&format!("Accent{}", i + 1), color_hex(*a).into());
+            keep_color(v, &format!("Accent{}", i + 1), *a, defaults[i]);
         }
         for (key, stops) in ["LightBgGradient", "DarkBgGradient"].iter().zip(&p.gradients) {
-            if !stops.is_empty() {
+            if stops.is_empty() {
+                v.remove(key);
+            } else if gradient(Some(v), key) != *stops {
                 let list = stops.iter().map(|c| color_hex(*c).into()).collect();
                 v.set(key, Json::Arr(list));
             }
         }
-        v
+    }
+    // The variant the deck shows goes first.
+    let look = if dark { "dark" } else { "light" };
+    if let Some(i) = list.iter().position(|v| {
+        v.str("Appearance")
+            .is_some_and(|a| a.eq_ignore_ascii_case(look))
+    }) {
+        let chosen = list.remove(i);
+        list.insert(0, chosen);
+    }
+    let mut presets = match base_presets {
+        Some(j @ Json::Obj(_)) => j,
+        _ => Json::Obj(Vec::new()),
     };
-    let order = if dark { ["dark", "light"] } else { ["light", "dark"] };
-    let presets = obj([("Presets", Json::Arr(order.map(variant).to_vec()))]);
-    (template, presets)
+    presets.set("Presets", Json::Arr(list));
+    (t, presets)
+}
+
+/// Keeps a colour as written (`#000`, `transparent`) when it still means
+/// the same colour; otherwise writes ours as `#RRGGBB`.
+fn keep_color(v: &mut Json, key: &str, ours: Color32, fallback: Color32) {
+    let current = v
+        .str(key)
+        .map(|s| parse_color(s).unwrap_or(fallback));
+    if current != Some(ours) {
+        v.set(key, color_hex(ours).into());
+    }
+}
+
+/// Keeps a font name as written when it still picks the same face.
+fn keep_font(current: Option<&str>, face: Face, fonts: &Path) -> String {
+    match current {
+        Some(name) if face_named_in(name, Some(fonts)) == face => name.to_string(),
+        _ => face_name(face),
+    }
+}
+
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+/// "New York" → "newyork", as iA Presenter names its stylesheets.
+fn css_slug(name: &str) -> String {
+    let s: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    if s.is_empty() {
+        "theme".into()
+    } else {
+        s
+    }
+}
+
+fn default_css(name: &str) -> String {
+    format!(
+        "/* {name}: made with PresentCraft.\n   Colours, accents and fonts are in presets.json and template.json.\n   iA Presenter reads this stylesheet; add theme CSS below. */\n"
+    )
+}
+
+/// Draws `template.png` and `template.webp`: a light and a dark slide card,
+/// overlapping like iA Presenter's own previews, in the theme's colours.
+fn write_previews(dir: &Path, p: &Preset) -> Result<(), String> {
+    use image::{Rgba, RgbaImage};
+    let (w, h) = (500u32, 281u32);
+    let mut img = RgbaImage::new(w, h);
+    let rgba = |c: Color32, a: u8| Rgba([c.r(), c.g(), c.b(), a]);
+    let fill = |img: &mut RgbaImage, x0: u32, y0: u32, x1: u32, y1: u32, c: Rgba<u8>| {
+        for y in y0..y1.min(h) {
+            for x in x0..x1.min(w) {
+                let dst = img.get_pixel_mut(x, y);
+                let a = c[3] as u32;
+                for k in 0..3 {
+                    dst[k] = ((c[k] as u32 * a + dst[k] as u32 * (255 - a)) / 255) as u8;
+                }
+                dst[3] = (a + dst[3] as u32 * (255 - a) / 255).min(255) as u8;
+            }
+        }
+    };
+    let card = |img: &mut RgbaImage, x0: u32, y0: u32, x1: u32, y1: u32, look: usize| {
+        let pal = if look == 0 { p.light } else { p.dark };
+        let stops = &p.gradients[look];
+        for y in y0..y1 {
+            let bg = if stops.len() >= 2 {
+                let t = (y - y0) as f32 / (y1 - y0).max(1) as f32 * (stops.len() - 1) as f32;
+                let i = (t.floor() as usize).min(stops.len() - 2);
+                lerp(stops[i], stops[i + 1], t - i as f32)
+            } else {
+                pal.bg
+            };
+            fill(img, x0, y, x1, y + 1, rgba(bg, 255));
+        }
+        let cw = x1 - x0;
+        // Decoration hint, title lines and a body line.
+        match p.decor {
+            Decor::Bar | Decor::Band => fill(img, x0, y0, x1, y0 + 8, rgba(p.accents[0], 255)),
+            Decor::Frame => {
+                let c = rgba(pal.title, 90);
+                fill(img, x0 + 8, y0 + 8, x1 - 8, y0 + 9, c);
+                fill(img, x0 + 8, y1 - 9, x1 - 8, y1 - 8, c);
+                fill(img, x0 + 8, y0 + 8, x0 + 9, y1 - 8, c);
+                fill(img, x1 - 9, y0 + 8, x1 - 8, y1 - 8, c);
+            }
+            _ => {}
+        }
+        let left = x0 + 20;
+        let base = y1 - 30;
+        fill(img, left, base - 62, left + cw * 64 / 100, base - 40, rgba(pal.title, 255));
+        fill(img, left, base - 34, left + cw * 46 / 100, base - 12, rgba(pal.title, 255));
+        fill(img, left, base - 2, left + cw * 40 / 100, base + 8, rgba(pal.body, 220));
+        fill(img, left, base + 14, left + 24, base + 17, rgba(p.accents[0], 255));
+    };
+    // Light card top left, dark card bottom right with a soft shadow.
+    let (light_first, dark_second) = ((0, 0, 338, 210), (150, 57, 487, 268));
+    fill(&mut img, dark_second.0 + 13, dark_second.1 + 13, 500, 281, Rgba([0, 0, 0, 60]));
+    card(&mut img, dark_second.0, dark_second.1, dark_second.2, dark_second.3, 1);
+    fill(&mut img, light_first.0 + 6, light_first.1 + 6, light_first.2 + 6, light_first.3 + 6, Rgba([0, 0, 0, 40]));
+    card(&mut img, light_first.0, light_first.1, light_first.2, light_first.3, 0);
+    img.save(dir.join(PREVIEW_PNG)).map_err(|e| e.to_string())?;
+    let file = std::fs::File::create(dir.join(PREVIEW_WEBP)).map_err(|e| e.to_string())?;
+    image::codecs::webp::WebPEncoder::new_lossless(std::io::BufWriter::new(file))
+        .encode(img.as_raw(), w, h, image::ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())
+}
+
+fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
+    let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t.clamp(0.0, 1.0)).round() as u8;
+    Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
 }
 
 /// Background gradient stops from a preset (fewer than two: none).
@@ -229,6 +447,19 @@ const SERIF_HINTS: &[&str] = &[
     "serif", "georgia", "times", "garamond", "baskerville", "charter", "palatino", "new york",
     "didot", "bodoni", "caslon", "merriweather", "playfair", "lora", "cambria",
 ];
+
+/// Like [`face_named`], trying the theme's own `fonts/` folder first.
+pub fn face_named_in(name: &str, fonts: Option<&Path>) -> Face {
+    if let Some(dir) = fonts.filter(|d| d.is_dir()) {
+        if let Some(f) = crate::fonts::families_in(dir)
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(name.trim()))
+        {
+            return crate::fonts::face_for(f);
+        }
+    }
+    face_named(name)
+}
 
 /// The face for a font family name: an installed family when the font list
 /// is ready, otherwise the built-in serif or sans.
@@ -316,7 +547,8 @@ fn ia_theme_roots() -> Vec<PathBuf> {
 /// The iA Presenter theme folder for a document's `"template"` value
 /// (a folder name such as "tokyo"), when iA Presenter is installed.
 pub fn ia_theme_dir(template: &str) -> Option<PathBuf> {
-    let want = template.trim();
+    // "new york", "newyork" and "New York" all name the same folder.
+    let want = css_slug(template);
     for root in ia_theme_roots() {
         let Ok(entries) = std::fs::read_dir(&root) else {
             continue;
@@ -325,7 +557,7 @@ pub fn ia_theme_dir(template: &str) -> Option<PathBuf> {
             let p = e.path();
             if is_theme_dir(&p)
                 && p.file_name()
-                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(want))
+                    .is_some_and(|n| css_slug(&n.to_string_lossy()) == want)
             {
                 return Some(p);
             }
@@ -464,9 +696,95 @@ mod tests {
         let dir = ia_theme_dir("tokyo").expect("Tokyo theme");
         let p = load_variant(&dir, Some("Default")).unwrap();
         assert_eq!(p.name, "Tokyo");
+        assert!(ia_theme_dir("newyork").is_some() && ia_theme_dir("New York").is_some());
         let helv = ia_theme_dir("helvetica").unwrap();
         assert!(load_variant(&helv, Some("Dark")).unwrap().starts_dark);
         assert!(!load_variant(&helv, Some("Light")).unwrap().starts_dark);
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("pc-theme-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    #[test]
+    fn new_theme_folder_has_ia_structure() {
+        let dir = scratch("new");
+        let mut p = crate::theme::presets()[5].clone();
+        p.custom = true;
+        save(&dir, &p, false, None).unwrap();
+        let t = Json::parse(&std::fs::read_to_string(dir.join(TEMPLATE)).unwrap()).unwrap();
+        assert_eq!(t.str("Css"), Some("studio.css"));
+        assert!(dir.join("studio.css").is_file());
+        assert!(dir.join(PREVIEW_WEBP).is_file());
+        let png = image::open(dir.join(PREVIEW_PNG)).unwrap();
+        assert_eq!((png.width(), png.height()), (500, 281));
+        for key in ["Version", "Author", "ShortDescription", "LongDescription", "LayoutExamples"] {
+            assert!(t.get(key).is_some(), "{key}");
+        }
+        let back = load(&dir).unwrap();
+        assert!(same_look(&back, &p));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saving_an_ia_theme_keeps_its_files_and_keys() {
+        let src = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/New York");
+        if !src.is_dir() {
+            return;
+        }
+        let dir = scratch("ny");
+        let mut p = load(src).unwrap();
+        save(&dir, &p, false, Some(src)).unwrap();
+        for f in ["newyork.css", "image2.webp", "logo.png", "fonts/Inter-Regular.woff2"] {
+            assert!(dir.join(f).is_file(), "{f}");
+        }
+        // iA's own preview art is kept, not redrawn
+        assert_eq!(
+            std::fs::read(dir.join(PREVIEW_PNG)).unwrap(),
+            std::fs::read(src.join(PREVIEW_PNG)).unwrap()
+        );
+        let t = Json::parse(&std::fs::read_to_string(dir.join(TEMPLATE)).unwrap()).unwrap();
+        assert_eq!(t.str("Css"), Some("newyork.css"));
+        assert_eq!(t.str("TitleFont"), Some("Inter"));
+        assert!(t.str("LongDescription").unwrap().contains("Inter"));
+        assert_eq!(t.arr("LayoutExamples").len(), 2);
+        let pr = Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap();
+        let v = &pr.arr("Presets")[0];
+        assert_eq!(v.str("Name"), Some("Default"));
+        assert_eq!(v.str("DarkAccent1"), Some("#FFC400"));
+        assert_eq!(v.str("DarkBodyTextColor"), Some("#000"));
+        assert_eq!(v.str("TitleFont"), Some("inter"));
+        // a changed colour is written; the rest stay as they were
+        p.light.bg = Color32::from_rgb(0xFF, 0xF4, 0xD6);
+        save(&dir, &p, false, Some(&dir)).unwrap();
+        let pr = Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap();
+        let v = &pr.arr("Presets")[0];
+        assert_eq!(v.str("LightBackgroundColor"), Some("#FFF4D6"));
+        assert_eq!(v.str("DarkBodyTextColor"), Some("#000"));
+        assert!(same_look(&load(&dir).unwrap(), &p));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn writes_preview_samples() {
+        // Leaves previews in the temp folder to look at by eye.
+        for (i, name) in [(6, "midnight"), (7, "editorial"), (9, "sunset")] {
+            let dir = std::env::temp_dir().join(format!("pc-preview-{name}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            save(&dir, &crate::theme::presets()[i], false, None).unwrap();
+        }
+    }
+
+    #[test]
+    fn loads_ttf_fonts_shipped_with_a_theme() {
+        let src = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/Copenhagen");
+        if !src.is_dir() {
+            return;
+        }
+        let fams = crate::fonts::families_in(&src.join(FONTS));
+        assert!(!fams.is_empty(), "Copenhagen ships .ttf fonts");
     }
 
     #[test]
