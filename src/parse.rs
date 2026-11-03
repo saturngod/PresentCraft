@@ -88,8 +88,39 @@ pub struct ChartSpec {
     pub title: Option<String>,
     pub xlabel: Option<String>,
     pub ylabel: Option<String>,
-    pub colors: Vec<[u8; 3]>,
+    pub colors: Vec<ChartColor>,
+    pub color_type: ColorType,
     pub legend: bool,
+}
+
+/// One entry of a chart's `Colors:` line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChartColor {
+    Rgb([u8; 3]),
+    /// Theme accent, 1-based (`accent 1`, `Accent2` …).
+    Accent(usize),
+}
+
+/// How series colours are picked (`Color-Type:`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ColorType {
+    /// One distinct colour per series (default).
+    #[default]
+    Categorical,
+    /// Shades of one colour, strongest first.
+    Sequential,
+    /// Two contrasting colours meeting at a neutral middle.
+    Differential,
+}
+
+impl ColorType {
+    pub fn from_word(w: &str) -> ColorType {
+        match w.trim().to_ascii_lowercase().as_str() {
+            "sequential" => ColorType::Sequential,
+            "differential" | "diverging" => ColorType::Differential,
+            _ => ColorType::Categorical,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -271,8 +302,19 @@ const IMAGE_KEYS: &[&str] = &[
     "position",
 ];
 // Supported chart option keys.
-const CHART_KEYS: &[&str] = &[
-    "chart", "type", "title", "caption", "xlabel", "ylabel", "colors", "xformat", "legend",
+pub(crate) const CHART_KEYS: &[&str] = &[
+    "chart",
+    "type",
+    "title",
+    "caption",
+    "xlabel",
+    "ylabel",
+    "colors",
+    "color-type",
+    "bar-type",
+    "orientation",
+    "xformat",
+    "legend",
 ];
 
 pub(crate) fn new_image(src: String, caption: Option<String>) -> ImageSpec {
@@ -365,22 +407,49 @@ fn is_align_row(line: &str) -> bool {
     t.contains('-') && t.chars().all(|c| matches!(c, '|' | ':' | '-' | ' ' | '\t'))
 }
 
-fn parse_colors(v: &str) -> Vec<[u8; 3]> {
-    v.split(|c: char| c == ',' || c.is_whitespace())
-        .filter_map(|s| {
-            let h = s.trim().trim_start_matches('#');
-            let h: String = if h.len() == 3 {
-                h.chars().flat_map(|c| [c, c]).collect()
-            } else {
-                h.to_string()
-            };
-            if h.len() != 6 {
-                return None;
+/// `#F00, #00FF00`, `#123456 #abcdef` or theme accents (`accent 1, Accent2`).
+pub(crate) fn parse_colors(v: &str) -> Vec<ChartColor> {
+    let words: Vec<String> = v
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|w| !w.is_empty())
+        .map(|w| w.to_ascii_lowercase())
+        .collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        let w = &words[i];
+        i += 1;
+        if let Some(rest) = w.strip_prefix("accent") {
+            // "accent1", "accent-1" or "accent 1"
+            let mut num = rest.trim_start_matches(['-', '_']).to_string();
+            if num.is_empty() {
+                if let Some(next) = words.get(i).filter(|n| n.parse::<usize>().is_ok()) {
+                    num = next.clone();
+                    i += 1;
+                }
             }
-            let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
-            Some([p(0)?, p(2)?, p(4)?])
-        })
-        .collect()
+            if let Ok(n) = num.parse::<usize>() {
+                if n >= 1 {
+                    out.push(ChartColor::Accent(n));
+                }
+            }
+            continue;
+        }
+        let h = w.trim_start_matches('#');
+        let h: String = if h.len() == 3 {
+            h.chars().flat_map(|c| [c, c]).collect()
+        } else {
+            h.to_string()
+        };
+        if h.len() != 6 || !h.is_ascii() {
+            continue;
+        }
+        let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+        if let (Some(r), Some(g), Some(b)) = (p(0), p(2), p(4)) {
+            out.push(ChartColor::Rgb([r, g, b]));
+        }
+    }
+    out
 }
 
 fn strip_tab(raw: &str) -> (bool, &str) {
@@ -583,6 +652,12 @@ pub fn parse_slide(lines: &[&str]) -> Slide {
                 if table.caption.is_none() {
                     table.caption = get("caption");
                 }
+                if let Some(v) = get("bar-type") {
+                    stacked = v.eq_ignore_ascii_case("stacked");
+                }
+                if let Some(v) = get("orientation") {
+                    horizontal = v.eq_ignore_ascii_case("horizontal");
+                }
                 let legend = get("legend")
                     .map(|v| {
                         !matches!(
@@ -599,6 +674,9 @@ pub fn parse_slide(lines: &[&str]) -> Slide {
                     xlabel: get("xlabel"),
                     ylabel: get("ylabel"),
                     colors: get("colors").map(|c| parse_colors(&c)).unwrap_or_default(),
+                    color_type: get("color-type")
+                        .map(|v| ColorType::from_word(&v))
+                        .unwrap_or_default(),
                     legend,
                     table,
                 }));
@@ -748,5 +826,40 @@ mod tests {
         assert!(matches!(s[1].groups[0][1], Block::Chart(_)));
         assert_eq!(s[2].groups.len(), 2);
         assert_eq!(slide_at_char(&s, 0), 0);
+    }
+
+    #[test]
+    fn chart_options() {
+        let doc = "| | S1 | S2 |\n|:--|:--|:--|\n| A | 10 | 15 |\nChart: Bar\nyLabel: Y\nColor-Type: sequential\nBar-Type: stacked\nOrientation: horizontal\nxLabel: X";
+        let s = parse_document(doc);
+        let Block::Chart(c) = &s[0].groups[0][0] else {
+            panic!("not a chart")
+        };
+        assert!(c.stacked && c.horizontal);
+        assert_eq!(c.color_type, ColorType::Sequential);
+        assert_eq!(c.xlabel.as_deref(), Some("X"));
+        assert_eq!(ColorType::from_word("Differential"), ColorType::Differential);
+    }
+
+    #[test]
+    fn chart_colors() {
+        assert_eq!(
+            parse_colors("#FF0000,#0F0F0F, #F0F"),
+            vec![
+                ChartColor::Rgb([255, 0, 0]),
+                ChartColor::Rgb([15, 15, 15]),
+                ChartColor::Rgb([255, 0, 255]),
+            ]
+        );
+        assert_eq!(
+            parse_colors("accent 1, accent 2 , accent3, Accent-4 #000"),
+            vec![
+                ChartColor::Accent(1),
+                ChartColor::Accent(2),
+                ChartColor::Accent(3),
+                ChartColor::Accent(4),
+                ChartColor::Rgb([0, 0, 0]),
+            ]
+        );
     }
 }

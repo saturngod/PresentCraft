@@ -3,7 +3,7 @@
 //! labels and colours, or reformats/transposes the table. The data rows are
 //! never changed by a type switch — only the `Chart:` line is rewritten.
 
-use crate::parse::ChartKind;
+use crate::parse::{ChartKind, ColorType};
 use crate::tableblock::{char_of_line, find, line_of_char, lines_of};
 use crate::{slide_color, App};
 use eframe::egui;
@@ -25,6 +25,25 @@ const COLOR_SETS: [(&str, &str); 4] = [
     ("Grays", "#222222, #555555, #888888, #BBBBBB, #DDDDDD"),
     ("Vivid", "#FF3333, #3770FF, #FFC400, #43AA8B, #A784FF"),
 ];
+
+/// The "Color Type" section shared by the chart type submenus.
+fn color_type_rows(ui: &mut egui::Ui, current: &ColorType, act: &mut Option<Act>) {
+    ui.separator();
+    heading(ui, "Color Type");
+    for (t, name, value) in [
+        (ColorType::Categorical, "Categorical — Default", None),
+        (ColorType::Sequential, "Sequential", Some("sequential")),
+        (ColorType::Differential, "Differential", Some("differential")),
+    ] {
+        if check(ui, *current == t, name) {
+            *act = Some(Act::Meta(
+                "color-type",
+                "Color-Type",
+                value.map(str::to_string),
+            ));
+        }
+    }
+}
 
 /// Menu rows share one layout: a checkmark column, then the text column.
 const MENU_TICK_X: f32 = 15.0;
@@ -362,6 +381,10 @@ impl App {
                 let x_label = block.get(&lines, "xlabel").unwrap_or_default();
                 let y_label = block.get(&lines, "ylabel").unwrap_or_default();
                 let colors = block.get(&lines, "colors");
+                let color_type = block
+                    .get(&lines, "color-type")
+                    .map(|v| ColorType::from_word(&v))
+                    .unwrap_or_default();
                 let legend_off = block
                     .get(&lines, "legend")
                     .map(|v| {
@@ -392,49 +415,47 @@ impl App {
                         ui,
                         format!("{}Lines", if lines_on { "✓  " } else { "     " }),
                         |ui| {
-                            for (k, name) in [
-                                (ChartKind::Line, "Straight"),
-                                (ChartKind::Spline, "Smooth"),
-                                (ChartKind::Step, "Steps"),
-                                (ChartKind::Area, "Area"),
+                            heading(ui, "Type");
+                            let stacked = chart.map(|c| c.2).unwrap_or(false);
+                            for (k, s, name) in [
+                                (ChartKind::Line, false, "Lines — Default"),
+                                (ChartKind::Spline, false, "Smooth"),
+                                (ChartKind::Step, false, "Steps"),
+                                (ChartKind::Area, false, "Area"),
+                                (ChartKind::Area, true, "Stacked Area"),
                             ] {
-                                if check(
-                                    ui,
-                                    is(k)
-                                        && !(k == ChartKind::Area
-                                            && chart.map(|c| c.2).unwrap_or(false)),
-                                    name,
-                                ) {
-                                    act = Some(Act::Chart(Some((k, false, false))));
+                                let on = is(k) && (k != ChartKind::Area || stacked == s);
+                                if check(ui, on, name) {
+                                    act = Some(Act::Chart(Some((k, false, s))));
                                 }
                             }
-                            if check(
-                                ui,
-                                is(ChartKind::Area) && chart.map(|c| c.2).unwrap_or(false),
-                                "Stacked Area",
-                            ) {
-                                act = Some(Act::Chart(Some((ChartKind::Area, false, true))));
-                            }
+                            color_type_rows(ui, &color_type, &mut act);
                         },
                     );
                     submenu(
                         ui,
                         format!("{}Bars", if is(ChartKind::Bar) { "✓  " } else { "     " }),
                         |ui| {
+                            let bar = is(ChartKind::Bar);
                             let (h, s) = chart
                                 .filter(|c| c.0 == ChartKind::Bar)
                                 .map(|c| (c.1, c.2))
                                 .unwrap_or((false, false));
-                            for (hh, ss, name) in [
-                                (false, false, "Vertical"),
-                                (true, false, "Horizontal"),
-                                (false, true, "Stacked"),
-                                (true, true, "Stacked Horizontal"),
-                            ] {
-                                if check(ui, is(ChartKind::Bar) && h == hh && s == ss, name) {
-                                    act = Some(Act::Chart(Some((ChartKind::Bar, hh, ss))));
+                            heading(ui, "Type");
+                            for (ss, name) in [(false, "Separated — Default"), (true, "Stacked")] {
+                                if check(ui, bar && s == ss, name) {
+                                    act = Some(Act::Chart(Some((ChartKind::Bar, h, ss))));
                                 }
                             }
+                            ui.separator();
+                            heading(ui, "Orientation");
+                            for (hh, name) in [(false, "Vertical — Default"), (true, "Horizontal")]
+                            {
+                                if check(ui, bar && h == hh, name) {
+                                    act = Some(Act::Chart(Some((ChartKind::Bar, hh, s))));
+                                }
+                            }
+                            color_type_rows(ui, &color_type, &mut act);
                         },
                     );
                     submenu(
@@ -448,12 +469,15 @@ impl App {
                             }
                         ),
                         |ui| {
-                            for (k, name) in [(ChartKind::Pie, "Pie"), (ChartKind::Donut, "Donut")]
+                            heading(ui, "Type");
+                            for (k, name) in
+                                [(ChartKind::Pie, "Pie — Default"), (ChartKind::Donut, "Donut")]
                             {
                                 if check(ui, is(k), name) {
                                     act = Some(Act::Chart(Some((k, false, false))));
                                 }
                             }
+                            color_type_rows(ui, &color_type, &mut act);
                         },
                     );
                     submenu(

@@ -2,7 +2,7 @@
 //! other columns = series. Chart types include line, spline, area,
 //! gauge, radar, bubble, bar, pie, donut (+ step, horizontal, stacked).
 
-use crate::parse::{ChartKind, ChartSpec};
+use crate::parse::{ChartColor, ChartKind, ChartSpec, ColorType};
 use crate::theme::family;
 use egui::epaint::TextShape;
 use egui::{pos2, vec2, Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Shape, Stroke};
@@ -10,6 +10,8 @@ use std::f32::consts::{PI, TAU};
 
 pub struct ChartStyle {
     pub fg: Color32,
+    /// Slide background, used to fade sequential and differential shades.
+    pub bg: Color32,
     pub accents: [Color32; 6],
     /// The theme's chart colours; empty means the accents.
     pub series: Vec<Color32>,
@@ -92,15 +94,65 @@ impl ChartStyle {
     }
 }
 
-fn color_for(spec: &ChartSpec, st: &ChartStyle, i: usize) -> Color32 {
+fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
+}
+
+/// The colours a chart starts from: its `Colors:` line, else the theme's
+/// chart colours, else its accents.
+fn base_colors(spec: &ChartSpec, st: &ChartStyle) -> Vec<Color32> {
     if !spec.colors.is_empty() {
-        let c = spec.colors[i % spec.colors.len()];
-        return Color32::from_rgb(c[0], c[1], c[2]);
+        return spec
+            .colors
+            .iter()
+            .map(|c| match *c {
+                ChartColor::Rgb([r, g, b]) => Color32::from_rgb(r, g, b),
+                ChartColor::Accent(n) => st.accents[(n.max(1) - 1) % st.accents.len()],
+            })
+            .collect();
     }
     if !st.series.is_empty() {
-        return st.series[i % st.series.len()];
+        return st.series.clone();
     }
-    st.accents[i % 6]
+    st.accents.to_vec()
+}
+
+/// Colour of item `i` of `n` (series, or slices/bubbles for pie and bubble).
+fn color_for(spec: &ChartSpec, st: &ChartStyle, i: usize, n: usize) -> Color32 {
+    let base = base_colors(spec, st);
+    let n = n.max(1);
+    match spec.color_type {
+        ColorType::Categorical => base[i % base.len()],
+        // Strongest shade first, fading toward the background.
+        ColorType::Sequential => {
+            let t = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.0 };
+            mix(base[0], st.bg, t * 0.75)
+        }
+        // First colour, through a neutral middle, to the second colour.
+        ColorType::Differential => {
+            let a = base[0];
+            // Custom colours: the second one. Theme colours: the one
+            // furthest from the first, so the two ends clearly differ.
+            let b = if spec.colors.len() > 1 {
+                base[1]
+            } else {
+                let dist = |c: &Color32| {
+                    let d = |x: u8, y: u8| (x as i32 - y as i32).pow(2);
+                    d(c.r(), a.r()) + d(c.g(), a.g()) + d(c.b(), a.b())
+                };
+                let pool = if base.len() > 1 { &base[..] } else { &st.accents[..] };
+                pool.iter().copied().max_by_key(dist).unwrap_or(a)
+            };
+            if n == 1 {
+                return a;
+            }
+            let neutral = mix(st.bg, st.fg, 0.3);
+            let t = i as f32 / (n - 1) as f32 * 2.0 - 1.0; // -1 … 1
+            let (end, k) = if t < 0.0 { (a, -t) } else { (b, t) };
+            mix(neutral, end, 0.25 + 0.75 * k)
+        }
+    }
 }
 
 fn text(p: &Painter, pos: Pos2, align: Align2, s: &str, font: FontId, color: Color32) -> Rect {
@@ -127,7 +179,7 @@ fn legend(p: &Painter, rect: Rect, names: &[String], spec: &ChartSpec, st: &Char
         p.rect_filled(
             Rect::from_center_size(pos2(x + sw / 2.0, y), vec2(sw, sw)),
             sw * 0.2,
-            color_for(spec, st, i),
+            color_for(spec, st, i, names.len()),
         );
         x += sw + st.base * 0.25;
         let w = g.size().x;
@@ -201,7 +253,7 @@ fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle)
     let mut a0 = -PI / 2.0;
     for (i, v) in vals.iter().enumerate() {
         let sweep = (*v / total) as f32 * TAU;
-        let col = color_for(spec, st, i);
+        let col = color_for(spec, st, i, vals.len());
         let steps = ((sweep / TAU) * 120.0).ceil().max(2.0) as usize;
         let mut mesh = Mesh::default();
         for k in 0..=steps {
@@ -294,7 +346,7 @@ fn radar(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyl
         );
     }
     for (si, (_, vals)) in d.series.iter().enumerate() {
-        let col = color_for(spec, st, si);
+        let col = color_for(spec, st, si, d.series.len());
         let pts: Vec<Pos2> = (0..n)
             .map(|i| {
                 let v = vals.get(i).cloned().unwrap_or(0.0).max(0.0);
@@ -345,7 +397,7 @@ fn gauge(p: &Painter, area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) {
         p.add(mesh);
     };
     arc(0.0, 1.0, st.fg.gamma_multiply(0.12));
-    arc(0.0, frac, color_for(spec, st, 0));
+    arc(0.0, frac, color_for(spec, st, 0, 1));
     let label = if max == 100.0 {
         format!("{}%", fmt(v, 1.0))
     } else {
@@ -606,7 +658,7 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
                 let mut acc_neg = 0.0;
                 for (s, (_, vals)) in d.series.iter().enumerate() {
                     let v = vals[c];
-                    let col = color_for(spec, st, s);
+                    let col = color_for(spec, st, s, nser);
                     let (a, b, lo_off, w) = if stacked {
                         let (from, to) = if v >= 0.0 {
                             let f = acc_pos;
@@ -645,14 +697,14 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
                     Some(s) => (rmax * ((s[c].max(0.0) / smax) as f32).sqrt()).max(3.0),
                     None => rmax * 0.4,
                 };
-                let col = color_for(spec, st, c);
+                let col = color_for(spec, st, c, ncat);
                 p.circle_filled(pos2(cat_center(c), val_to(v)), rr, col.gamma_multiply(0.75));
             }
         }
         _ => {
             let mut base_line: Vec<f64> = vec![0.0; ncat];
             for (s, (_, vals)) in d.series.iter().enumerate() {
-                let col = color_for(spec, st, s);
+                let col = color_for(spec, st, s, d.series.len());
                 let tops: Vec<f64> = if stacked {
                     (0..ncat).map(|c| base_line[c] + vals[c]).collect()
                 } else {

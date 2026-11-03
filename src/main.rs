@@ -1464,6 +1464,9 @@ fn speaking_seconds(text: &str) -> f32 {
                     "colors",
                     "xformat",
                     "legend",
+                    "color-type",
+                    "bar-type",
+                    "orientation",
                     "type",
                 ]
                 .contains(&kl.as_str())
@@ -2893,6 +2896,9 @@ fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJo
                     "colors",
                     "xformat",
                     "legend",
+                    "color-type",
+                    "bar-type",
+                    "orientation",
                 ]
                 .contains(&k.trim().to_ascii_lowercase().as_str())
             })

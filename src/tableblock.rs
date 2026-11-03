@@ -15,9 +15,7 @@ pub struct TableBlock {
     pub tab: bool,
 }
 
-const META_KEYS: &[&str] = &[
-    "chart", "type", "title", "caption", "xlabel", "ylabel", "colors", "xformat", "legend",
-];
+use crate::parse::CHART_KEYS as META_KEYS;
 
 fn strip(l: &str) -> &str {
     l.strip_prefix('\t').unwrap_or(l).trim_start()
@@ -153,16 +151,37 @@ impl TableBlock {
                 }
             }
         }
+        if let Some(v) = self.get(lines, "bar-type") {
+            s = v.eq_ignore_ascii_case("stacked");
+        }
+        if let Some(v) = self.get(lines, "orientation") {
+            h = v.eq_ignore_ascii_case("horizontal");
+        }
         Some((kind.unwrap_or(ChartKind::Bar), h, s))
     }
 
     pub fn set_chart(&mut self, lines: &mut Vec<String>, chart: Option<(ChartKind, bool, bool)>) {
-        let value = chart.map(|(k, h, s)| {
+        // Bars keep stacking and orientation on their own lines
+        // (`Bar-Type:`, `Orientation:`), like iA Presenter writes them.
+        let bar = chart.filter(|c| c.0 == ChartKind::Bar);
+        self.set(
+            lines,
+            "bar-type",
+            "Bar-Type",
+            bar.filter(|c| c.2).map(|_| "stacked"),
+        );
+        self.set(
+            lines,
+            "orientation",
+            "Orientation",
+            bar.filter(|c| c.1).map(|_| "horizontal"),
+        );
+        if chart.is_none() {
+            self.set(lines, "color-type", "Color-Type", None);
+        }
+        let value = chart.map(|(k, _, s)| {
             let mut v = kind_word(k).to_string();
-            if h && k == ChartKind::Bar {
-                v.push_str(", Horizontal");
-            }
-            if s && matches!(k, ChartKind::Bar | ChartKind::Area) {
+            if s && k == ChartKind::Area {
                 v.push_str(", Stacked");
             }
             v
@@ -312,6 +331,13 @@ mod tests {
         assert_eq!(lines[3], "| x | 1 |");
         b.set_chart(&mut lines, None);
         assert_eq!(lines[4], "yLabel: U");
+        b.set_chart(&mut lines, Some((ChartKind::Bar, true, true)));
+        assert_eq!(b.chart(&lines), Some((ChartKind::Bar, true, true)));
+        assert!(lines.contains(&"Bar-Type: stacked".to_string()));
+        assert!(lines.contains(&"Orientation: horizontal".to_string()));
+        b.set_chart(&mut lines, Some((ChartKind::Bar, false, false)));
+        assert!(!lines.iter().any(|l| l.starts_with("Bar-Type") || l.starts_with("Orientation")));
+        b.set_chart(&mut lines, None);
         b.set(&mut lines, "[caption]", "", Some("Cap"));
         assert_eq!(lines[4], "[Cap]");
         b.transpose(&mut lines);

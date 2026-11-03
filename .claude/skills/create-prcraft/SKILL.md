@@ -74,8 +74,10 @@ PresentCraft splits the script into slides and decides what the audience sees. *
   - `caption: Text`.
 - **Chart options** go on the lines directly under the table:
   - `Chart:` with a type: `bar`, `line`, `spline`, `area`, `step`, `pie`, `donut`, `radar`, `gauge` or `bubble`. Add `horizontal` and/or `stacked`, for example `Chart: bar, horizontal, stacked`.
+  - For bars you can also write `Bar-Type: stacked` and `Orientation: horizontal` on their own lines (iA Presenter's form).
   - `title:`, `xLabel:`, `yLabel:`, `caption:`.
-  - `colors: #E63946, #457B9D`.
+  - `colors: #E63946, #457B9D`, or theme accents: `colors: accent 1, accent 3` (`Accent1`–`Accent6` from the theme's `presets.json`).
+  - `Color-Type: sequential` uses shades of one colour (the first `colors:` entry, else the theme's first chart colour); `Color-Type: differential` runs from the first colour through a neutral middle to the second. Omit it for the default categorical palette.
   - `legend: off`.
   - The first column holds the labels and the other columns are series. Pie, donut and gauge charts use the first number column.
 
