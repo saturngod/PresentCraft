@@ -145,8 +145,23 @@ if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
     (cd "$root/dist" && ditto -c -k --keepParent "PresentCraft.app" "$zip")
     xcrun notarytool submit "$zip" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
       --team-id "$APPLE_TEAM_ID" --wait
-    xcrun stapler staple "$app"
-    xcrun stapler validate "$app"
+    # Stapling and checking talk to Apple's servers, which sometimes drop the
+    # connection; retry a few times. The check is only a confirmation, so it
+    # warns instead of failing once stapling has worked.
+    stapled=0
+    for attempt in 1 2 3 4 5; do
+      if xcrun stapler staple "$app"; then stapled=1; break; fi
+      echo "Stapling failed (attempt $attempt); retrying in 15 s…" >&2
+      sleep 15
+    done
+    [[ "$stapled" == 1 ]] || { echo "Could not staple the notarization ticket." >&2; exit 1; }
+    validated=0
+    for attempt in 1 2 3; do
+      if xcrun stapler validate "$app"; then validated=1; break; fi
+      echo "Checking the stapled ticket failed (attempt $attempt); retrying in 15 s…" >&2
+      sleep 15
+    done
+    [[ "$validated" == 1 ]] || echo "Warning: could not confirm the stapled ticket (network); stapling itself succeeded." >&2
     rm -f "$zip"
   fi
 else
