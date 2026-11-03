@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Dark",
+      "TitleFont": "Archivo",
+      "BodyFont": "IBM Plex Sans",
+      "DarkBodyTextColor": "#3A4654",
+      "LightBodyTextColor": "#A9B6C6",
+      "DarkTitleTextColor": "#0B2C4A",
+      "LightTitleTextColor": "#E2E8EF",
+      "DarkBackgroundColor": "#0A1626",
+      "LightBackgroundColor": "#F4F6F8",
+      "Appearance": "dark",
+      "Accent1": "#C9A227",
+      "Accent2": "#0E8A7E",
+      "Accent3": "#CC3333",
+      "Accent4": "#3B6EA5",
+      "Accent5": "#8FA3B8",
+      "Accent6": "#7B4FA0"
+    },
+    {
+      "Name": "Light",
+      "TitleFont": "Archivo",
+      "BodyFont": "IBM Plex Sans",
+      "DarkBodyTextColor": "#3A4654",
+      "LightBodyTextColor": "#A9B6C6",
+      "DarkTitleTextColor": "#0B2C4A",
+      "LightTitleTextColor": "#E2E8EF",
+      "DarkBackgroundColor": "#0A1626",
+      "LightBackgroundColor": "#F4F6F8",
+      "Appearance": "light",
+      "Accent1": "#C9A227",
+      "Accent2": "#0E8A7E",
+      "Accent3": "#CC3333",
+      "Accent4": "#3B6EA5",
+      "Accent5": "#8FA3B8",
+      "Accent6": "#7B4FA0"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "Name": "Luang Prabang",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Saffron and teak.",
+  "LongDescription": "Saffron and teak.\n- Saffron on temple white\n- Saffron on dark teak\n- Calm, generous spacing\n- Fonts: Libre Baskerville and Work Sans",
+  "Css": "luang prabang.css",
+  "TitleFont": "Libre Baskerville",
+  "BodyFont": "Work Sans",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

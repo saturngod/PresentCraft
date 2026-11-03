@@ -24,7 +24,7 @@ The same members can also be stored as a **single zip file** named `Talk.prcraft
 1. Write the script as a Markdown file following **Script rules** below. Reference local pictures by path.
 2. Build the package with the helper. It copies media into `assets/` and rewrites the references:
    ```bash
-   python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Midnight --appearance dark --author "Name"
+   python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Bagan --appearance dark --author "Name"
    ```
    Add `--zip` for a single file. Add `--theme-dir path/to/theme` to embed a custom theme.
 3. Check the package. Fix every `error:` it reports, and read the slide summary to confirm each slide shows something:
@@ -141,7 +141,7 @@ All settings are optional. Write strict JSON. Unknown keys and blocks are kept w
   "version": 2,
   "transient": false,
   "app.myanmars.presentcraft": {
-    "theme": "Midnight",
+    "theme": "Bagan",
     "appearance": "dark",
     "author": "Ada Lovelace",
     "audience": "Engineering all-hands",
@@ -165,7 +165,7 @@ All settings are optional. Write strict JSON. Unknown keys and blocks are kept w
 
 | Key (under `app.myanmars.presentcraft`) | Meaning |
 | --- | --- |
-| `theme` | A theme name. It is used only when there is no `Theme/` folder. Built-in themes: `Swiss`, `Contrast Serif`, `Paper`, `Signal`, `Graphite`, `Studio` (the default), `Midnight`, `Editorial`, `Corporate`, `Sunset` |
+| `theme` | A theme name. It is used only when there is no `Theme/` folder. Built-in themes (Southeast Asian cities): `Yangon` (the default), `Mandalay`, `Bagan`, `Singapore`, `Bangkok`, `Chiang Mai`, `Hanoi`, `Hoi An`, `Kuala Lumpur`, `Penang`, `Siem Reap`, `Luang Prabang`, `Bali`, `Manila` |
 | `appearance` | `"light"` or `"dark"`: which colour variant the slides use |
 | `author`, `audience` | Metadata shown in the Design panel |
 | `logo`, `logoSize` | The logo picture (put it in `assets/`), and its height as a fraction of slide height (about 0.02–0.08). The logo appears in slots set to `Logo` |

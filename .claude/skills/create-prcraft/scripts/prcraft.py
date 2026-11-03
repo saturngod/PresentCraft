@@ -29,8 +29,8 @@ import zipfile
 from pathlib import Path
 
 BUILTIN_THEMES = [
-    "Swiss", "Contrast Serif", "Paper", "Signal", "Graphite",
-    "Studio", "Midnight", "Editorial", "Corporate", "Sunset",
+    "Yangon", "Mandalay", "Bagan", "Singapore", "Bangkok", "Chiang Mai", "Hanoi",
+    "Hoi An", "Kuala Lumpur", "Penang", "Siem Reap", "Luang Prabang", "Bali", "Manila",
 ]
 MEDIA_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".svg", ".pdf",

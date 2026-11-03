@@ -1,0 +1,16 @@
+{
+  "Name": "Bangkok",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Emerald, sapphire and gold.",
+  "LongDescription": "Emerald, sapphire and gold.\n- Temple colours, one per slide\n- White titles on jewel tones\n- Dark: deeper jewels\n- Fonts: Prompt and Sarabun",
+  "Css": "bangkok.css",
+  "TitleFont": "Prompt",
+  "BodyFont": "Sarabun",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 2,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

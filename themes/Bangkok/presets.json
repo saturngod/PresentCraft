@@ -1,0 +1,88 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Prompt",
+      "BodyFont": "Sarabun",
+      "DarkBodyTextColor": "#FFFFFF",
+      "LightBodyTextColor": "#F2EEE6",
+      "DarkTitleTextColor": "#FFFFFF",
+      "LightTitleTextColor": "#FFFFFF",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#F2C14E",
+      "Accent2": "#0E7C66",
+      "Accent3": "#E2672A",
+      "Accent4": "#2C5FA8",
+      "Accent5": "#E8417A",
+      "Accent6": "#7CC4C1",
+      "LightBgGradient": [
+        "#0E7C66",
+        "#13777E",
+        "#1F6496",
+        "#2C5FA8",
+        "#5B4BA6",
+        "#8E3E8E",
+        "#C2456A",
+        "#D9593A",
+        "#E2672A",
+        "#C98A16"
+      ],
+      "DarkBgGradient": [
+        "#07463A",
+        "#0B4448",
+        "#123A57",
+        "#192F5E",
+        "#2E275E",
+        "#4A2150",
+        "#6A2238",
+        "#7A2E1F",
+        "#7E3716",
+        "#6E4C0C"
+      ]
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Prompt",
+      "BodyFont": "Sarabun",
+      "DarkBodyTextColor": "#FFFFFF",
+      "LightBodyTextColor": "#F2EEE6",
+      "DarkTitleTextColor": "#FFFFFF",
+      "LightTitleTextColor": "#FFFFFF",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#F2C14E",
+      "Accent2": "#0E7C66",
+      "Accent3": "#E2672A",
+      "Accent4": "#2C5FA8",
+      "Accent5": "#E8417A",
+      "Accent6": "#7CC4C1",
+      "LightBgGradient": [
+        "#0E7C66",
+        "#13777E",
+        "#1F6496",
+        "#2C5FA8",
+        "#5B4BA6",
+        "#8E3E8E",
+        "#C2456A",
+        "#D9593A",
+        "#E2672A",
+        "#C98A16"
+      ],
+      "DarkBgGradient": [
+        "#07463A",
+        "#0B4448",
+        "#123A57",
+        "#192F5E",
+        "#2E275E",
+        "#4A2150",
+        "#6A2238",
+        "#7A2E1F",
+        "#7E3716",
+        "#6E4C0C"
+      ]
+    }
+  ]
+}

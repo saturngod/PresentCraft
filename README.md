@@ -108,11 +108,39 @@ New York/
 AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:
 
 ```sh
-python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Midnight
+python3 .claude/skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --theme Bagan
 python3 .claude/skills/create-prcraft/scripts/prcraft.py check Talk.prcraft
 ```
 
 When a package has no `Theme/` folder, `info.json`'s `Theme` key picks an installed theme by name.
+
+### Built-in themes
+
+The built-in themes are named after Southeast Asian cities. Each one's colours and typography are drawn from its city; there are no pictures.
+
+- **Storage:** each theme is an iA Presenter theme folder in `themes/`, built into the app. The folder holds `template.json`, `presets.json`, a stylesheet with `@font-face` rules, previews, and its fonts in `fonts/`.
+- **Fonts:** they come from [Google Fonts](https://fonts.google.com) under the SIL Open Font License (licence files are in each `fonts/` folder). They work without being installed.
+- **First run:** the app writes the folders to `Built-in Themes/` next to the settings file.
+- **Saving:** a presentation copies its theme, fonts included, into its `Theme/` folder, so it looks the same on another computer and in iA Presenter.
+
+| Theme | Look | Titles / body |
+| --- | --- | --- |
+| Yangon | Lacquer maroon on ivory; gold on twilight indigo. Covers in the dark look. | Cormorant Garamond / Lato |
+| Mandalay | Royal vermilion on warm paper; gilded titles on teak. | Cinzel / EB Garamond |
+| Bagan | Dawn gradient, a new colour per slide: rose, apricot, amber; brick to dusk plum when dark. | Marcellus / Nunito Sans |
+| Singapore | Singapore red on crisp white; covers in night-bay navy. | Space Grotesk / Inter |
+| Bangkok | Jewel-tone gradient (emerald, sapphire, ruby, gold) with white titles. | Prompt / Sarabun |
+| Chiang Mai | Forest green on morning mist; lantern orange on a night sky. | Lora / Source Sans 3 |
+| Hanoi | Shutter green on mustard; covers in deep green with mustard titles. | Be Vietnam Pro / Be Vietnam Pro |
+| Hoi An | Silk-lantern gradient; deep silk tones by default, lantern glow when light. | Playfair Display / Mulish |
+| Kuala Lumpur | Navy on cool white; steel on a city night, with songket gold. | Archivo / IBM Plex Sans |
+| Penang | Peranakan pastel gradient (pink, peach, mint, lilac); jewel tones when dark. | Fraunces / Karla |
+| Siem Reap | Temple brown on sandstone; covers in pre-dawn blue with sunrise titles. | Spectral / Kantumruy Pro |
+| Luang Prabang | Saffron on temple white and on dark teak. | Libre Baskerville / Work Sans |
+| Bali | Terrace greens to ripe gold; deep jungle greens when dark. | DM Serif Display / DM Sans |
+| Manila | Sunset gradient from bay blue to gold, white titles. | Oswald / Poppins |
+
+To change one, edit its `themes/<City>/` files, then refresh the stylesheets and previews with `cargo test -- --ignored write_built_in_theme_folders`.
 
 ### Opening documents by double-click
 
@@ -162,7 +190,7 @@ Pass options after Cargo's `--` separator:
 | `--new` | Start with a blank document from the new-presentation template (File › New and ⌘N / Ctrl+N open a new window this way). |
 | `--tab format\|pictures\|design\|share` | Select the inspector tab. |
 | `--slide 2` | Select a slide, numbered from 1. |
-| `--theme 1` | Select a theme, numbered from 1 (1–5 classic, 6–10 Studio, Midnight, Editorial, Corporate, Sunset). Studio is the default. |
+| `--theme 1` | Select a built-in theme, numbered from 1 in the order listed under Themes. Yangon is the default. |
 | `--light` | Open with the light editor appearance. |
 | `--dark` | Open with the dark editor appearance. |
 | `--settings general\|editor\|presentation\|themes\|markdown` | Open a settings page. |

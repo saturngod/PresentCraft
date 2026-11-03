@@ -12,6 +12,15 @@ use egui::Color32;
 use std::path::{Path, PathBuf};
 
 pub const TEMPLATE: &str = "template.json";
+/// Accents for a theme that sets none (iA Presenter's usual six).
+const DEFAULT_ACCENTS: [Color32; 6] = [
+    Color32::from_rgb(0xF9, 0x41, 0x44),
+    Color32::from_rgb(0x43, 0xAA, 0x8B),
+    Color32::from_rgb(0xF9, 0xC7, 0x4F),
+    Color32::from_rgb(0x90, 0xBE, 0x6D),
+    Color32::from_rgb(0xF8, 0x96, 0x1E),
+    Color32::from_rgb(0x57, 0x75, 0x90),
+];
 pub const PRESETS: &str = "presets.json";
 /// Preview pictures iA Presenter shows in its theme list (500 × 281).
 pub const PREVIEW_PNG: &str = "template.png";
@@ -82,7 +91,7 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
         title: color(dark_p, "LightTitleTextColor", Color32::WHITE),
         body: color(dark_p, "LightBodyTextColor", Color32::WHITE),
     };
-    let defaults = crate::theme::presets()[0].accents;
+    let defaults = DEFAULT_ACCENTS;
     let accents_of = |p: Option<&Json>| -> [Color32; 6] {
         std::array::from_fn(|i| color(p, &format!("Accent{}", i + 1), defaults[i]))
     };
@@ -244,7 +253,7 @@ fn merge_json(
             .map(|n| obj([("Name", n.into()), ("Appearance", n.to_ascii_lowercase().into())]))
             .to_vec();
     }
-    let defaults = crate::theme::presets()[0].accents;
+    let defaults = DEFAULT_ACCENTS;
     for v in &mut list {
         let tf = keep_font(v.str("TitleFont"), p.title_face, fonts, css_font_name);
         let bf = keep_font(v.str("BodyFont"), p.body_face, fonts, css_font_name);
@@ -867,12 +876,14 @@ mod tests {
     #[test]
     fn new_theme_folder_has_ia_structure() {
         let dir = scratch("new");
-        let mut p = crate::theme::presets()[5].clone();
+        let mut p = crate::theme::presets()[0].clone();
         p.custom = true;
-        save(&dir, &p, false, None).unwrap();
+        let source = p.file.clone();
+        save(&dir, &p, false, source.as_deref()).unwrap();
+        assert!(dir.join("fonts/Lato-Regular.ttf").is_file(), "theme fonts come along");
         let t = Json::parse(&std::fs::read_to_string(dir.join(TEMPLATE)).unwrap()).unwrap();
-        assert_eq!(t.str("Css"), Some("studio.css"));
-        assert!(dir.join("studio.css").is_file());
+        assert_eq!(t.str("Css"), Some("yangon.css"));
+        assert!(dir.join("yangon.css").is_file());
         assert!(dir.join(PREVIEW_WEBP).is_file());
         let png = image::open(dir.join(PREVIEW_PNG)).unwrap();
         assert_eq!((png.width(), png.height()), (500, 281));
@@ -921,6 +932,30 @@ mod tests {
         assert_eq!(v.str("DarkBodyTextColor"), Some("#000"));
         assert!(same_look(&load(&dir).unwrap(), &p));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Refreshes the stylesheets and previews in `themes/` after editing a
+    /// built-in theme: `cargo test -- --ignored write_built_in_theme_folders`.
+    #[test]
+    #[ignore]
+    fn write_built_in_theme_folders() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("themes");
+        for p in crate::theme::presets() {
+            let dir = root.join(p.name);
+            save(&dir, &p, p.starts_dark, Some(&dir)).unwrap();
+        }
+    }
+
+    #[test]
+    fn built_in_themes_load_from_their_folders() {
+        let all = crate::theme::presets();
+        assert_eq!(all.len(), 14);
+        assert_eq!(all[0].name, crate::theme::DEFAULT_THEME);
+        for p in &all {
+            assert!(!p.custom, "{}", p.name);
+            // Each theme uses its own bundled Google Fonts, not the built-ins.
+            assert!(p.title_face.0 >= 2 && p.body_face.0 >= 2, "{} fonts", p.name);
+        }
     }
 
     #[test]
@@ -998,7 +1033,10 @@ mod tests {
     #[test]
     fn follows_ia_theme_documentation() {
         // Inverted titles live in "Layouts", as in Basel.
-        let mut p = crate::theme::presets()[1].clone(); // Contrast Serif inverts titles
+        let mut p = crate::theme::presets()
+            .into_iter()
+            .find(|p| p.name == "Singapore")
+            .unwrap(); // inverts its cover and title slides
         assert!(p.invert_titles);
         p.name = "My Theme";
         let dir = scratch("doc");
@@ -1009,9 +1047,9 @@ mod tests {
         assert_eq!(t.arr("Layouts").len(), 2);
         assert!(!t.str("CssClasses").unwrap().contains("invert"));
         // Display names in template.json, CSS names in presets.json.
-        assert_eq!(t.str("TitleFont"), Some("Serif"));
+        assert_eq!(t.str("TitleFont"), Some("Space Grotesk"));
         let pr = Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap();
-        assert_eq!(pr.arr("Presets")[0].str("TitleFont"), Some("ui-serif"));
+        assert_eq!(pr.arr("Presets")[0].str("TitleFont"), Some("Space Grotesk"));
         assert!(load(&dir).unwrap().invert_titles);
         // Turning it off removes the entries again.
         p.invert_titles = false;
@@ -1059,7 +1097,9 @@ mod tests {
     fn round_trips_a_builtin_preset() {
         for (i, original) in crate::theme::presets().into_iter().enumerate() {
             let (t, p) = to_json(&original, i % 2 == 0);
-            let back = from_json(&t, &p, Path::new("/x"));
+            // Read beside the theme's own fonts, as a saved theme would be.
+            let dir = original.file.clone().unwrap_or_else(|| PathBuf::from("/x"));
+            let back = from_json(&t, &p, &dir);
             assert_eq!(back.name, original.name);
             assert!(back.light == original.light && back.dark == original.dark);
             assert_eq!(back.accents, original.accents);
@@ -1067,7 +1107,8 @@ mod tests {
             assert_eq!(back.gradients, original.gradients);
             assert_eq!(back.size_idx, original.size_idx);
             assert_eq!(back.invert_titles, original.invert_titles);
-            assert_eq!(back.title_face == Face::SERIF, original.title_face == Face::SERIF);
+            assert_eq!(back.title_face, original.title_face, "{}", original.name);
+            assert_eq!(back.body_face, original.body_face, "{}", original.name);
             assert_eq!(back.starts_dark, i % 2 == 0);
         }
     }

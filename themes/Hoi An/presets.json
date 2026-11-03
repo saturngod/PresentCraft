@@ -1,0 +1,72 @@
+{
+  "Presets": [
+    {
+      "Name": "Dark",
+      "TitleFont": "Playfair Display",
+      "BodyFont": "Mulish",
+      "DarkBodyTextColor": "#4E3B2A",
+      "LightBodyTextColor": "#F5EAD6",
+      "DarkTitleTextColor": "#5A2A12",
+      "LightTitleTextColor": "#FFE7B0",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#E4572E",
+      "Accent2": "#F2A541",
+      "Accent3": "#2E86AB",
+      "Accent4": "#8E4A9E",
+      "Accent5": "#3BA272",
+      "Accent6": "#F7D06B",
+      "LightBgGradient": [
+        "#FFE7A3",
+        "#FFD7A2",
+        "#FBC9B4",
+        "#F4C9D9",
+        "#DDD3F1",
+        "#CBE6D8"
+      ],
+      "DarkBgGradient": [
+        "#7A1E2C",
+        "#8A3A1A",
+        "#6B4E12",
+        "#1E5B4A",
+        "#1F4E79",
+        "#4B2A6B"
+      ]
+    },
+    {
+      "Name": "Light",
+      "TitleFont": "Playfair Display",
+      "BodyFont": "Mulish",
+      "DarkBodyTextColor": "#4E3B2A",
+      "LightBodyTextColor": "#F5EAD6",
+      "DarkTitleTextColor": "#5A2A12",
+      "LightTitleTextColor": "#FFE7B0",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#E4572E",
+      "Accent2": "#F2A541",
+      "Accent3": "#2E86AB",
+      "Accent4": "#8E4A9E",
+      "Accent5": "#3BA272",
+      "Accent6": "#F7D06B",
+      "LightBgGradient": [
+        "#FFE7A3",
+        "#FFD7A2",
+        "#FBC9B4",
+        "#F4C9D9",
+        "#DDD3F1",
+        "#CBE6D8"
+      ],
+      "DarkBgGradient": [
+        "#7A1E2C",
+        "#8A3A1A",
+        "#6B4E12",
+        "#1E5B4A",
+        "#1F4E79",
+        "#4B2A6B"
+      ]
+    }
+  ]
+}

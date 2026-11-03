@@ -1,0 +1,16 @@
+{
+  "Name": "Bali",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Terrace greens.",
+  "LongDescription": "Terrace greens.\n- Young rice to ripe gold, one per slide\n- Dark: deep jungle greens\n- Fresh and calm\n- Fonts: DM Serif Display and DM Sans",
+  "Css": "bali.css",
+  "TitleFont": "DM Serif Display",
+  "BodyFont": "DM Sans",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Cinzel",
+      "BodyFont": "EB Garamond",
+      "DarkBodyTextColor": "#3D2F28",
+      "LightBodyTextColor": "#E7D6C4",
+      "DarkTitleTextColor": "#A6342A",
+      "LightTitleTextColor": "#F1C27D",
+      "DarkBackgroundColor": "#2A1712",
+      "LightBackgroundColor": "#F6EEE3",
+      "Appearance": "light",
+      "Accent1": "#B23A2E",
+      "Accent2": "#C8963E",
+      "Accent3": "#3F7F86",
+      "Accent4": "#E3A857",
+      "Accent5": "#6B4E3D",
+      "Accent6": "#9DB4A8"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Cinzel",
+      "BodyFont": "EB Garamond",
+      "DarkBodyTextColor": "#3D2F28",
+      "LightBodyTextColor": "#E7D6C4",
+      "DarkTitleTextColor": "#A6342A",
+      "LightTitleTextColor": "#F1C27D",
+      "DarkBackgroundColor": "#2A1712",
+      "LightBackgroundColor": "#F6EEE3",
+      "Appearance": "dark",
+      "Accent1": "#B23A2E",
+      "Accent2": "#C8963E",
+      "Accent3": "#3F7F86",
+      "Accent4": "#E3A857",
+      "Accent5": "#6B4E3D",
+      "Accent6": "#9DB4A8"
+    }
+  ]
+}

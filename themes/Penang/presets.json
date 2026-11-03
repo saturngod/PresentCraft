@@ -1,0 +1,70 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Fraunces",
+      "BodyFont": "Karla",
+      "DarkBodyTextColor": "#3B3B3B",
+      "LightBodyTextColor": "#EADCE0",
+      "DarkTitleTextColor": "#1F5F66",
+      "LightTitleTextColor": "#FBD5DA",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#E88EA0",
+      "Accent2": "#3FA7A3",
+      "Accent3": "#F2C14E",
+      "Accent4": "#6C9A5B",
+      "Accent5": "#D96C4F",
+      "Accent6": "#5A6FA8",
+      "LightBgGradient": [
+        "#F8D7DD",
+        "#F9E3C3",
+        "#FDF1C7",
+        "#D7EEDF",
+        "#CFE7EA",
+        "#DCD6F0"
+      ],
+      "DarkBgGradient": [
+        "#5B2333",
+        "#6B4A1E",
+        "#1E4D45",
+        "#1F4A5A",
+        "#3E2F5B"
+      ]
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Fraunces",
+      "BodyFont": "Karla",
+      "DarkBodyTextColor": "#3B3B3B",
+      "LightBodyTextColor": "#EADCE0",
+      "DarkTitleTextColor": "#1F5F66",
+      "LightTitleTextColor": "#FBD5DA",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#E88EA0",
+      "Accent2": "#3FA7A3",
+      "Accent3": "#F2C14E",
+      "Accent4": "#6C9A5B",
+      "Accent5": "#D96C4F",
+      "Accent6": "#5A6FA8",
+      "LightBgGradient": [
+        "#F8D7DD",
+        "#F9E3C3",
+        "#FDF1C7",
+        "#D7EEDF",
+        "#CFE7EA",
+        "#DCD6F0"
+      ],
+      "DarkBgGradient": [
+        "#5B2333",
+        "#6B4A1E",
+        "#1E4D45",
+        "#1F4A5A",
+        "#3E2F5B"
+      ]
+    }
+  ]
+}

@@ -179,11 +179,12 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
     let cover = one && first_heading == Some(1);
     let title = one && first_heading == Some(2) && is_text_only(&groups[0]);
     let invert = (cover || title) && theme.invert_titles && slide.backgrounds.is_empty();
+    // As in iA Presenter, "invert" shows the slide in the other appearance.
     let mut colors = if invert {
         Colors {
-            bg: theme.body,
-            body: theme.bg,
-            title: theme.bg,
+            bg: theme.inverse.bg,
+            body: theme.inverse.body,
+            title: theme.inverse.title,
         }
     } else {
         Colors {

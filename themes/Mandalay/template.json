@@ -1,0 +1,16 @@
+{
+  "Name": "Mandalay",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Vermilion and teak.",
+  "LongDescription": "Vermilion and teak.\n- Royal vermilion on warm paper\n- Teak brown with gilded titles in the dark\n- Calm and classical\n- Fonts: Cinzel and EB Garamond",
+  "Css": "mandalay.css",
+  "TitleFont": "Cinzel",
+  "BodyFont": "EB Garamond",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

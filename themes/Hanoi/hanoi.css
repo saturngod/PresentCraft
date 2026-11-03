@@ -1,0 +1,24 @@
+/* Hanoi: a PresentCraft theme.
+   Titles: Be Vietnam Pro. Body: Be Vietnam Pro. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/BeVietnamPro-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/BeVietnamPro-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/BeVietnamPro-Bold.ttf') format('truetype');
+}

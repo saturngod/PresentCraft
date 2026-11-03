@@ -1,0 +1,16 @@
+{
+  "Name": "Manila",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Sunset over the bay.",
+  "LongDescription": "Sunset over the bay.\n- Bay blue to sunset gold, one per slide\n- White titles throughout\n- Dark: dusk\n- Fonts: Oswald and Poppins",
+  "Css": "manila.css",
+  "TitleFont": "Oswald",
+  "BodyFont": "Poppins",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 2,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

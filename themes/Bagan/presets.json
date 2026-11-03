@@ -1,0 +1,72 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Marcellus",
+      "BodyFont": "Nunito Sans",
+      "DarkBodyTextColor": "#4A2E22",
+      "LightBodyTextColor": "#F4D6C0",
+      "DarkTitleTextColor": "#5A2410",
+      "LightTitleTextColor": "#FFE3C4",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#B5552B",
+      "Accent2": "#E8A33D",
+      "Accent3": "#C97B84",
+      "Accent4": "#6E7F5C",
+      "Accent5": "#8A5A44",
+      "Accent6": "#D9C3A0",
+      "LightBgGradient": [
+        "#F9D8C4",
+        "#F6C9B2",
+        "#F2BBA0",
+        "#F0C493",
+        "#F3D29A",
+        "#F5DDB0"
+      ],
+      "DarkBgGradient": [
+        "#4A2238",
+        "#5A2620",
+        "#6E2E1C",
+        "#7F3A20",
+        "#6A3A2A",
+        "#4E2C2E"
+      ]
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Marcellus",
+      "BodyFont": "Nunito Sans",
+      "DarkBodyTextColor": "#4A2E22",
+      "LightBodyTextColor": "#F4D6C0",
+      "DarkTitleTextColor": "#5A2410",
+      "LightTitleTextColor": "#FFE3C4",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#B5552B",
+      "Accent2": "#E8A33D",
+      "Accent3": "#C97B84",
+      "Accent4": "#6E7F5C",
+      "Accent5": "#8A5A44",
+      "Accent6": "#D9C3A0",
+      "LightBgGradient": [
+        "#F9D8C4",
+        "#F6C9B2",
+        "#F2BBA0",
+        "#F0C493",
+        "#F3D29A",
+        "#F5DDB0"
+      ],
+      "DarkBgGradient": [
+        "#4A2238",
+        "#5A2620",
+        "#6E2E1C",
+        "#7F3A20",
+        "#6A3A2A",
+        "#4E2C2E"
+      ]
+    }
+  ]
+}

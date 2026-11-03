@@ -1,0 +1,26 @@
+{
+  "Name": "Yangon",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Gold and lacquer.",
+  "LongDescription": "Gold and lacquer.\n- Lacquer maroon on temple ivory\n- Gold on twilight indigo\n- Cover and title slides in the dark look\n- Fonts: Cormorant Garamond and Lato",
+  "Css": "yangon.css",
+  "TitleFont": "Cormorant Garamond",
+  "BodyFont": "Lato",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

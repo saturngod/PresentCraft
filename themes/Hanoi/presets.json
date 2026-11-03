@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Be Vietnam Pro",
+      "BodyFont": "Be Vietnam Pro",
+      "DarkBodyTextColor": "#3F3A2F",
+      "LightBodyTextColor": "#EDE6D0",
+      "DarkTitleTextColor": "#1E4D3B",
+      "LightTitleTextColor": "#F2C14E",
+      "DarkBackgroundColor": "#16352A",
+      "LightBackgroundColor": "#FBF1D2",
+      "Appearance": "light",
+      "Accent1": "#E3B341",
+      "Accent2": "#C8102E",
+      "Accent3": "#2F6B55",
+      "Accent4": "#5B8FA8",
+      "Accent5": "#8C6D46",
+      "Accent6": "#D9824B"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Be Vietnam Pro",
+      "BodyFont": "Be Vietnam Pro",
+      "DarkBodyTextColor": "#3F3A2F",
+      "LightBodyTextColor": "#EDE6D0",
+      "DarkTitleTextColor": "#1E4D3B",
+      "LightTitleTextColor": "#F2C14E",
+      "DarkBackgroundColor": "#16352A",
+      "LightBackgroundColor": "#FBF1D2",
+      "Appearance": "dark",
+      "Accent1": "#E3B341",
+      "Accent2": "#C8102E",
+      "Accent3": "#2F6B55",
+      "Accent4": "#5B8FA8",
+      "Accent5": "#8C6D46",
+      "Accent6": "#D9824B"
+    }
+  ]
+}

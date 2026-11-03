@@ -1,0 +1,26 @@
+{
+  "Name": "Hanoi",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Mustard and shutter green.",
+  "LongDescription": "Mustard and shutter green.\n- Shutter green on a mustard wash\n- Mustard on deep green in the dark\n- Cover and title slides in the dark look\n- Font: Be Vietnam Pro",
+  "Css": "hanoi.css",
+  "TitleFont": "Be Vietnam Pro",
+  "BodyFont": "Be Vietnam Pro",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

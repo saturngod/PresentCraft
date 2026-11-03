@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Cormorant Garamond",
+      "BodyFont": "Lato",
+      "DarkBodyTextColor": "#3E2A22",
+      "LightBodyTextColor": "#EDE3CF",
+      "DarkTitleTextColor": "#6B1E1E",
+      "LightTitleTextColor": "#E8B84A",
+      "DarkBackgroundColor": "#1B1530",
+      "LightBackgroundColor": "#FBF6EA",
+      "Appearance": "light",
+      "Accent1": "#C9961A",
+      "Accent2": "#E07B24",
+      "Accent3": "#8E2C2C",
+      "Accent4": "#2F6F5E",
+      "Accent5": "#3A4F8C",
+      "Accent6": "#C9A27E"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Cormorant Garamond",
+      "BodyFont": "Lato",
+      "DarkBodyTextColor": "#3E2A22",
+      "LightBodyTextColor": "#EDE3CF",
+      "DarkTitleTextColor": "#6B1E1E",
+      "LightTitleTextColor": "#E8B84A",
+      "DarkBackgroundColor": "#1B1530",
+      "LightBackgroundColor": "#FBF6EA",
+      "Appearance": "dark",
+      "Accent1": "#C9961A",
+      "Accent2": "#E07B24",
+      "Accent3": "#8E2C2C",
+      "Accent4": "#2F6F5E",
+      "Accent5": "#3A4F8C",
+      "Accent6": "#C9A27E"
+    }
+  ]
+}

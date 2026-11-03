@@ -1,0 +1,16 @@
+{
+  "Name": "Hoi An",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Silk lanterns at night.",
+  "LongDescription": "Silk lanterns at night.\n- A lantern colour on every slide\n- Dark: deep silk tones\n- Light: lantern glow on paper\n- Fonts: Playfair Display and Mulish",
+  "Css": "hoi an.css",
+  "TitleFont": "Playfair Display",
+  "BodyFont": "Mulish",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

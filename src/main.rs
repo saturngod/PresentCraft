@@ -621,10 +621,12 @@ impl App {
     pub fn theme_for(&self, i: usize, dark: bool) -> Theme {
         let p = &self.presets[i];
         let current = i == self.preset_idx;
-        let pal = if dark {
-            self.dark_override.filter(|_| current).unwrap_or(p.dark)
+        let light = self.light_override.filter(|_| current).unwrap_or(p.light);
+        let dark_pal = self.dark_override.filter(|_| current).unwrap_or(p.dark);
+        let (pal, inverse) = if dark {
+            (dark_pal, light)
         } else {
-            self.light_override.filter(|_| current).unwrap_or(p.light)
+            (light, dark_pal)
         };
         let pick = |c: FontChoice, default| match c {
             FontChoice::Theme => default,
@@ -672,6 +674,7 @@ impl App {
                 p.title_face
             },
             invert_titles: p.invert_titles,
+            inverse,
             size_scale: SIZES[if current { self.size_idx } else { p.size_idx }].1,
             slots: self.slots.clone(),
             date: self.today.clone(),

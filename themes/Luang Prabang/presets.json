@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Libre Baskerville",
+      "BodyFont": "Work Sans",
+      "DarkBodyTextColor": "#4A4038",
+      "LightBodyTextColor": "#E6D9C6",
+      "DarkTitleTextColor": "#B5530F",
+      "LightTitleTextColor": "#F49D37",
+      "DarkBackgroundColor": "#1F1A14",
+      "LightBackgroundColor": "#FBF7F0",
+      "Appearance": "light",
+      "Accent1": "#F08A24",
+      "Accent2": "#5E8C7A",
+      "Accent3": "#B88A3E",
+      "Accent4": "#7A3B2E",
+      "Accent5": "#D9B26F",
+      "Accent6": "#3C5A73"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Libre Baskerville",
+      "BodyFont": "Work Sans",
+      "DarkBodyTextColor": "#4A4038",
+      "LightBodyTextColor": "#E6D9C6",
+      "DarkTitleTextColor": "#B5530F",
+      "LightTitleTextColor": "#F49D37",
+      "DarkBackgroundColor": "#1F1A14",
+      "LightBackgroundColor": "#FBF7F0",
+      "Appearance": "dark",
+      "Accent1": "#F08A24",
+      "Accent2": "#5E8C7A",
+      "Accent3": "#B88A3E",
+      "Accent4": "#7A3B2E",
+      "Accent5": "#D9B26F",
+      "Accent6": "#3C5A73"
+    }
+  ]
+}

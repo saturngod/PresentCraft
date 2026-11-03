@@ -1,0 +1,26 @@
+{
+  "Name": "Singapore",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Red and white, sharp lines.",
+  "LongDescription": "Red and white, sharp lines.\n- Singapore red on crisp white\n- White on the night bay in the dark\n- Cover and title slides in the dark look\n- Fonts: Space Grotesk and Inter",
+  "Css": "singapore.css",
+  "TitleFont": "Space Grotesk",
+  "BodyFont": "Inter",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

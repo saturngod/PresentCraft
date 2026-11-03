@@ -1,0 +1,16 @@
+{
+  "Name": "Penang",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Peranakan pastels.",
+  "LongDescription": "Peranakan pastels.\n- A pastel on every slide\n- Nyonya pink, mint, peach and lilac\n- Dark: jewel tones\n- Fonts: Fraunces and Karla",
+  "Css": "penang.css",
+  "TitleFont": "Fraunces",
+  "BodyFont": "Karla",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

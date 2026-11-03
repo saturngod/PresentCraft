@@ -14,8 +14,10 @@ pub struct Theme {
     pub chart_colors: Vec<Color32>,
     pub face: crate::fonts::Face,
     pub title_face: crate::fonts::Face,
-    /// Cover and title slides swap foreground and background.
+    /// Cover and title slides use the opposite appearance.
     pub invert_titles: bool,
+    /// The other appearance's colours, for inverted slides.
+    pub inverse: Palette,
     pub size_scale: f32,
     /// Header and footer slots (see [`SLOT_NAMES`] for the order).
     pub slots: [Slot; 6],
@@ -254,259 +256,84 @@ pub const fn hex(v: u32) -> Color32 {
     Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 
-const ACCENTS: [Color32; 6] = [
-    hex(0xFF3333),
-    hex(0x43AA8B),
-    hex(0xF9C74F),
-    hex(0x90BE6D),
-    hex(0xF8961E),
-    hex(0x577590),
-];
-const ACCENTS_B: [Color32; 6] = [
-    hex(0xF94144),
-    hex(0x43AA8B),
-    hex(0xF9C74F),
-    hex(0x90BE6D),
-    hex(0xF8961E),
-    hex(0x577590),
+/// Name of the theme new presentations start with.
+pub const DEFAULT_THEME: &str = "Yangon";
+
+/// The built-in themes: Southeast Asian cities, in menu order. Each is an
+/// iA Presenter theme folder in `themes/` (template.json, presets.json,
+/// stylesheet, preview and its Google Fonts), built into the app.
+pub const BUILT_IN_ORDER: [&str; 14] = [
+    "Yangon",
+    "Mandalay",
+    "Bagan",
+    "Singapore",
+    "Bangkok",
+    "Chiang Mai",
+    "Hanoi",
+    "Hoi An",
+    "Kuala Lumpur",
+    "Penang",
+    "Siem Reap",
+    "Luang Prabang",
+    "Bali",
+    "Manila",
 ];
 
-const fn pal(bg: u32, title: u32, body: u32) -> Palette {
-    Palette {
-        bg: hex(bg),
-        title: hex(title),
-        body: hex(body),
-    }
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/built_in_themes.rs"));
 }
 
-/// Name of the theme new presentations start with.
-pub const DEFAULT_THEME: &str = "Studio";
+/// Writes the built-in theme folders where the app can read their fonts:
+/// "Built-in Themes" next to the settings file. Files are rewritten only
+/// when they differ from the ones built into the app.
+fn built_in_root() -> Option<std::path::PathBuf> {
+    let root = if cfg!(test) {
+        std::env::temp_dir().join(format!("presentcraft-built-in-{}", std::process::id()))
+    } else {
+        crate::settings::Settings::app_dir()?.join("Built-in Themes")
+    };
+    for (rel, bytes) in embedded::BUILT_IN_FILES {
+        let path = root.join(rel);
+        if std::fs::read(&path).ok().as_deref() == Some(*bytes) {
+            continue;
+        }
+        std::fs::create_dir_all(path.parent()?).ok()?;
+        std::fs::write(&path, bytes).ok()?;
+    }
+    Some(root)
+}
+
+fn embedded_text(rel: &str) -> Option<crate::json::Json> {
+    embedded::BUILT_IN_FILES
+        .iter()
+        .find(|(p, _)| *p == rel)
+        .and_then(|(_, b)| std::str::from_utf8(b).ok())
+        .and_then(|t| crate::json::Json::parse(t).ok())
+}
 
 pub fn presets() -> Vec<Preset> {
-    vec![
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Swiss",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 1,
-            invert_titles: false,
-            light: pal(0xFFFFFF, 0x000000, 0x000000),
-            dark: pal(0x000000, 0xFFFFFF, 0xFFFFFF),
-            starts_dark: false,
-            accents: ACCENTS,
-            decor: Decor::None,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Contrast Serif",
-            title_face: crate::fonts::Face::SERIF,
-            body_face: crate::fonts::Face::SERIF,
-            size_idx: 2,
-            invert_titles: true,
-            light: pal(0xFFFFFF, 0x000000, 0x000000),
-            dark: pal(0x000000, 0xFFFFFF, 0xFFFFFF),
-            starts_dark: false,
-            accents: ACCENTS,
-            decor: Decor::None,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Paper",
-            title_face: crate::fonts::Face::SERIF,
-            body_face: crate::fonts::Face::SERIF,
-            size_idx: 1,
-            invert_titles: false,
-            light: pal(0xEBE7E7, 0x11100E, 0x11100E),
-            dark: pal(0x11100E, 0xEBE7E7, 0xEBE7E7),
-            starts_dark: false,
-            accents: [
-                hex(0x6A6256),
-                hex(0x43AA8B),
-                hex(0xF9C74F),
-                hex(0x90BE6D),
-                hex(0xF8961E),
-                hex(0x577590),
-            ],
-            decor: Decor::None,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Signal",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 2,
-            invert_titles: false,
-            light: pal(0xFFFFFF, 0x000000, 0x000000),
-            dark: pal(0x000000, 0xFFC400, 0xFFFFFF),
-            starts_dark: true,
-            accents: ACCENTS_B,
-            decor: Decor::None,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Graphite",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 0,
-            invert_titles: false,
-            light: pal(0xF2F2F2, 0x000000, 0x000000),
-            dark: pal(0x1C1C1E, 0xFFFFFF, 0xFFFFFF),
-            starts_dark: true,
-            accents: ACCENTS_B,
-            decor: Decor::None,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Studio",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 1,
-            invert_titles: false,
-            light: pal(0xFFFFFF, 0x111C3D, 0x3C4560),
-            dark: pal(0x0F1629, 0xFFFFFF, 0xC5CCE0),
-            starts_dark: false,
-            accents: [
-                hex(0x4361EE),
-                hex(0x22B8CF),
-                hex(0xF7B32B),
-                hex(0xEF476F),
-                hex(0x7B61FF),
-                hex(0x06D6A0),
-            ],
-            decor: Decor::Bar,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Midnight",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 2,
-            invert_titles: false,
-            light: pal(0xF3F6FB, 0x0B1124, 0x3B4766),
-            dark: pal(0x0B1020, 0xFFFFFF, 0xB8C1DC),
-            starts_dark: true,
-            accents: [
-                hex(0x38BDF8),
-                hex(0xA78BFA),
-                hex(0x34D399),
-                hex(0xFBBF24),
-                hex(0xF472B6),
-                hex(0x60A5FA),
-            ],
-            decor: Decor::Glow,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Editorial",
-            title_face: crate::fonts::Face::SERIF,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 1,
-            invert_titles: false,
-            light: pal(0xFAF7F2, 0x1F1A17, 0x4A403A),
-            dark: pal(0x1A1714, 0xF3EDE4, 0xCFC6BB),
-            starts_dark: false,
-            accents: [
-                hex(0xB4532A),
-                hex(0x2F6F6A),
-                hex(0xD9A441),
-                hex(0x7A8B5A),
-                hex(0x8C4A6B),
-                hex(0x4D6A8C),
-            ],
-            decor: Decor::Frame,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Corporate",
-            title_face: crate::fonts::Face::SANS,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 0,
-            invert_titles: false,
-            light: pal(0xFFFFFF, 0x0B3B5B, 0x334155),
-            dark: pal(0x0B1F2A, 0xF1F5F9, 0xB6C3CF),
-            starts_dark: false,
-            accents: [
-                hex(0x0E9F9E),
-                hex(0x0B3B5B),
-                hex(0xF59E0B),
-                hex(0x64748B),
-                hex(0x22C55E),
-                hex(0xE11D48),
-            ],
-            decor: Decor::Band,
-        },
-        Preset {
-            custom: false,
-            file: None,
-            gradients: [Vec::new(), Vec::new()],
-            chart_colors: [Vec::new(), Vec::new()],
-            accent1: [None, None],
-            dark_accents: None,
-            name: "Sunset",
-            title_face: crate::fonts::Face::SERIF,
-            body_face: crate::fonts::Face::SANS,
-            size_idx: 2,
-            invert_titles: false,
-            light: pal(0xFFF6F0, 0x6B1D3A, 0x5B3946),
-            dark: pal(0x24101C, 0xFFE9DF, 0xE6C3CC),
-            starts_dark: false,
-            accents: [
-                hex(0xF0545A),
-                hex(0xF59E42),
-                hex(0x8B5CF6),
-                hex(0x14B8A6),
-                hex(0xEAB308),
-                hex(0xEC4899),
-            ],
-            decor: Decor::Shapes,
-        },
-    ]
+    static CACHE: std::sync::OnceLock<Vec<Preset>> = std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            let root = built_in_root();
+            BUILT_IN_ORDER
+                .iter()
+                .filter_map(|name| {
+                    // From the written folder (with fonts); else from memory.
+                    let mut p = root
+                        .as_ref()
+                        .and_then(|r| crate::themefile::load(&r.join(name)).ok())
+                        .or_else(|| {
+                            let t = embedded_text(&format!("{name}/template.json"))?;
+                            let ps = embedded_text(&format!("{name}/presets.json"))?;
+                            Some(crate::themefile::from_json(&t, &ps, std::path::Path::new("")))
+                        })?;
+                    p.custom = false;
+                    Some(p)
+                })
+                .collect()
+        })
+        .clone()
 }
 
 pub fn family(face: impl Into<crate::fonts::Face>, bold: bool, italic: bool) -> FontFamily {

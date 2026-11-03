@@ -1,0 +1,16 @@
+{
+  "Name": "Chiang Mai",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Mist, forest and lantern light.",
+  "LongDescription": "Mist, forest and lantern light.\n- Forest green on morning mist\n- Lantern orange on a night sky\n- Soft and quiet\n- Fonts: Lora and Source Sans 3",
+  "Css": "chiang mai.css",
+  "TitleFont": "Lora",
+  "BodyFont": "Source Sans 3",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}
