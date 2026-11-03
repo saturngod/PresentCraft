@@ -399,7 +399,40 @@ fn split_row(line: &str) -> Vec<String> {
     let t = line.trim();
     let t = t.strip_prefix('|').unwrap_or(t);
     let t = t.strip_suffix('|').unwrap_or(t);
-    t.split('|').map(|c| c.trim().to_string()).collect()
+    t.split('|').map(|c| cell_breaks(c.trim())).collect()
+}
+
+/// Turns `<br>`, `<br/>` and `<br />` (any case) in a table cell into line
+/// breaks, dropping spaces around each break.
+pub(crate) fn cell_breaks(cell: &str) -> String {
+    let lower = cell.to_ascii_lowercase();
+    if !lower.contains("<br") {
+        return cell.to_string();
+    }
+    let mut out = String::with_capacity(cell.len());
+    let mut i = 0;
+    while i < cell.len() {
+        if lower[i..].starts_with("<br") {
+            let rest = &lower[i + 3..];
+            let tail = rest.trim_start_matches(' ');
+            let tail = tail.strip_prefix('/').unwrap_or(tail);
+            if let Some(after) = tail.strip_prefix('>') {
+                let end = cell.len() - after.len();
+                let kept = out.trim_end().len();
+                out.truncate(kept);
+                out.push('\n');
+                i = end;
+                while cell[i..].starts_with(' ') {
+                    i += 1;
+                }
+                continue;
+            }
+        }
+        let ch = cell[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 fn is_align_row(line: &str) -> bool {
@@ -814,6 +847,30 @@ pub fn parse_slide(lines: &[&str]) -> Slide {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn table_cell_line_breaks() {
+        assert_eq!(cell_breaks("a <br>b"), "a\nb");
+        assert_eq!(cell_breaks("a<br/>b"), "a\nb");
+        assert_eq!(cell_breaks("a <br /> b"), "a\nb");
+        assert_eq!(cell_breaks("a<BR>b<Br/>c"), "a\nb\nc");
+        assert_eq!(cell_breaks("no break <b>"), "no break <b>");
+        assert_eq!(cell_breaks("<brx>"), "<brx>");
+        assert_eq!(cell_breaks("ünï<br>cödé"), "ünï\ncödé");
+        let doc = "### T\n| Table | Another |\n|---|---|\n| x | long and <br>goes on<br/>and<br />on |";
+        let s = parse_document(doc);
+        let t = s[0]
+            .groups
+            .iter()
+            .flatten()
+            .find_map(|b| match b {
+                Block::Table(t) => Some(t),
+                _ => None,
+            })
+            .expect("table");
+        assert_eq!(t.rows[0][1], "long and\ngoes on\nand\non");
+        assert_eq!(t.header, vec!["Table", "Another"]);
+    }
 
     #[test]
     fn splits_and_classifies() {

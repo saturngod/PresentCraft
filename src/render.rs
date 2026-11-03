@@ -884,6 +884,8 @@ fn draw_group(
 }
 
 /// Draws a table across the full width of `rect`; returns the height used.
+/// Cells wrap onto more lines (and `<br>` breaks a line) when the text does
+/// not fit; rows grow taller to hold them.
 fn draw_table(
     painter: &Painter,
     rect: Rect,
@@ -900,70 +902,144 @@ fn draw_table(
     let nrows = t.rows.len() + 1;
     let cap_h = if t.caption.is_some() { base * 1.2 } else { 0.0 };
     let avail = rect.height() - cap_h;
-    let mut fs = (base * 0.9).min(avail / nrows as f32 / 1.9).max(4.0);
-    let cell_pad = fs * 0.6;
+    let start_fs = (base * 0.9).min(avail / nrows as f32 / 1.9).max(4.0);
     let font = |bold: bool, fs: f32| FontId::new(fs, family(theme.face, bold, false));
-    // natural column widths
-    let mut widths = vec![0.0f32; ncols];
-    let measure = |s: &str, bold: bool, fs: f32| {
-        painter
-            .layout_no_wrap(s.replace("**", ""), font(bold, fs), colors.body)
-            .size()
-            .x
+    let cell = |ri: usize, j: usize| -> &str {
+        let cells = if ri == 0 { &t.header } else { &t.rows[ri - 1] };
+        cells.get(j).map(|s| s.as_str()).unwrap_or("")
     };
-    for (j, w) in widths.iter_mut().enumerate() {
-        *w = measure(t.header.get(j).map(|s| s.as_str()).unwrap_or(""), true, fs);
-        for r in &t.rows {
-            *w = w.max(measure(
-                r.get(j).map(|s| s.as_str()).unwrap_or(""),
-                false,
-                fs,
-            ));
+    let cell_job = |s: &str, bold: bool, fs: f32, wrap: f32| {
+        inline::job(
+            s,
+            &Style {
+                size: fs,
+                color: colors.body,
+                face: theme.face,
+                bold,
+                italic: false,
+                accent: theme.accents[0],
+                line_height: 1.2,
+            },
+            wrap,
+        )
+    };
+    // Column widths and row heights for a font size.
+    let plan = |fs: f32| -> (f32, Vec<f32>, Vec<f32>, Vec<Vec<Option<Arc<Galley>>>>) {
+        let cell_pad = fs * 0.6;
+        let measure = |s: &str, bold: bool| {
+            painter
+                .layout_no_wrap(s.replace("**", ""), font(bold, fs), colors.body)
+                .size()
+                .x
+        };
+        // natural (one line per `<br>`) width of each column
+        let mut natural = vec![0.0f32; ncols];
+        for (j, w) in natural.iter_mut().enumerate() {
+            for ri in 0..nrows {
+                *w = w.max(measure(cell(ri, j), ri == 0));
+            }
+            *w += cell_pad * 2.0;
         }
-        *w += cell_pad * 2.0;
+        // longest single word per column (capped so one long word can't
+        // starve the other columns)
+        let cap = rect.width() / ncols as f32;
+        let mut min_w = vec![0.0f32; ncols];
+        for (j, w) in min_w.iter_mut().enumerate() {
+            for ri in 0..nrows {
+                for word in cell(ri, j).split_whitespace() {
+                    *w = w.max(measure(word, ri == 0));
+                }
+            }
+            *w = (*w + cell_pad * 2.0).min(cap).min(natural[j]);
+        }
+        let total: f32 = natural.iter().sum();
+        let mut widths = natural.clone();
+        if total <= rect.width() {
+            let extra = (rect.width() - total) / ncols as f32;
+            for w in widths.iter_mut() {
+                *w += extra;
+            }
+        } else {
+            // Narrow columns keep their natural width; the wide ones share
+            // what is left in proportion to their natural width.
+            let mut fixed = vec![false; ncols];
+            loop {
+                let fixed_w: f32 = (0..ncols).filter(|&j| fixed[j]).map(|j| natural[j]).sum();
+                let flex_nat: f32 = (0..ncols).filter(|&j| !fixed[j]).map(|j| natural[j]).sum();
+                let room = (rect.width() - fixed_w).max(0.0);
+                let mut grew = false;
+                for j in 0..ncols {
+                    if !fixed[j] {
+                        let share = room * natural[j] / flex_nat.max(1e-3);
+                        if natural[j] <= share {
+                            fixed[j] = true;
+                            grew = true;
+                        }
+                    }
+                }
+                if !grew {
+                    for j in 0..ncols {
+                        widths[j] = if fixed[j] {
+                            natural[j]
+                        } else {
+                            room * natural[j] / flex_nat.max(1e-3)
+                        };
+                    }
+                    // Lift columns below their longest word, taking the room
+                    // from columns that have spare width above theirs.
+                    let short: f32 = (0..ncols).map(|j| (min_w[j] - widths[j]).max(0.0)).sum();
+                    if short > 0.0 {
+                        let spare: f32 = (0..ncols).map(|j| (widths[j] - min_w[j]).max(0.0)).sum();
+                        let k = (short / spare.max(1e-3)).min(1.0);
+                        for j in 0..ncols {
+                            if widths[j] < min_w[j] {
+                                widths[j] = min_w[j];
+                            } else {
+                                widths[j] -= (widths[j] - min_w[j]) * k;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        let mut galleys = Vec::with_capacity(nrows);
+        let mut heights = Vec::with_capacity(nrows);
+        for ri in 0..nrows {
+            let mut row = Vec::with_capacity(ncols);
+            let mut row_h = fs * 1.9;
+            for (j, w) in widths.iter().enumerate() {
+                let s = cell(ri, j);
+                if s.is_empty() {
+                    row.push(None);
+                    continue;
+                }
+                let g = painter.layout_job(cell_job(s, ri == 0, fs, (w - cell_pad * 2.0).max(1.0)));
+                // a one-line cell keeps the old row height
+                row_h = row_h.max(g.size().y + fs * 0.7);
+                row.push(Some(g));
+            }
+            galleys.push(row);
+            heights.push(row_h);
+        }
+        (cell_pad, widths, heights, galleys)
+    };
+    let mut fs = start_fs;
+    let (mut cell_pad, mut widths, mut heights, mut galleys) = plan(fs);
+    // Shrink the text a little while the wrapped table is too tall.
+    for _ in 0..8 {
+        if heights.iter().sum::<f32>() <= avail || fs <= (start_fs * 0.6).max(4.0) {
+            break;
+        }
+        fs = (fs * 0.9).max((start_fs * 0.6).max(4.0));
+        (cell_pad, widths, heights, galleys) = plan(fs);
     }
-    let total: f32 = widths.iter().sum();
-    if total > rect.width() {
-        let k = rect.width() / total;
-        fs = (fs * k.max(0.6)).max(4.0);
-        for w in widths.iter_mut() {
-            *w *= k;
-        }
-    } else {
-        let extra = (rect.width() - total) / ncols as f32;
-        for w in widths.iter_mut() {
-            *w += extra;
-        }
-    }
-    let row_h = fs * 1.9;
     let line = colors.body.gamma_multiply(0.2);
     let mut y = rect.top();
-    for ri in 0..nrows {
-        let (cells, bold): (&Vec<String>, bool) = if ri == 0 {
-            (&t.header, true)
-        } else {
-            (&t.rows[ri - 1], false)
-        };
+    for (ri, (row, row_h)) in galleys.into_iter().zip(heights).enumerate() {
         let mut x = rect.left();
-        for (j, w) in widths.iter().enumerate() {
-            let s = cells.get(j).map(|s| s.as_str()).unwrap_or("");
-            if !s.is_empty() {
-                let mut job = inline::job(
-                    s,
-                    &Style {
-                        size: fs,
-                        color: colors.body,
-                        face: theme.face,
-                        bold,
-                        italic: false,
-                        accent: theme.accents[0],
-                        line_height: 1.2,
-                    },
-                    (w - cell_pad * 2.0).max(1.0),
-                );
-                job.wrap.max_rows = 1;
-                job.wrap.overflow_character = Some('…');
-                let g = painter.layout_job(job);
+        for (j, (g, w)) in row.into_iter().zip(&widths).enumerate() {
+            if let Some(g) = g {
                 let gw = g.size().x;
                 let align = t.aligns.get(j).copied().unwrap_or(Align::Left);
                 let gx = match align {
