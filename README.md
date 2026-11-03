@@ -1,5 +1,9 @@
 # PresentCraft
 
+<p align="center">
+  <img src="icon.png" alt="PresentCraft icon" width="128">
+</p>
+
 A native Markdown presentation editor built with Rust and egui/eframe. Edit a script, browse slide thumbnails, change the design, and present or export the deck.
 
 ## Requirements
