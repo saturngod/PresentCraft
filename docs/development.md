@@ -20,6 +20,7 @@ Pass options after Cargo's `--` separator:
 | --- | --- |
 | `--new` | Start with a blank document from the new-presentation template (File › New and ⌘N / Ctrl+N open a new window this way). |
 | `--tab format\|pictures\|design\|share` | Select the inspector tab. |
+| `--find table` | Open the find bar (⌘F / Ctrl+F) searching for the given text. |
 | `--slide 2` | Select a slide, numbered from 1. |
 | `--theme 1` | Select a built-in theme, numbered from 1 in the order listed under Themes. Yangon is the default. |
 | `--light` | Open with the light editor appearance. |

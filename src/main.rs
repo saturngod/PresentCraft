@@ -4,6 +4,7 @@
 mod chart;
 mod docinfo;
 mod export;
+mod find;
 mod fonts;
 mod images;
 mod imagetools;
@@ -112,6 +113,9 @@ const SLIDE_TEMPLATES: &[(&str, &[(&str, &str)])] = &[
 
 const SAMPLE: &str = include_str!("sample.md");
 const EDITOR_ID: &str = "markdown-editor";
+const FIND_FIELD_ID: &str = "find-field";
+/// Height of the find bar under the editor's top bar.
+const FIND_BAR: f32 = 44.0;
 const SCREENSHOT_FRAMES: u32 = 120;
 
 /// The last captured window picture, filled in by egui's screenshot callback.
@@ -266,6 +270,7 @@ fn main() -> eframe::Result<()> {
     let mut tab: Option<inspector::Tab> = None;
     let mut export_req: Option<(export::Format, PathBuf)> = None;
     let mut cursor_line: Option<usize> = None;
+    let mut find_query: Option<String> = None;
     let mut i = 1;
     while i < args.len() {
         let next = args.get(i + 1).cloned().unwrap_or_default();
@@ -326,6 +331,10 @@ fn main() -> eframe::Result<()> {
                     PathBuf::from(args.get(i + 2).cloned().unwrap_or_default()),
                 ));
                 i += 3;
+            }
+            "--find" => {
+                find_query = Some(next.clone());
+                i += 2;
             }
             "--line" => {
                 cursor_line = next.parse::<usize>().ok();
@@ -391,6 +400,11 @@ fn main() -> eframe::Result<()> {
             }
             if let Some(t) = theme_idx {
                 app.apply_preset(t.min(app.presets.len() - 1));
+            }
+            if let Some(q) = find_query {
+                app.find.query = q;
+                app.find.open = true;
+                app.find.focus_field = true;
             }
             if let Some(l) = cursor_line {
                 // put the cursor at the start of line l (1-based) and show it
@@ -490,6 +504,8 @@ pub struct App {
     pub jump_to: Option<(usize, usize)>,
     /// Character to bring to the top of the editor (after clicking a slide).
     scroll_editor: Option<usize>,
+    /// Find bar (⌘F) over the editor.
+    find: find::Find,
     /// A running export (slides are drawn and captured one by one).
     pub export: Option<export::Job>,
     export_rect: Rect,
@@ -585,6 +601,7 @@ impl App {
             sel_start: 0,
             jump_to: None,
             scroll_editor: None,
+            find: find::Find::default(),
             export: None,
             export_rect: Rect::NOTHING,
             quit_after_export: false,
@@ -2339,6 +2356,174 @@ impl App {
         }
     }
 
+    /// Show the find bar (or re-select its text if it is already open),
+    /// starting from the editor's selection when there is one.
+    fn open_find(&mut self) {
+        let (a, b) = (self.sel_start.min(self.cursor), self.sel_start.max(self.cursor));
+        if a != b && b - a < 200 {
+            let sel: String = self.text.chars().skip(a).take(b - a).collect();
+            if !sel.contains('\n') {
+                self.find.query = sel;
+            }
+        }
+        self.find.open = true;
+        self.find.focus_field = true;
+    }
+
+    /// Close the find bar and leave the current match selected in the editor.
+    fn close_find(&mut self) {
+        self.find.open = false;
+        let range = self.find.current_range();
+        self.jump_to = Some(range.unwrap_or((self.sel_start, self.cursor)));
+    }
+
+    fn find_bar(&mut self, ui: &mut egui::Ui, bar: Rect) {
+        let pal = crate::settings::pal();
+        ui.painter().rect_filled(bar, 0.0, pal.editor_bg);
+        ui.painter().line_segment(
+            [
+                pos2(bar.left(), bar.bottom() - 0.5),
+                pos2(bar.right(), bar.bottom() - 0.5),
+            ],
+            Stroke::new(1.0_f32, pal.divider.gamma_multiply(0.6)),
+        );
+        let ctx = ui.ctx().clone();
+        let now = ui.input(|i| i.time);
+        let field_id = egui::Id::unique(FIND_FIELD_ID);
+        let field_focused = ctx.memory(|m| m.has_focus(field_id));
+        let editor_focused = ctx.memory(|m| m.has_focus(egui::Id::unique(EDITOR_ID)));
+        if field_focused {
+            if ctx.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Enter)) {
+                self.find.step(&self.text, self.cursor, false, now);
+            } else if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) {
+                self.find.step(&self.text, self.cursor, true, now);
+            }
+        }
+        let had_focus = std::mem::replace(&mut self.find.had_focus, field_focused || editor_focused);
+        if (had_focus || field_focused || editor_focused)
+            && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+        {
+            self.find.had_focus = false;
+            self.close_find();
+            return;
+        }
+
+        let h = 28.0;
+        let y = bar.center().y;
+        let done_w = 58.0;
+        let done = Rect::from_center_size(pos2(bar.right() - 16.0 - done_w / 2.0, y), vec2(done_w, h));
+        let next = Rect::from_center_size(pos2(done.left() - 10.0 - 15.0, y), vec2(28.0, h));
+        let prev = Rect::from_center_size(pos2(next.left() - 2.0 - 14.0, y), vec2(28.0, h));
+        let field = Rect::from_min_max(
+            pos2(bar.left() + 16.0, y - h / 2.0),
+            pos2(prev.left() - 8.0, y + h / 2.0),
+        );
+
+        // search field: rounded box with a magnifier, the text, a count and a clear button
+        let ring = if field_focused {
+            ui.visuals().selection.stroke.color
+        } else {
+            pal.border
+        };
+        ui.painter().rect_filled(field, 8.0, pal.field);
+        ui.painter().rect_stroke(
+            field,
+            8.0,
+            Stroke::new(if field_focused { 2.0 } else { 1.0 }, ring),
+            egui::StrokeKind::Inside,
+        );
+        let glass = pos2(field.left() + 15.0, y - 1.0);
+        let st = Stroke::new(1.4_f32, pal.icon);
+        ui.painter().circle_stroke(glass, 5.0, st);
+        ui.painter()
+            .line_segment([glass + vec2(3.6, 3.6), glass + vec2(7.0, 7.0)], st);
+
+        let count = if self.find.not_found {
+            "Not found".to_string()
+        } else {
+            String::new()
+        };
+        let count_g = ui.painter().layout_no_wrap(
+            count,
+            FontId::proportional(12.0),
+            pal.text_dim,
+        );
+        let clear = Rect::from_center_size(pos2(field.right() - 14.0, y), vec2(18.0, 18.0));
+        let has_query = !self.find.query.is_empty();
+        let count_right = if has_query { clear.left() - 6.0 } else { field.right() - 10.0 };
+        ui.painter().galley(
+            pos2(count_right - count_g.size().x, y - count_g.size().y / 2.0),
+            count_g.clone(),
+            pal.text_dim,
+        );
+        if has_query {
+            let r = ui
+                .interact(clear, egui::Id::unique("find-clear"), Sense::click())
+                .on_hover_text("Clear");
+            let c = clear.center();
+            ui.painter().circle_filled(
+                c,
+                7.5,
+                if r.hovered() { pal.text_dim } else { pal.icon.gamma_multiply(0.7) },
+            );
+            let x = Stroke::new(1.4_f32, pal.field);
+            ui.painter().line_segment([c + vec2(-2.8, -2.8), c + vec2(2.8, 2.8)], x);
+            ui.painter().line_segment([c + vec2(-2.8, 2.8), c + vec2(2.8, -2.8)], x);
+            if r.clicked() {
+                self.find.query.clear();
+                self.find.focus_field = true;
+            }
+        }
+        let text_rect = Rect::from_min_max(
+            pos2(field.left() + 28.0, field.top() + 2.0),
+            pos2(count_right - count_g.size().x - 8.0, field.bottom() - 2.0),
+        );
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
+        let out = egui::TextEdit::singleline(&mut self.find.query)
+            .id(field_id)
+            .frame(egui::Frame::NONE)
+            .hint_text("Find in document")
+            .font(FontId::proportional(14.0))
+            .text_color(pal.text_hi)
+            .desired_width(text_rect.width())
+            .align(egui::Align2::LEFT_CENTER)
+            .min_size(text_rect.size())
+            .show(&mut child);
+        if std::mem::take(&mut self.find.focus_field) {
+            ctx.memory_mut(|m| m.request_focus(field_id));
+            let mut st = out.state.clone();
+            let n = self.find.query.chars().count();
+            st.cursor
+                .set_char_range(Some(CCursorRange::two(CCursor::new(0), CCursor::new(n))));
+            st.store(&ctx, field_id);
+        }
+
+        if icon_button(ui, prev, Icon::ChevronLeft, &format!("Previous match ({})", kbd("⇧⌘G"))).clicked() {
+            self.find.step(&self.text, self.cursor, false, now);
+        }
+        if icon_button(ui, next, Icon::ChevronRight, &format!("Next match ({})", kbd("⌘G"))).clicked() {
+            self.find.step(&self.text, self.cursor, true, now);
+        }
+        let r = ui
+            .interact(done, egui::Id::unique("find-done"), Sense::click())
+            .on_hover_text("Close (Esc)");
+        ui.painter().rect_filled(
+            done,
+            7.0,
+            if r.hovered() { pal.hover } else { pal.button },
+        );
+        ui.painter().text(
+            done.center(),
+            egui::Align2::CENTER_CENTER,
+            "Done",
+            FontId::proportional(13.5),
+            pal.text_hi,
+        );
+        if r.clicked() {
+            self.close_find();
+        }
+    }
+
     fn editor(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         egui::CentralPanel::default()
@@ -2434,7 +2619,12 @@ impl App {
                     Stroke::new(1.0_f32, pal.divider.gamma_multiply(0.6)),
                 );
 
-                let body = Rect::from_min_max(pos2(full.left(), top.bottom()), full.max);
+                let mut body = Rect::from_min_max(pos2(full.left(), top.bottom()), full.max);
+                if self.find.open {
+                    let bar = Rect::from_min_size(body.min, vec2(body.width(), FIND_BAR));
+                    self.find_bar(ui, bar);
+                    body.min.y = bar.bottom();
+                }
                 let col_w = (EDITOR_COLUMN * self.settings.line_length as f32 / 64.0
                     * self.settings.editor_font
                     / EDITOR_FONT)
@@ -2462,10 +2652,24 @@ impl App {
                 let current = self.current;
                 // option-line icons found by the last layout: (char, key, colour)
                 let icons = std::cell::RefCell::new(Vec::new());
+                let now = ui.input(|i| i.time);
+                let find_marks = if self.find.open {
+                    self.find.refresh(&self.text, self.cursor, now);
+                    if self.find.flashing(now) {
+                        ctx.request_repaint();
+                    }
+                    self.find.marks(now, ui.visuals().selection.bg_fill)
+                } else {
+                    Vec::new()
+                };
+                let find_scroll = std::mem::take(&mut self.find.scroll)
+                    .then(|| self.find.current_range())
+                    .flatten();
                 let mut layouter = |ui: &egui::Ui, s: &dyn egui::TextBuffer, wrap: f32| {
                     let s = s.as_str();
                     let mut job =
                         highlight(s, &editor_settings, current, &mut icons.borrow_mut());
+                    find::apply_marks(&mut job, &find_marks);
                     job.wrap.max_width = wrap;
                     let g = ui.fonts_mut(|f| f.layout_job(job));
                     hanging_indent(g, s)
@@ -2514,6 +2718,14 @@ impl App {
                             if !changed {
                                 self.table_toolbar(ui, &out.galley, out.galley_pos);
                                 self.image_toolbar(ui, &out.galley, out.galley_pos);
+                            }
+                            if let Some((a, b)) = find_scroll {
+                                let r = out
+                                    .galley
+                                    .pos_from_cursor(CCursor::new(a))
+                                    .union(out.galley.pos_from_cursor(CCursor::new(b)))
+                                    .translate(out.galley_pos.to_vec2());
+                                ui.scroll_to_rect(r, Some(egui::Align::Center));
                             }
                             if let Some(ch) = scroll_to {
                                 // bring the clicked slide's first line near the top of the editor
@@ -3052,6 +3264,19 @@ impl eframe::App for App {
         }
         if cmd(Key::N) {
             self.new_doc();
+        }
+        if !self.presenting && self.export.is_none() {
+            if cmd(Key::F) {
+                self.open_find();
+            }
+            if self.find.open {
+                let now = ctx.input(|i| i.time);
+                if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::G)) {
+                    self.find.step(&self.text, self.cursor, false, now);
+                } else if cmd(Key::G) {
+                    self.find.step(&self.text, self.cursor, true, now);
+                }
+            }
         }
         if cmd(Key::Enter) {
             if self.presenting {
