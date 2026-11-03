@@ -5,8 +5,9 @@
 #   packaging/package-macos.sh
 #
 # Output: dist/PresentCraft.app and dist/PresentCraft-<version>-macos-<arch>.zip
-# The app is signed ad hoc (fine for your own Macs). To share it widely,
-# sign it with a Developer ID and notarize it (see README).
+# The app is signed ad hoc (fine for your own Macs). Set APPLE_SIGNING_IDENTITY
+# to sign with a Developer ID, plus APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID
+# to notarize (see README).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -127,12 +128,33 @@ cat >"$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad hoc signature so the bundle (and the ffmpeg inside it) runs on Apple silicon.
-codesign --force --sign - "$app/Contents/Resources/ffmpeg/ffmpeg"
-codesign --force --deep --sign - "$app"
-
 zip="$root/dist/PresentCraft-$version-macos-$arch.zip"
 rm -f "$zip"
+
+if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  # Developer ID signature with the hardened runtime (needed for notarization).
+  # The certificate must already be in a keychain.
+  echo "Signing with $APPLE_SIGNING_IDENTITY…"
+  codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
+    "$app/Contents/Resources/ffmpeg/ffmpeg"
+  codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$app"
+  codesign --verify --strict --verbose=2 "$app"
+
+  if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
+    echo "Notarizing…"
+    (cd "$root/dist" && ditto -c -k --keepParent "PresentCraft.app" "$zip")
+    xcrun notarytool submit "$zip" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+      --team-id "$APPLE_TEAM_ID" --wait
+    xcrun stapler staple "$app"
+    xcrun stapler validate "$app"
+    rm -f "$zip"
+  fi
+else
+  # Ad hoc signature so the bundle (and the ffmpeg inside it) runs on Apple silicon.
+  codesign --force --sign - "$app/Contents/Resources/ffmpeg/ffmpeg"
+  codesign --force --deep --sign - "$app"
+fi
+
 (cd "$root/dist" && ditto -c -k --keepParent "PresentCraft.app" "$zip")
 echo "Done: $app"
 echo "      $zip ($(du -h "$zip" | cut -f1))"

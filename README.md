@@ -161,11 +161,24 @@ packaging/build-ffmpeg.sh macos
 packaging/package-macos.sh
 ```
 
-This makes `dist/PresentCraft.app` and `dist/PresentCraft-<version>-macos-<arch>.zip`. The app is signed ad hoc; to give it to other people without Gatekeeper warnings, sign it with a Developer ID certificate and notarize it.
+This makes `dist/PresentCraft.app` and `dist/PresentCraft-<version>-macos-<arch>.zip`. The app is signed ad hoc unless `APPLE_SIGNING_IDENTITY` is set (for example `Developer ID Application: Name (TEAMID)`); then it is signed with that certificate and the hardened runtime. Also set `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID` to notarize and staple it.
 
-Windows: build `ffmpeg.exe` on macOS or Linux with `packaging/build-ffmpeg.sh windows` (needs MinGW-w64: `brew install mingw-w64`) and copy `packaging/vendor/ffmpeg/windows/` to the Windows machine, then run `powershell -ExecutionPolicy Bypass -File packaging\package-windows.ps1` there. Without the small build, the script downloads BtbN's ready-made LGPL `ffmpeg.exe` instead (larger, about 60 MB zipped).
+Windows: build `ffmpeg.exe` on macOS or Linux with `packaging/build-ffmpeg.sh windows` (needs MinGW-w64: `brew install mingw-w64`) and copy `packaging/vendor/ffmpeg/windows/` to the Windows machine, then run `powershell -ExecutionPolicy Bypass -File packaging\package-windows.ps1` there (add `-Arch arm64` for Windows on ARM; the default is the computer's own architecture). Without the small build, the script downloads BtbN's ready-made LGPL `ffmpeg.exe` instead (larger, about 60 MB zipped); ARM64 always uses it.
 
 Linux (on Linux): `packaging/build-ffmpeg.sh linux` then `packaging/package-linux.sh`, or `FETCH_FFMPEG=1 packaging/package-linux.sh` to use BtbN's ready-made LGPL build.
+
+### GitHub Actions
+
+`.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed (`git tag v0.2.0 && git push origin v0.2.0`) and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64, and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing. The macOS job needs these repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `APPLE_CERTIFICATE` | The Developer ID Application certificate and key exported as `.p12`, base64-encoded (`base64 -i cert.p12 \| pbcopy`). |
+| `APPLE_CERTIFICATE_PASSWORD` | The `.p12` export password. |
+| `APPLE_SIGNING_IDENTITY` | The certificate name, for example `Developer ID Application: Name (TEAMID)`. |
+| `APPLE_ID` | The Apple ID email used for notarization. |
+| `APPLE_PASSWORD` | An app-specific password for that Apple ID. |
+| `APPLE_TEAM_ID` | The 10-character team ID. |
 
 Every package carries `licenses/FFMPEG-NOTICE.txt`, the LGPL text and `BUILD-INFO.txt` (FFmpeg version, source link, configure options). FFmpeg's GPL-only parts are never enabled. Build output goes to `dist/` and `packaging/build|vendor/`, which git ignores.
 
