@@ -25,6 +25,7 @@ mod tableeditor;
 mod tabletools;
 mod theme;
 mod themefile;
+mod update;
 mod video;
 
 use eframe::egui;
@@ -532,6 +533,9 @@ pub struct App {
     doc_info: Option<json::Json>,
     /// Folder or zip, for a document opened from (or saved as) a package.
     doc_form: Option<package::Form>,
+    /// A running check for a newer release, and a newer release to offer.
+    pub update_check: Option<update::Check>,
+    update_available: Option<update::Release>,
 }
 
 pub const SIZES: [(&str, f32); 4] = [
@@ -621,6 +625,8 @@ impl App {
             import_dir: None,
             doc_info: None,
             doc_form: None,
+            update_check: None,
+            update_available: None,
         };
         #[cfg(target_os = "macos")]
         macos_open::set_context(&cc.egui_ctx);
@@ -629,7 +635,113 @@ impl App {
             app.open_path(f);
         }
         app.reparse();
+        // Screenshot runs stay offline and show no banner.
+        if app.shot_path.is_none()
+            && app.settings.check_updates
+            && update::due(app.settings.last_update_check, update::now_secs())
+        {
+            app.check_for_updates(&cc.egui_ctx, false);
+        }
         app
+    }
+
+    /// Starts looking for a newer release. A manual check reports its result
+    /// even when there is no update, and offers a version the person skipped.
+    pub fn check_for_updates(&mut self, ctx: &egui::Context, manual: bool) {
+        if let Some(check) = &mut self.update_check {
+            check.manual |= manual;
+            return;
+        }
+        if manual {
+            self.status = "Checking for updates…".into();
+        }
+        self.update_check = Some(update::Check::start(ctx, manual));
+    }
+
+    fn poll_update_check(&mut self) {
+        let Some(outcome) = self.update_check.as_ref().and_then(|c| c.poll()) else {
+            return;
+        };
+        let manual = self.update_check.take().is_some_and(|c| c.manual);
+        if !matches!(outcome, update::Outcome::Failed(_)) {
+            self.settings.last_update_check = update::now_secs();
+            self.settings.save();
+        }
+        match outcome {
+            update::Outcome::Newer(release) => {
+                if manual || release.version != self.settings.skipped_version {
+                    self.update_available = Some(release);
+                }
+                if manual {
+                    self.status.clear();
+                }
+            }
+            update::Outcome::UpToDate if manual => {
+                self.status = format!("PresentCraft {} is up to date.", update::CURRENT);
+            }
+            update::Outcome::Failed(e) if manual => {
+                self.status = format!("Couldn't check for updates: {e}");
+            }
+            _ => {}
+        }
+    }
+
+    /// A small card under the top bar offering the newer release.
+    fn update_banner(&mut self, ctx: &egui::Context) {
+        let Some(release) = self.update_available.clone() else {
+            return;
+        };
+        let pal = settings::pal();
+        let mut download = false;
+        let mut skip = false;
+        let mut later = false;
+        egui::Area::new(egui::Id::unique("update-banner"))
+            .anchor(egui::Align2::CENTER_TOP, vec2(0.0, TOP_BAR + 10.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(pal.pill)
+                    .stroke(Stroke::new(1.0_f32, pal.border))
+                    .corner_radius(10)
+                    .shadow(ctx.global_style().visuals.popup_shadow)
+                    .inner_margin(egui::Margin::symmetric(14, 10))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "PresentCraft {} is available",
+                                        release.version
+                                    ))
+                                    .size(13.5)
+                                    .strong()
+                                    .color(pal.text_hi),
+                                );
+                                ui.label(
+                                    RichText::new(format!("You have {}.", update::CURRENT))
+                                        .size(12.0)
+                                        .color(pal.text_dim),
+                                );
+                            });
+                            ui.add_space(18.0);
+                            download = ui.button("Download").clicked();
+                            skip = ui.button("Skip This Version").clicked();
+                            later = ui.button("Later").clicked();
+                        });
+                    });
+            });
+        if download {
+            if !open_external(std::ffi::OsStr::new(&release.url)) {
+                self.status = format!("Couldn't open {}", release.url);
+            }
+            self.update_available = None;
+        } else if skip {
+            self.settings.skipped_version = release.version;
+            self.settings.save();
+            self.update_available = None;
+        } else if later {
+            self.update_available = None;
+        }
     }
 
     /// Apply the complete theme bundle, replacing manual design overrides.
@@ -1319,6 +1431,10 @@ impl App {
                 if menu_item(ui, "Settings…", "⌘,") {
                     self.settings_open = true;
                     ui.close();
+                }
+                if ui.button("Check for Updates…").clicked() {
+                    ui.close();
+                    self.check_for_updates(ctx, true);
                 }
             });
             ui.separator();
@@ -3234,6 +3350,7 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
         settings::apply_appearance(ctx, &self.settings);
+        self.poll_update_check();
         self.screenshot_tick(ctx);
         if self.pending_present {
             self.pending_present = false;
@@ -3317,6 +3434,7 @@ impl eframe::App for App {
         self.editor(ui);
         self.table_editor_ui(ctx);
         self.settings_window(ctx);
+        self.update_banner(ctx);
     }
 }
 

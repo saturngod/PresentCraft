@@ -157,6 +157,12 @@ pub struct Settings {
     pub smart_punct: bool,
     /// Width of the slide list, in points (the person can drag it).
     pub sidebar_width: f32,
+    // Updates
+    pub check_updates: bool,
+    /// When the last update check succeeded (seconds since 1970).
+    pub last_update_check: u64,
+    /// A release the person chose to skip; it isn't offered again.
+    pub skipped_version: String,
 }
 
 impl Settings {
@@ -192,6 +198,9 @@ impl Settings {
             single_return: crate::mechanics::SINGLE_RETURN, // singleReturnStartsANewParagraph = true
             smart_punct: false,                             // smartPonctuation = false
             sidebar_width: crate::SIDEBAR_W,
+            check_updates: true,
+            last_update_check: 0,
+            skipped_version: String::new(),
         }
     }
 
@@ -301,6 +310,9 @@ impl Settings {
                         .unwrap_or(crate::SIDEBAR_W)
                         .clamp(crate::SIDEBAR_MIN, crate::SIDEBAR_MAX)
                 }
+                "check_updates" => s.check_updates = v.parse().unwrap_or(true),
+                "last_update_check" => s.last_update_check = v.parse().unwrap_or(0),
+                "skipped_version" => s.skipped_version = v.trim().to_string(),
                 _ => {}
             }
         }
@@ -318,7 +330,7 @@ impl Settings {
             .replace('\n', "\\n")
             .replace('\t', "\\t");
         let out = format!(
-            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\n",
+            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\ncheck_updates={}\nlast_update_check={}\nskipped_version={}\n",
             self.match_system,
             self.dark,
             t,
@@ -348,7 +360,10 @@ impl Settings {
             self.bold_underscore,
             self.single_return,
             self.smart_punct,
-            self.sidebar_width.round()
+            self.sidebar_width.round(),
+            self.check_updates,
+            self.last_update_check,
+            self.skipped_version.replace(['\n', '\r'], ""),
         );
         let _ = std::fs::write(p, out);
     }
@@ -825,6 +840,30 @@ impl crate::App {
                 }
             });
         });
+        sep(ui);
+        let mut check_now = false;
+        row(ui, "Updates:", |ui| {
+            ui.checkbox(&mut s.check_updates, "Check for updates automatically");
+            ui.horizontal(|ui| {
+                let checking = self.update_check.is_some();
+                if ui
+                    .add_enabled(!checking, egui::Button::new("Check Now"))
+                    .clicked()
+                {
+                    check_now = true;
+                }
+                if checking {
+                    ui.spinner();
+                }
+            });
+            note(
+                ui,
+                &format!("You're using PresentCraft {}.", crate::update::CURRENT),
+            );
+        });
+        if check_now {
+            self.check_for_updates(ui.ctx(), true);
+        }
     }
 
     fn page_editor(&mut self, ui: &mut egui::Ui) {
