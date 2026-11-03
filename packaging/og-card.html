@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  Social share card for the website (1200x630).
+  Rebuild website/assets/og-image.png with:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+    --window-size=1200,630 --virtual-time-budget=5000 \
+    --screenshot=website/assets/og-image.png packaging/og-card.html
+-->
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@500&family=JetBrains+Mono:wght@500&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { background: #f3f1ea; color: #151513; font-family: Inter, sans-serif; position: relative; }
+  .rule { position: absolute; left: 0; right: 0; top: 64px; border-top: 1px solid rgba(21,21,19,.14); }
+  .top { position: absolute; top: 24px; left: 64px; right: 64px; display: flex; justify-content: space-between;
+         font: 500 15px "JetBrains Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: #7b7a73; }
+  .top b { color: #151513; font-weight: 500; }
+  .left { position: absolute; left: 64px; top: 110px; width: 560px; }
+  .brand { display: flex; align-items: center; gap: 18px; font: 700 34px "Space Grotesk", sans-serif; letter-spacing: -.01em; }
+  .brand img { width: 84px; height: 84px; border-radius: 19px; box-shadow: 0 14px 30px -14px rgba(0,0,0,.5); }
+  h1 { font: 700 76px/1.0 "Space Grotesk", sans-serif; letter-spacing: -.035em; margin: 34px 0 24px; }
+  .mark { background: #ffd000; padding: 0 .1em; }
+  p { font-size: 24px; line-height: 1.4; color: #4a4944; margin: 0; }
+  .plat { position: absolute; left: 64px; bottom: 34px; font: 500 15px "JetBrains Mono", monospace;
+          letter-spacing: .14em; text-transform: uppercase; color: #151513; }
+  .plat span { background: #151513; color: #f3f1ea; padding: 6px 10px; margin-right: 8px; }
+  .shot { position: absolute; left: 670px; top: 120px; width: 760px; border: 1px solid rgba(21,21,19,.18);
+          background: #f7f5ef; padding: 10px; box-shadow: 0 30px 60px -30px rgba(0,0,0,.35); }
+  .shot img { display: block; width: 100%; border: 1px solid rgba(21,21,19,.12); }
+  .band { position: absolute; right: 0; bottom: 0; width: 560px; height: 12px; background: #ffd000; }
+</style></head>
+<body>
+  <div class="top"><span><b>01</b> / PresentCraft</span><span>Free · Open source</span></div>
+  <div class="rule"></div>
+  <div class="left">
+    <div class="brand"><img src="../website/assets/icon-512.png" alt="">PresentCraft</div>
+    <h1>Write the talk. <span class="mark">Design</span> it later.</h1>
+    <p>A native Markdown presentation editor. Present or export to PDF, PowerPoint, images and HTML.</p>
+  </div>
+  <div class="shot"><img src="../website/assets/screen-design.jpg" alt=""></div>
+  <div class="plat"><span>macOS</span><span>Windows</span><span>Linux</span></div>
+  <div class="band"></div>
+</body></html>
