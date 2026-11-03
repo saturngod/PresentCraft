@@ -2954,7 +2954,6 @@ fn background_swatch(
     colors: &mut Vec<Color32>,
     width: f32,
 ) {
-    let id = ui.auto_id_with("background_picker");
     let preview = if *enabled {
         colors.clone()
     } else {
@@ -2962,6 +2961,8 @@ fn background_swatch(
     };
     let response = gradient_chip(ui, &preview, vec2(width, 24.0), false)
         .on_hover_text("Choose a solid background or deck gradient");
+    // Key the popup by this widget's own id so the light and dark chips don't share one popup.
+    let id = response.id.with("background_picker");
     if response.clicked() {
         egui::Popup::toggle_id(ui.ctx(), id);
     }
@@ -3273,8 +3274,9 @@ fn color_field(ui: &mut egui::Ui, id: egui::Id, color: &mut Color32) {
 }
 
 fn swatch(ui: &mut egui::Ui, c: &mut Color32, w: f32) {
-    let popup_id = ui.auto_id_with("swatch_popup");
     let (r, resp) = ui.allocate_exact_size(vec2(w, 24.0), egui::Sense::click());
+    // Key the popup by this widget's own id so the light and dark swatches don't share one popup.
+    let popup_id = resp.id.with("swatch_popup");
     let resp = resp.on_hover_text("Click to edit color");
     ui.painter().rect_filled(r, 3.0, *c);
     ui.painter().rect_stroke(
