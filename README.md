@@ -171,9 +171,11 @@ Windows: build `ffmpeg.exe` on macOS or Linux with `packaging/build-ffmpeg.sh wi
 
 Linux (on Linux): `packaging/build-ffmpeg.sh linux` then `packaging/package-linux.sh`, or `FETCH_FFMPEG=1 packaging/package-linux.sh` to use BtbN's ready-made LGPL build.
 
+Linux also gets a `.deb`, an `.rpm` and an AppImage. After `package-linux.sh`, run `packaging/package-linux-formats.sh` (all three; or name them: `deb rpm appimage`). It needs `dpkg-deb`, `rpmbuild` (package `rpm`), and for the AppImage `curl`, `file` and `desktop-file-validate` (package `desktop-file-utils`); formats whose tools are missing are skipped. The `.deb` and `.rpm` install to `/usr/lib/presentcraft` with a `presentcraft` command, a menu entry, icons and the `.prcraft` file type. The AppImage is one file: make it executable and run it (`chmod +x PresentCraft-*.AppImage`). It needs FUSE 2 (`libfuse2` on Ubuntu 22.04+), or run it with `--appimage-extract-and-run`.
+
 ### GitHub Actions
 
-`.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64, and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing.
+`.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64 (`.tar.gz`, `.deb`, `.rpm` and AppImage each), and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing.
 
 The version comes from `Cargo.toml`. It shows in the app, the package file names, the macOS bundle and the Windows exe. Make releases with `packaging/release.sh`, which sets the version, commits it and adds the matching tag, so the build always has the right number:
 

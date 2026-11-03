@@ -117,7 +117,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential nasm pkg-config \
             libxkbcommon-dev libwayland-dev libgl1-mesa-dev libx11-dev \
-            libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev
+            libxcursor-dev libxrandr-dev libxi-dev libxcb1-dev \
+            rpm desktop-file-utils file
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -135,13 +136,20 @@ jobs:
             packaging/build-ffmpeg.sh linux
           fi
 
-      - name: Package
+      - name: Package (tar.gz)
         run: packaging/package-linux.sh
+
+      - name: Package (deb, rpm, AppImage)
+        run: packaging/package-linux-formats.sh deb rpm appimage
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
           if-no-files-found: error
 
   windows:
