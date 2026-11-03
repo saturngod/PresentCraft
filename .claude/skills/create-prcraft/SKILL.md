@@ -252,8 +252,13 @@ Theme/
 - **Which variant shows first:** the first preset listed is the one the deck starts in.
 - **Colour values:** `#RGB` or `#RRGGBB`.
 - **Background gradients:** add `"LightBgGradient": [...]` and/or `"DarkBgGradient": [...]`, each a list of 2 or more colours.
+- **Inverted cover and title slides:** write `"Layouts": [{"Name": "Cover", "Classes": "invert"}, {"Name": "Title", "Classes": "invert"}]` in `template.json`, following [iA's theme guide](https://ia.net/presenter/support/visuals/themes?platform=mac). `InvertTitles` is the PresentCraft shorthand for the same thing.
+- **Per-look accents:** `DarkAccent1` / `LightAccent1` set the first accent for light and dark slides.
+- **Chart colours:** `LightGraphDataColors` / `DarkGraphDataColors` take an object such as `{"data-0": "#EA3E55", "data-1": "#FFC400"}`.
+- **Transparency:** colours may include it, as `#RRGGBBAA`.
 - **Fonts:**
-  - `System` is the built-in sans and `Serif` the built-in serif.
+  - `template.json` takes display names: `System` is the built-in sans and `Serif` the built-in serif.
+  - `presets.json` takes CSS names: `system-ui`, `ui-serif`, or a list like `-apple-system-ui-serif, ui-serif`.
   - Another name, such as `Helvetica`, is used if that font is installed on the computer.
   - Serif-sounding names otherwise fall back to the built-in serif.
 - **PresentCraft-only keys** (iA Presenter ignores them):

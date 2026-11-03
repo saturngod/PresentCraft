@@ -92,8 +92,17 @@ New York/
 ```
 
 - **Saving a theme** (Duplicate Theme, or the `Theme/` folder in a package) writes this whole structure. A theme that came from a folder (an imported or iA Presenter theme) keeps everything in it, including its CSS, fonts, pictures, preview, layout examples and keys like `DarkAccent1`. PresentCraft only updates the values you changed, and colours written as `#000` or `transparent` stay as they were.
-- **New themes** get a stylesheet named after the theme and a preview drawn in its colours. PresentCraft also adds `Decoration`, `TextSize` and `InvertTitles` to `template.json`; iA Presenter ignores these keys.
-- **Fonts:** `.ttf` and `.otf` files in a theme's `fonts/` folder are used for its slides. Web-only fonts (`.woff`, `.woff2`) can't be drawn natively, so those themes use an installed font with the same name, or the built-in sans or serif.
+- **New themes** get a stylesheet named after the theme in lower case, with spaces kept ("My Theme" → `my theme.css`, as iA Presenter does), and a preview drawn in its colours. PresentCraft also adds `Decoration`, `TextSize` and `InvertTitles` to `template.json`; iA Presenter ignores these keys.
+- **Rules from [iA's theme guide](https://ia.net/presenter/support/visuals/themes?platform=mac):**
+  - Inverted cover and title slides are written as `"Layouts": [{"Name": "Cover", "Classes": "invert"}, {"Name": "Title", "Classes": "invert"}]`.
+  - `template.json` holds font display names (`System`, `Inter`). `presets.json` holds CSS names (`system-ui`, `ui-serif`, or a list like `-apple-system-ui-serif, ui-serif`).
+- **Colours and charts:**
+  - Colours may include transparency (`#000000b3` is black at 70%).
+  - `DarkAccent1` / `LightAccent1` set the first accent for light and dark slides.
+  - A Dark preset may have its own `Accent1`–`Accent6`.
+  - `LightGraphDataColors` / `DarkGraphDataColors` (`data-0`, `data-1`, …) colour charts.
+- **Gradients:** when the theme supplies `LightBgGradient` / `DarkBgGradient`, its own text colours are used on every slide (San Francisco: white throughout). A gradient you pick yourself gets black or white text for contrast.
+- **Fonts:** `.ttf` and `.otf` files anywhere in a theme's folder (usually `fonts/`) are used for its slides. Web-only fonts (`.woff`, `.woff2`) can't be drawn natively, so those themes use an installed font with the same name, or the built-in sans or serif.
 - **Importing:** Settings → Themes → Import Theme… adds any such folder, including iA Presenter's installed themes. Saved themes live in `Themes/` next to the settings file.
 
 AI agents can create packages with the `create-prcraft` skill in `.claude/skills/create-prcraft/`. Its helper script builds a package from a Markdown script and checks it:

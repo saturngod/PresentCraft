@@ -11,6 +11,8 @@ use std::f32::consts::{PI, TAU};
 pub struct ChartStyle {
     pub fg: Color32,
     pub accents: [Color32; 6],
+    /// The theme's chart colours; empty means the accents.
+    pub series: Vec<Color32>,
     pub base: f32,
     pub face: crate::fonts::Face,
 }
@@ -94,6 +96,9 @@ fn color_for(spec: &ChartSpec, st: &ChartStyle, i: usize) -> Color32 {
     if !spec.colors.is_empty() {
         let c = spec.colors[i % spec.colors.len()];
         return Color32::from_rgb(c[0], c[1], c[2]);
+    }
+    if !st.series.is_empty() {
+        return st.series[i % st.series.len()];
     }
     st.accents[i % 6]
 }

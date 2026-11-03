@@ -870,6 +870,7 @@ fn draw_group(
                         &ChartStyle {
                             fg: colors.body,
                             accents: theme.accents,
+                            series: theme.chart_colors.clone(),
                             base: base * scale.max(0.7),
                             face: theme.face,
                         },

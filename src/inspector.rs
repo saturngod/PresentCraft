@@ -370,7 +370,18 @@ impl App {
         let front = Rect::from_min_size(area.min, vec2(w, h));
         let border = crate::settings::pal().border;
         for (r, dark) in [(back, true), (front, false)] {
-            let theme = self.theme_for(i, dark);
+            let mut theme = self.theme_for(i, dark);
+            let look = usize::from(dark);
+            // The current theme with a deck gradient: show its first colour.
+            if i == self.preset_idx && self.deck_gradient[look] {
+                if let Some(&bg) = self.gradient_colors[look].first() {
+                    theme.bg = bg;
+                    if self.presets[i].gradients[look] != self.gradient_colors[look] {
+                        theme.title = crate::theme::contrast_text(bg);
+                        theme.body = theme.title;
+                    }
+                }
+            }
             self.paint_slide_with(painter, r, 0, &theme);
             painter.rect_stroke(
                 r,

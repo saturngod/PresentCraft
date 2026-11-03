@@ -632,11 +632,35 @@ impl App {
             FontChoice::Serif => fonts::Face::SERIF,
             FontChoice::Named(f) => f,
         };
+        // Previews of other themes: a gradient theme shows its first colour
+        // (the current theme gets its per-slide colours in paint_slide).
+        let preview_bg = p.gradients[usize::from(dark)]
+            .first()
+            .copied()
+            .filter(|_| !current);
         Theme {
-            bg: pal.bg,
+            bg: preview_bg.unwrap_or(pal.bg),
             body: pal.body,
             title: pal.title,
-            accents: p.accents,
+            accents: {
+                let mut a = if dark {
+                    p.dark_accents.unwrap_or(p.accents)
+                } else {
+                    p.accents
+                };
+                if let Some(c) = p.accent1[usize::from(dark)] {
+                    a[0] = c;
+                }
+                a
+            },
+            chart_colors: {
+                let look = usize::from(dark);
+                if p.chart_colors[look].is_empty() {
+                    p.chart_colors[1 - look].clone()
+                } else {
+                    p.chart_colors[look].clone()
+                }
+            },
             face: if current {
                 pick(self.body_font, p.body_face)
             } else {
@@ -1625,15 +1649,20 @@ impl App {
 
     pub fn paint_slide(&mut self, painter: &egui::Painter, rect: Rect, idx: usize) {
         let mut theme = self.theme();
-        if self.deck_gradient[usize::from(self.dark)] {
-            if let Some(bg) = theme::deck_color(
-                &self.gradient_colors[usize::from(self.dark)],
-                idx,
-                self.slides.len(),
-            ) {
+        let look = usize::from(self.dark);
+        if self.deck_gradient[look] {
+            if let Some(bg) = theme::deck_color(&self.gradient_colors[look], idx, self.slides.len())
+            {
                 theme.bg = bg;
-                theme.body = theme::contrast_text(bg);
-                theme.title = theme.body;
+                // A theme's own gradient comes with its own text colours
+                // (San Francisco: white on every colour). For a gradient
+                // picked here, choose black or white for contrast.
+                let from_theme = self.presets[self.preset_idx].gradients[look]
+                    == self.gradient_colors[look];
+                if !from_theme {
+                    theme.body = theme::contrast_text(bg);
+                    theme.title = theme.body;
+                }
                 theme.invert_titles = false;
                 theme.decor = theme::Decor::None;
             }

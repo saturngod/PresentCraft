@@ -16,8 +16,6 @@ pub const PRESETS: &str = "presets.json";
 /// Preview pictures iA Presenter shows in its theme list (500 × 281).
 pub const PREVIEW_PNG: &str = "template.png";
 pub const PREVIEW_WEBP: &str = "template.webp";
-/// Font files that come with a theme.
-pub const FONTS: &str = "fonts";
 
 /// True when `dir` looks like a theme folder.
 pub fn is_theme_dir(dir: &Path) -> bool {
@@ -84,14 +82,17 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
         title: color(dark_p, "LightTitleTextColor", Color32::WHITE),
         body: color(dark_p, "LightBodyTextColor", Color32::WHITE),
     };
-    let accent_src = light_p.or(dark_p);
     let defaults = crate::theme::presets()[0].accents;
-    let accents = std::array::from_fn(|i| color(accent_src, &format!("Accent{}", i + 1), defaults[i]));
+    let accents_of = |p: Option<&Json>| -> [Color32; 6] {
+        std::array::from_fn(|i| color(p, &format!("Accent{}", i + 1), defaults[i]))
+    };
+    let accents = accents_of(light_p.or(dark_p));
+    let dark_accents = Some(accents_of(dark_p)).filter(|a| *a != accents);
     let font = |key: &str| {
         template
             .str(key)
             .or_else(|| light_p.and_then(|p| p.str(key)))
-            .map(|n| face_named_in(n, Some(&dir.join(FONTS))))
+            .map(|n| face_named_in(n, Some(dir)))
             .unwrap_or(Face::SANS)
     };
     let name = template
@@ -109,15 +110,25 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
             gradient(light_p, "LightBgGradient"),
             gradient(dark_p, "DarkBgGradient"),
         ],
+        chart_colors: [
+            graph_colors(light_p, "LightGraphDataColors"),
+            graph_colors(dark_p, "DarkGraphDataColors"),
+        ],
+        // Named like the text colours: "Dark…" is used on light slides.
+        dark_accents,
+        accent1: [
+            light_p.and_then(|p| p.str("DarkAccent1")).and_then(parse_color),
+            dark_p.and_then(|p| p.str("LightAccent1")).and_then(parse_color),
+        ],
         title_face: font("TitleFont"),
         body_face: font("BodyFont"),
         size_idx: template
             .num("TextSize")
             .map(|n| (n.max(0.0) as usize).min(crate::SIZES.len() - 1))
             .unwrap_or(1),
-        invert_titles: template
-            .bool("InvertTitles")
-            .unwrap_or_else(|| classes.split_whitespace().any(|c| c == "invert")),
+        invert_titles: template.bool("InvertTitles").unwrap_or_else(|| {
+            layouts_inverted(template) || classes.split_whitespace().any(|c| c == "invert")
+        }),
         light,
         dark,
         // The first variant listed is the one the deck shows.
@@ -155,13 +166,13 @@ pub fn save(dir: &Path, p: &Preset, dark: bool, source: Option<&Path>) -> std::i
             .ok()
             .and_then(|t| Json::parse(&t).ok())
     };
-    let fonts = dir.join(FONTS);
+    let fonts = dir.to_path_buf();
     let (mut template, presets) = merge_json(p, dark, read(TEMPLATE), read(PRESETS), &fonts);
     let has_css = template
         .str("Css")
         .is_some_and(|c| !c.trim().is_empty() && dir.join(c).is_file());
     if !has_css {
-        let name = format!("{}.css", css_slug(p.name));
+        let name = format!("{}.css", css_file_stem(p.name));
         if !dir.join(&name).exists() {
             std::fs::write(dir.join(&name), default_css(p.name))?;
         }
@@ -205,21 +216,20 @@ fn merge_json(
     set_default(&mut t, "ShortDescription", "".into());
     set_default(&mut t, "LongDescription", "".into());
     set_default(&mut t, "Css", "".into());
-    let title_font = keep_font(t.str("TitleFont"), p.title_face, fonts);
-    let body_font = keep_font(t.str("BodyFont"), p.body_face, fonts);
+    // template.json holds display names, presets.json CSS names.
+    let title_font = keep_font(t.str("TitleFont"), p.title_face, fonts, face_name);
+    let body_font = keep_font(t.str("BodyFont"), p.body_face, fonts, face_name);
     t.set("TitleFont", title_font.clone().into());
     t.set("BodyFont", body_font.clone().into());
-    let mut classes: Vec<String> = t
+    // "invert" belongs on layouts, not on the whole theme.
+    let classes: Vec<&str> = t
         .str("CssClasses")
         .unwrap_or("")
         .split_whitespace()
         .filter(|c| *c != "invert")
-        .map(str::to_string)
         .collect();
-    if p.invert_titles {
-        classes.push("invert".into());
-    }
     t.set("CssClasses", classes.join(" ").into());
+    set_inverted_layouts(&mut t, p.invert_titles);
     set_default(&mut t, "LayoutExamples", Json::Arr(Vec::new()));
     t.set("Decoration", decor_name(p.decor).into());
     t.set("TextSize", p.size_idx.into());
@@ -236,8 +246,8 @@ fn merge_json(
     }
     let defaults = crate::theme::presets()[0].accents;
     for v in &mut list {
-        let tf = keep_font(v.str("TitleFont"), p.title_face, fonts);
-        let bf = keep_font(v.str("BodyFont"), p.body_face, fonts);
+        let tf = keep_font(v.str("TitleFont"), p.title_face, fonts, css_font_name);
+        let bf = keep_font(v.str("BodyFont"), p.body_face, fonts, css_font_name);
         v.set("TitleFont", tf.into());
         v.set("BodyFont", bf.into());
         // "Dark…" colours are used on light slides, "Light…" on dark ones.
@@ -254,8 +264,21 @@ fn merge_json(
         if v.get("Appearance").is_none() {
             v.set("Appearance", "light".into());
         }
-        for (i, a) in p.accents.iter().enumerate() {
+        let is_dark = v
+            .str("Appearance")
+            .is_some_and(|a| a.eq_ignore_ascii_case("dark"));
+        let accents = if is_dark {
+            p.dark_accents.unwrap_or(p.accents)
+        } else {
+            p.accents
+        };
+        for (i, a) in accents.iter().enumerate() {
             keep_color(v, &format!("Accent{}", i + 1), *a, defaults[i]);
+        }
+        for (key, c) in [("DarkAccent1", p.accent1[0]), ("LightAccent1", p.accent1[1])] {
+            if let Some(c) = c {
+                keep_color(v, key, c, c);
+            }
         }
         for (key, stops) in ["LightBgGradient", "DarkBgGradient"].iter().zip(&p.gradients) {
             if stops.is_empty() {
@@ -283,6 +306,59 @@ fn merge_json(
     (t, presets)
 }
 
+/// Layouts whose `invert` class swaps cover and title slides to the
+/// opposite appearance (iA Presenter's way of inverting titles).
+const INVERTED_LAYOUTS: [&str; 2] = ["Cover", "Title"];
+
+fn layouts_inverted(template: &Json) -> bool {
+    template.arr("Layouts").iter().any(|l| {
+        l.str("Name")
+            .is_some_and(|n| INVERTED_LAYOUTS.iter().any(|x| x.eq_ignore_ascii_case(n)))
+            && l.str("Classes")
+                .is_some_and(|c| c.split_whitespace().any(|c| c == "invert"))
+    })
+}
+
+/// Adds or removes `invert` on the Cover and Title layouts, keeping any
+/// other layouts and classes.
+fn set_inverted_layouts(t: &mut Json, invert: bool) {
+    let had_key = t.get("Layouts").is_some();
+    let mut list = t.arr("Layouts").to_vec();
+    for name in INVERTED_LAYOUTS {
+        let pos = list
+            .iter()
+            .position(|l| l.str("Name").is_some_and(|n| n.eq_ignore_ascii_case(name)));
+        let mut entry = match pos {
+            Some(i) => list[i].clone(),
+            None if invert => obj([("Name", name.into())]),
+            None => continue,
+        };
+        let mut classes: Vec<String> = entry
+            .str("Classes")
+            .unwrap_or("")
+            .split_whitespace()
+            .filter(|c| *c != "invert")
+            .map(str::to_string)
+            .collect();
+        if invert {
+            classes.push("invert".into());
+        }
+        entry.set("Classes", classes.join(" ").into());
+        let empty = classes.is_empty()
+            && matches!(&entry, Json::Obj(items) if items.len() == 2);
+        match (pos, empty) {
+            (Some(i), true) => {
+                list.remove(i);
+            }
+            (Some(i), false) => list[i] = entry,
+            (None, _) => list.push(entry),
+        }
+    }
+    if !list.is_empty() || had_key {
+        t.set("Layouts", Json::Arr(list));
+    }
+}
+
 /// Keeps a colour as written (`#000`, `transparent`) when it still means
 /// the same colour; otherwise writes ours as `#RRGGBB`.
 fn keep_color(v: &mut Json, key: &str, ours: Color32, fallback: Color32) {
@@ -295,10 +371,10 @@ fn keep_color(v: &mut Json, key: &str, ours: Color32, fallback: Color32) {
 }
 
 /// Keeps a font name as written when it still picks the same face.
-fn keep_font(current: Option<&str>, face: Face, fonts: &Path) -> String {
+fn keep_font(current: Option<&str>, face: Face, fonts: &Path, name: fn(Face) -> String) -> String {
     match current {
-        Some(name) if face_named_in(name, Some(fonts)) == face => name.to_string(),
-        _ => face_name(face),
+        Some(n) if face_named_in(n, Some(fonts)) == face => n.to_string(),
+        _ => name(face),
     }
 }
 
@@ -309,7 +385,25 @@ fn same_dir(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// "New York" → "newyork", as iA Presenter names its stylesheets.
+/// iA Presenter names a new theme's stylesheet after the theme in lower
+/// case ("My Theme" → "my theme.css").
+fn css_file_stem(name: &str) -> String {
+    let s: String = name
+        .trim()
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':' | '\0') { '-' } else { c })
+        .collect::<String>()
+        .to_lowercase();
+    let s = s.trim_start_matches('.').to_string();
+    if s.is_empty() {
+        "theme".into()
+    } else {
+        s
+    }
+}
+
+/// Letters and digits only, lower case: "New York" → "newyork". Used to
+/// match iA Presenter template names.
 fn css_slug(name: &str) -> String {
     let s: String = name
         .chars()
@@ -399,6 +493,25 @@ fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
     Color32::from_rgb(m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()))
 }
 
+/// Chart colours from `{"data-0": "#…", "data-1": …}`, in number order.
+fn graph_colors(p: Option<&Json>, key: &str) -> Vec<Color32> {
+    let Some(Json::Obj(items)) = p.and_then(|p| p.get(key)) else {
+        return Vec::new();
+    };
+    let mut list: Vec<(u32, Color32)> = items
+        .iter()
+        .filter_map(|(k, v)| {
+            let n = k.strip_prefix("data-")?.parse().ok()?;
+            match v {
+                Json::Str(s) => parse_color(s).map(|c| (n, c)),
+                _ => None,
+            }
+        })
+        .collect();
+    list.sort_by_key(|(n, _)| *n);
+    list.into_iter().map(|(_, c)| c).collect()
+}
+
 /// Background gradient stops from a preset (fewer than two: none).
 fn gradient(p: Option<&Json>, key: &str) -> Vec<Color32> {
     let stops: Vec<Color32> = p
@@ -417,30 +530,37 @@ fn gradient(p: Option<&Json>, key: &str) -> Vec<Color32> {
     }
 }
 
-/// `#RGB` or `#RRGGBB` (an optional alpha pair is ignored).
+/// `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA` (Copenhagen's titles are
+/// `#000000b3`, black at 70%).
 pub fn parse_color(s: &str) -> Option<Color32> {
     let h = s.trim().strip_prefix('#')?;
-    let digits: Vec<u8> = h
+    let d: Vec<u8> = h
         .chars()
         .map(|c| c.to_digit(16).map(|d| d as u8))
         .collect::<Option<_>>()?;
-    match digits.len() {
-        3 | 4 => Some(Color32::from_rgb(
-            digits[0] * 17,
-            digits[1] * 17,
-            digits[2] * 17,
-        )),
-        6 | 8 => Some(Color32::from_rgb(
-            digits[0] * 16 + digits[1],
-            digits[2] * 16 + digits[3],
-            digits[4] * 16 + digits[5],
-        )),
-        _ => None,
-    }
+    let (r, g, b, a) = match d.len() {
+        3 => (d[0] * 17, d[1] * 17, d[2] * 17, 255),
+        4 => (d[0] * 17, d[1] * 17, d[2] * 17, d[3] * 17),
+        6 => (d[0] * 16 + d[1], d[2] * 16 + d[3], d[4] * 16 + d[5], 255),
+        8 => (
+            d[0] * 16 + d[1],
+            d[2] * 16 + d[3],
+            d[4] * 16 + d[5],
+            d[6] * 16 + d[7],
+        ),
+        _ => return None,
+    };
+    Some(Color32::from_rgba_unmultiplied(r, g, b, a))
 }
 
+/// `#RRGGBB`, or `#RRGGBBAA` for a see-through colour.
 pub fn color_hex(c: Color32) -> String {
-    format!("#{:02X}{:02X}{:02X}", c.r(), c.g(), c.b())
+    let [r, g, b, a] = c.to_srgba_unmultiplied();
+    if a == 255 {
+        format!("#{r:02X}{g:02X}{b:02X}")
+    } else {
+        format!("#{r:02X}{g:02X}{b:02X}{a:02X}")
+    }
 }
 
 const SERIF_HINTS: &[&str] = &[
@@ -448,17 +568,52 @@ const SERIF_HINTS: &[&str] = &[
     "didot", "bodoni", "caslon", "merriweather", "playfair", "lora", "cambria",
 ];
 
-/// Like [`face_named`], trying the theme's own `fonts/` folder first.
-pub fn face_named_in(name: &str, fonts: Option<&Path>) -> Face {
-    if let Some(dir) = fonts.filter(|d| d.is_dir()) {
-        if let Some(f) = crate::fonts::families_in(dir)
-            .iter()
-            .find(|f| f.name.eq_ignore_ascii_case(name.trim()))
-        {
+/// Like [`face_named`], trying font files in the theme's folder first (in
+/// `fonts/` or anywhere else, as `@font-face` rules may point). A CSS list
+/// such as `-apple-system-ui-serif, ui-serif` uses its first known name.
+pub fn face_named_in(name: &str, theme_dir: Option<&Path>) -> Face {
+    let names: Vec<&str> = name
+        .split(',')
+        .map(|n| n.trim().trim_matches(|c| c == '"' || c == '\''))
+        .filter(|n| !n.is_empty())
+        .collect();
+    let families = theme_dir
+        .filter(|d| d.is_dir())
+        .map(crate::fonts::families_in)
+        .unwrap_or_default();
+    for n in &names {
+        if let Some(f) = families.iter().find(|f| f.name.eq_ignore_ascii_case(n)) {
             return crate::fonts::face_for(f);
         }
+        if let Some(face) = css_generic(n) {
+            return face;
+        }
+        if crate::fonts::catalog().is_some_and(|c| c.iter().any(|f| f.name.eq_ignore_ascii_case(n))) {
+            return face_named(n);
+        }
     }
-    face_named(name)
+    face_named(names.first().copied().unwrap_or(""))
+}
+
+/// CSS generic and system font keywords.
+fn css_generic(name: &str) -> Option<Face> {
+    match name.to_ascii_lowercase().as_str() {
+        "system" | "system-ui" | "-apple-system" | "blinkmacsystemfont" | "ui-sans-serif"
+        | "sans" | "sans-serif" | "ui-rounded" | "ui-monospace" | "monospace" => Some(Face::SANS),
+        "serif" | "ui-serif" | "-apple-system-ui-serif" => Some(Face::SERIF),
+        _ => None,
+    }
+}
+
+/// The name `presets.json` uses: a CSS font-family value.
+pub fn css_font_name(face: Face) -> String {
+    if face == Face::SANS {
+        "system-ui".into()
+    } else if face == Face::SERIF {
+        "ui-serif".into()
+    } else {
+        face.name()
+    }
 }
 
 /// The face for a font family name: an installed family when the font list
@@ -466,13 +621,11 @@ pub fn face_named_in(name: &str, fonts: Option<&Path>) -> Face {
 pub fn face_named(name: &str) -> Face {
     let n = name.trim();
     let lower = n.to_ascii_lowercase();
-    if lower.is_empty()
-        || matches!(lower.as_str(), "system" | "system-ui" | "-apple-system" | "sans" | "sans-serif")
-    {
+    if lower.is_empty() {
         return Face::SANS;
     }
-    if lower == "serif" {
-        return Face::SERIF;
+    if let Some(face) = css_generic(&lower) {
+        return face;
     }
     if let Some(f) = crate::fonts::catalog()
         .and_then(|c| c.iter().find(|f| f.name.eq_ignore_ascii_case(n)))
@@ -527,6 +680,9 @@ pub fn same_look(a: &Preset, b: &Preset) -> bool {
         && a.invert_titles == b.invert_titles
         && a.decor == b.decor
         && a.gradients == b.gradients
+        && a.chart_colors == b.chart_colors
+        && a.accent1 == b.accent1
+        && a.dark_accents == b.dark_accents
 }
 
 // ---------- iA Presenter's themes ----------
@@ -778,12 +934,124 @@ mod tests {
     }
 
     #[test]
+    fn reads_san_francisco_gradients_and_chart_colors() {
+        let src = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/San Francisco");
+        if !src.is_dir() {
+            return;
+        }
+        let p = load(src).unwrap();
+        assert_eq!(p.gradients[0].len(), 11);
+        assert_eq!(p.gradients[0][0], Color32::from_rgb(0x00, 0xA8, 0xFF));
+        assert_eq!(p.gradients[1][10], Color32::from_rgb(0x9D, 0x79, 0x00));
+        assert_eq!(p.light.title, Color32::WHITE);
+        assert_eq!(p.chart_colors[0].len(), 7);
+        assert_eq!(p.chart_colors[0][1], Color32::from_rgb(0xFF, 0xC4, 0x00));
+        assert!(p.chart_colors[1].is_empty());
+        // saving keeps "transparent", the gradients and the chart colours
+        let dir = scratch("sf");
+        save(&dir, &p, false, Some(src)).unwrap();
+        let pr = Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap();
+        let v = &pr.arr("Presets")[0];
+        assert_eq!(v.str("LightBackgroundColor"), Some("transparent"));
+        assert_eq!(v.arr("LightBgGradient").len(), 11);
+        assert_eq!(v.get("LightGraphDataColors").and_then(|g| g.str("data-1")), Some("#FFC400"));
+        assert!(same_look(&load(&dir).unwrap(), &p));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_installed_ia_theme_loads_and_round_trips() {
+        let root = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes");
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let src = e.path();
+            let name = src.file_name().unwrap().to_string_lossy().into_owned();
+            let p = load(&src).unwrap_or_else(|err| panic!("{name}: {err}"));
+            // Themes that ship TrueType fonts get them, not a stand-in.
+            let has_ttf = !crate::fonts::families_in(&src).is_empty();
+            if has_ttf {
+                assert!(p.title_face.0 >= 2, "{name}: title font not loaded from fonts/");
+            }
+            let dir = scratch(&format!("all-{}", css_slug(&name)));
+            save(&dir, &p, p.starts_dark, Some(&src)).unwrap();
+            let back = load(&dir).unwrap();
+            assert!(same_look(&back, &p), "{name}: changed after saving");
+            let layouts = |d: &Path| {
+                Json::parse(&std::fs::read_to_string(d.join(TEMPLATE)).unwrap())
+                    .unwrap()
+                    .get("Layouts")
+                    .cloned()
+            };
+            assert_eq!(layouts(&dir), layouts(&src), "{name}: Layouts changed");
+            // Unchanged themes are written back exactly.
+            assert_eq!(
+                Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap(),
+                Json::parse(&std::fs::read_to_string(src.join(PRESETS)).unwrap()).unwrap(),
+                "{name}: presets.json changed"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn follows_ia_theme_documentation() {
+        // Inverted titles live in "Layouts", as in Basel.
+        let mut p = crate::theme::presets()[1].clone(); // Contrast Serif inverts titles
+        assert!(p.invert_titles);
+        p.name = "My Theme";
+        let dir = scratch("doc");
+        save(&dir, &p, false, None).unwrap();
+        let t = Json::parse(&std::fs::read_to_string(dir.join(TEMPLATE)).unwrap()).unwrap();
+        assert_eq!(t.str("Css"), Some("my theme.css"));
+        assert!(dir.join("my theme.css").is_file());
+        assert_eq!(t.arr("Layouts").len(), 2);
+        assert!(!t.str("CssClasses").unwrap().contains("invert"));
+        // Display names in template.json, CSS names in presets.json.
+        assert_eq!(t.str("TitleFont"), Some("Serif"));
+        let pr = Json::parse(&std::fs::read_to_string(dir.join(PRESETS)).unwrap()).unwrap();
+        assert_eq!(pr.arr("Presets")[0].str("TitleFont"), Some("ui-serif"));
+        assert!(load(&dir).unwrap().invert_titles);
+        // Turning it off removes the entries again.
+        p.invert_titles = false;
+        save(&dir, &p, false, Some(&dir)).unwrap();
+        let t = Json::parse(&std::fs::read_to_string(dir.join(TEMPLATE)).unwrap()).unwrap();
+        assert!(t.arr("Layouts").is_empty());
+        assert!(!load(&dir).unwrap().invert_titles);
+        // CSS font lists.
+        assert_eq!(face_named_in("-apple-system-ui-serif, ui-serif", None), Face::SERIF);
+        assert_eq!(face_named_in("system-ui", None), Face::SANS);
+        let _ = std::fs::remove_dir_all(&dir);
+        let basel = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/Basel");
+        if basel.is_dir() {
+            assert!(load(basel).unwrap().invert_titles);
+        }
+    }
+
+    #[test]
+    fn reads_see_through_colours_and_per_look_accents() {
+        assert_eq!(
+            parse_color("#000000b3"),
+            Some(Color32::from_rgba_unmultiplied(0, 0, 0, 0xB3))
+        );
+        assert_eq!(color_hex(parse_color("#ffffffe6").unwrap()), "#FFFFFFE6");
+        assert_eq!(color_hex(parse_color("#FFF").unwrap()), "#FFFFFF");
+        let ny = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/New York");
+        if ny.is_dir() {
+            let p = load(ny).unwrap();
+            let yellow = Some(Color32::from_rgb(0xFF, 0xC4, 0x00));
+            assert_eq!(p.accent1, [yellow, yellow]);
+        }
+    }
+
+    #[test]
     fn loads_ttf_fonts_shipped_with_a_theme() {
         let src = Path::new("/Applications/iA Presenter.app/Contents/Resources/Themes/Copenhagen");
         if !src.is_dir() {
             return;
         }
-        let fams = crate::fonts::families_in(&src.join(FONTS));
+        let fams = crate::fonts::families_in(&src.join("fonts"));
         assert!(!fams.is_empty(), "Copenhagen ships .ttf fonts");
     }
 
