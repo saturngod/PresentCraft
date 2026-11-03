@@ -18,7 +18,7 @@ cargo build --locked
 cargo run --locked --bin PresentCraft
 ```
 
-With no document argument, the app opens its bundled sample presentation. To open your own Markdown document:
+With no document argument, the app opens its bundled sample presentation. To open your own presentation (a `.prcraft` or `.iapresenter` package, or a Markdown file):
 
 ```sh
 cargo run --locked --bin PresentCraft -- "/path/to/presentation.md"
@@ -46,6 +46,44 @@ Themes bundle colours, title and body fonts, and text size. Selecting a theme ap
 In **Design → Colors**, click a **Background** swatch and choose **Gradient**. Pick a preset or edit the color stops in the picker; choose **Solid** to return to the theme’s background colors. Light and dark appearances have independent background modes and gradient colors. The first slide uses the first color, the last uses the last color, and slides between them blend evenly through the color stops. Add or remove colors, or reverse their order. A one-slide deck uses the first color. Text automatically switches between black and white for contrast; theme decorations and cover inversion are replaced by the chosen background, while background pictures and videos still appear on top. The gradient applies to thumbnails, presenting, and all exports. Like other Design overrides, it lasts for the current session; selecting a theme turns it off, and Duplicate Theme saves the base theme without the deck gradient.
 
 In **Design → Logo**, select an image or drop it onto the logo preview, then adjust **Size**. The presentation has one logo: in **Design → Header & Footer**, set any of the six places to **Logo** to show it there — one place or several. Logos keep their aspect ratio and appear in presentations and all export formats. **Remove Logo** clears the image everywhere. Like the other Design controls, these choices apply to the current presentation session.
+
+## Document format
+
+PresentCraft saves presentations as `Name.prcraft` package folders, laid out like iA Presenter's `.iapresenter` packages:
+
+```text
+Name.prcraft/
+├── text.md          the script (Markdown)
+├── info.json        document settings: appearance, author, audience, logo, header/footer, gradients
+├── assets/          pictures and videos, referenced as /assets/photo.jpg
+└── Theme/
+    ├── template.json  theme name, fonts, decoration, text size
+    └── presets.json   light and dark colours, accents and background gradients
+```
+
+A package is stored in one of two forms with the same contents:
+
+| | macOS | Windows and Linux |
+| --- | --- | --- |
+| New documents | Folder package | Single zip file |
+| Opens | Folder and zip | Folder and zip |
+| Saving an existing document | Keeps its form | Keeps its form |
+
+On macOS, Finder shows a folder package as one file. Saving only rewrites `text.md`, `info.json` and `Theme/`, so large videos in `assets/` are never rewritten. On Windows and Linux there is no package concept, so a zip file is what lets you double-click a presentation. A zipped document is edited in a private working folder in the temporary directory and zipped again on each save. The new archive replaces the old one only once it is complete. Pictures and videos are stored uncompressed, because they are already compressed and this keeps saving quick.
+
+Saving copies media that lives outside the package into `assets/` and points the script at the copy. Media added to a saved package is copied in straight away. Files in the package that PresentCraft doesn't write are left alone, and unknown `info.json` keys are kept.
+
+Open also accepts `.iapresenter` documents (folder or zip) and plain Markdown (`.md`, `.markdown`, `.txt`). These are imported: Save asks where to put a new `.prcraft` package next to the original and never changes the original file. Export → Markdown still writes plain text.
+
+Themes use iA Presenter's `template.json` + `presets.json` format. Settings → Themes → Import Theme… adds any such folder (including iA Presenter's installed themes); Duplicate Theme saves your design as a theme folder. Saved themes live in `Themes/` next to the settings file.
+
+### Opening documents by double-click
+
+- **macOS:** the release bundle registers `.prcraft` (folder and zip) and offers PresentCraft for `.iapresenter` and Markdown.
+- **Windows:** in the unpacked release folder, run `powershell -ExecutionPolicy Bypass -File register-file-types.ps1` once. It registers `.prcraft` for the current user (no administrator rights needed) and adds PresentCraft to *Open with* for `.iapresenter` and Markdown. Run it again if you move the folder; add `-Remove` to undo.
+- **Linux:** in the unpacked release folder, run `./install.sh` once. It adds the menu entry, icons and the `application/x-presentcraft` file type under `~/.local/share`. `./install.sh --remove` undoes it.
+
+A folder package from a Mac is an ordinary folder on Windows and Linux. Open it with File → Open Package Folder…, by dragging it onto the window, or by passing its path on the command line.
 
 ## Release packages
 

@@ -221,6 +221,11 @@ impl Settings {
         Self::path_for("PresentCraft", "presentcraft")
     }
 
+    /// The app's own preferences folder.
+    pub fn app_dir() -> Option<PathBuf> {
+        Self::path().and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    }
+
     pub fn load(sample: &str) -> Self {
         let mut s = Settings::defaults(sample);
         let Some(p) = Self::path() else { return s };
@@ -964,20 +969,40 @@ impl crate::App {
                 )
                 .clicked()
             {
-                let resolved = self.theme();
-                let mut p = self.presets[self.preset_idx].clone();
-                p.title_face = resolved.title_face;
-                p.body_face = resolved.face;
-                p.size_idx = self.size_idx;
-                p.light = self.light_override.unwrap_or(p.light);
-                p.dark = self.dark_override.unwrap_or(p.dark);
+                let mut p = self.current_as_preset();
                 let n = self.presets.iter().filter(|p| p.custom).count() + 1;
                 p.name = Box::leak(format!("Custom {n}").into_boxed_str());
                 p.custom = true;
+                p.file = None;
+                if let Some(parent) = crate::themefile::user_dir() {
+                    let dir = crate::themefile::unique_dir(&parent, p.name);
+                    match crate::themefile::save(&dir, &p, self.dark) {
+                        Ok(()) => p.file = Some(dir),
+                        Err(e) => self.status = format!("Couldn't save the theme: {e}"),
+                    }
+                }
                 self.presets.push(p);
                 self.preset_idx = self.presets.len() - 1;
                 self.light_override = None;
                 self.dark_override = None;
+            }
+            if ui
+                .add(egui::Button::new("Import Theme…").min_size(vec2(120.0, 28.0)))
+                .on_hover_text("Add a theme folder with template.json and presets.json (iA Presenter themes work too)")
+                .clicked()
+            {
+                if let Some(dir) = rfd::FileDialog::new()
+                    .set_title("Choose a theme folder")
+                    .pick_folder()
+                {
+                    match crate::themefile::import(&dir) {
+                        Ok(p) => {
+                            self.presets.push(p);
+                            self.apply_preset(self.presets.len() - 1);
+                        }
+                        Err(e) => self.status = format!("Couldn't import the theme: {e}"),
+                    }
+                }
             }
             let can_remove = self.presets[self.preset_idx].custom;
             if ui
@@ -989,12 +1014,25 @@ impl crate::App {
                 .on_disabled_hover_text("Built-in themes can't be deleted")
                 .clicked()
             {
-                self.presets.remove(self.preset_idx);
+                let removed = self.presets.remove(self.preset_idx);
+                if let Some(dir) = removed.file {
+                    crate::themefile::remove(&dir);
+                }
                 self.apply_preset(0);
+            }
+            if let Some(dir) = crate::themefile::user_dir() {
+                if ui
+                    .button("Show Themes Folder")
+                    .on_hover_text(dir.display().to_string())
+                    .clicked()
+                {
+                    let _ = std::fs::create_dir_all(&dir);
+                    crate::open_external(dir.as_os_str());
+                }
             }
         });
         ui.add_space(6.0);
-        note(ui, "Pick a theme to use it. To make your own, change colours, fonts and size in the Design panel, then choose Duplicate Theme.");
+        note(ui, "Pick a theme to use it. To make your own, change colours, fonts and size in the Design panel, then choose Duplicate Theme. Themes are saved as folders with template.json and presets.json, the same layout iA Presenter uses.");
     }
 
     /// A titled grid of theme previews (cover slide drawn in each theme).

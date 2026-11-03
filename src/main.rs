@@ -8,7 +8,11 @@ mod images;
 mod imagetools;
 mod inline;
 mod inspector;
+mod json;
 mod mechanics;
+#[cfg(target_os = "macos")]
+mod macos_open;
+mod package;
 mod parse;
 mod render;
 mod settings;
@@ -16,6 +20,7 @@ mod syntax;
 mod tableblock;
 mod tabletools;
 mod theme;
+mod themefile;
 mod video;
 
 use eframe::egui;
@@ -313,6 +318,7 @@ fn main() -> eframe::Result<()> {
                 });
                 i += 2;
             }
+            a if a.starts_with("-psn_") => i += 1,
             _ => {
                 file = Some(PathBuf::from(&args[i]));
                 i += 1;
@@ -337,6 +343,8 @@ fn main() -> eframe::Result<()> {
             .with_title_shown(false),
         ..Default::default()
     };
+    #[cfg(target_os = "macos")]
+    macos_open::install();
     eframe::run_native(
         "PresentCraft",
         options,
@@ -469,6 +477,14 @@ pub struct App {
     shot_requested: bool,
     scroll_thumb: bool,
     recent_files: Vec<PathBuf>,
+    /// Name and folder of an opened Markdown or iA Presenter document that
+    /// hasn't been saved as a package yet.
+    import_name: Option<String>,
+    import_dir: Option<PathBuf>,
+    /// The package's `info.json`, so keys this app doesn't know survive.
+    doc_info: Option<json::Json>,
+    /// Folder or zip, for a document opened from (or saved as) a package.
+    doc_form: Option<package::Form>,
 }
 
 pub const SIZES: [(&str, f32); 4] = [
@@ -483,7 +499,11 @@ impl App {
         theme::install_fonts(&cc.egui_ctx);
         fonts::start_scan();
         settings::set_visuals(&cc.egui_ctx, true);
-        let presets = theme::presets();
+        let mut presets = theme::presets();
+        for (dir, mut p) in themefile::load_user_themes() {
+            p.file = Some(dir);
+            presets.push(p);
+        }
         let default_theme = presets
             .iter()
             .position(|p| p.name == theme::DEFAULT_THEME)
@@ -544,11 +564,17 @@ impl App {
             shot_requested: false,
             scroll_thumb: false,
             recent_files: Vec::new(),
+            import_name: None,
+            import_dir: None,
+            doc_info: None,
+            doc_form: None,
         };
+        #[cfg(target_os = "macos")]
+        macos_open::set_context(&cc.egui_ctx);
+        app.apply_preset(default_theme);
         if let Some(f) = file {
             app.open_path(f);
         }
-        app.apply_preset(default_theme);
         app.reparse();
         app
     }
@@ -560,6 +586,12 @@ impl App {
         self.light_override = None;
         self.dark_override = None;
         self.deck_gradient = [false; 2];
+        for (look, stops) in self.presets[i].gradients.iter().enumerate() {
+            if stops.len() >= 2 {
+                self.deck_gradient[look] = true;
+                self.gradient_colors[look] = stops.clone();
+            }
+        }
         self.title_font = FontChoice::Theme;
         self.body_font = FontChoice::Theme;
         self.size_idx = self.presets[i].size_idx;
@@ -618,30 +650,227 @@ impl App {
     }
 
     pub fn open_path(&mut self, p: PathBuf) {
-        match std::fs::read_to_string(&p) {
-            Ok(t) => {
-                self.text = t.replace("\r\n", "\n");
-                self.images.set_doc_dir(p.parent().map(|d| d.to_path_buf()));
-                self.status = format!(
-                    "Opened {}",
-                    p.file_name().unwrap_or_default().to_string_lossy()
-                );
-                self.recent_files.retain(|recent| recent != &p);
-                self.recent_files.insert(0, p.clone());
-                self.recent_files.truncate(10);
-                self.path = Some(p);
-                self.dirty = false;
-                self.current = 0;
-                self.cursor = 0;
-                self.sel_start = 0;
-                self.reparse();
+        let p = package::package_for(&p);
+        let doc = match package::open(&p) {
+            Ok(doc) => doc,
+            Err(e) => {
+                self.status = format!("Couldn't open: {e}");
+                return;
             }
-            Err(e) => self.status = format!("Couldn't open: {e}"),
+        };
+        self.text = doc.text;
+        self.images.set_doc_dir(Some(doc.root));
+        self.status = format!(
+            "Opened {}",
+            p.file_name().unwrap_or_default().to_string_lossy()
+        );
+        self.recent_files.retain(|recent| recent != &p);
+        self.recent_files.insert(0, p.clone());
+        self.recent_files.truncate(10);
+        if doc.kind == package::Kind::PrCraft {
+            self.path = Some(p);
+            self.import_name = None;
+            self.import_dir = None;
+        } else {
+            // Saving makes a new package next to the original.
+            self.import_name = p.file_stem().map(|n| n.to_string_lossy().into_owned());
+            self.import_dir = p.parent().map(|d| d.to_path_buf());
+            self.path = None;
+        }
+        if let Some(theme) = doc.theme {
+            self.use_doc_theme(theme);
+        }
+        if let Some(info) = &doc.info {
+            self.apply_doc_info(info);
+        }
+        self.doc_info = doc.info.filter(|_| doc.kind == package::Kind::PrCraft);
+        self.doc_form = (doc.kind == package::Kind::PrCraft).then_some(doc.form);
+        self.dirty = false;
+        self.current = 0;
+        self.cursor = 0;
+        self.sel_start = 0;
+        self.reparse();
+    }
+
+    /// Opens a document macOS or another window asked for: here when this
+    /// window holds an untouched new document, otherwise in a new window.
+    pub fn open_requested(&mut self, p: PathBuf) {
+        let p = package::package_for(&p);
+        if self.path.as_ref() == Some(&p) {
+            return;
+        }
+        if self.path.is_none() && self.import_name.is_none() && !self.dirty {
+            self.open_path(p);
+            return;
+        }
+        let spawned = std::env::current_exe().ok().is_some_and(|exe| {
+            std::process::Command::new(exe)
+                .arg(&p)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .is_ok()
+        });
+        if !spawned && self.confirm_replace() {
+            self.open_path(p);
+        }
+    }
+
+    /// Selects the document's theme, adding it when no theme matches.
+    fn use_doc_theme(&mut self, t: Preset) {
+        let idx = match self
+            .presets
+            .iter()
+            .position(|p| p.name == t.name && themefile::same_look(p, &t))
+        {
+            Some(i) => i,
+            None => {
+                self.presets.push(t.clone());
+                self.presets.len() - 1
+            }
+        };
+        self.apply_preset(idx);
+        self.dark = t.starts_dark;
+    }
+
+    /// The current design (theme plus colour, font and size changes).
+    pub fn current_as_preset(&self) -> Preset {
+        let resolved = self.theme();
+        let mut p = self.presets[self.preset_idx].clone();
+        p.title_face = resolved.title_face;
+        p.body_face = resolved.face;
+        p.size_idx = self.size_idx;
+        p.light = self.light_override.unwrap_or(p.light);
+        p.dark = self.dark_override.unwrap_or(p.dark);
+        p.starts_dark = self.dark;
+        p.gradients = std::array::from_fn(|look| {
+            if self.deck_gradient[look] {
+                self.gradient_colors[look].clone()
+            } else {
+                Vec::new()
+            }
+        });
+        p
+    }
+
+    /// Document settings written to `info.json`.
+    fn doc_info_json(&self) -> json::Json {
+        use json::{obj, Json};
+        let mut info = match &self.doc_info {
+            Some(j @ Json::Obj(_)) => j.clone(),
+            _ => Json::Obj(Vec::new()),
+        };
+        let look = |dark: bool| if dark { "Dark" } else { "Light" };
+        info.set("Format", "PresentCraft".into());
+        info.set("FormatVersion", 1usize.into());
+        info.set(
+            "Creator",
+            format!("PresentCraft {}", env!("CARGO_PKG_VERSION")).into(),
+        );
+        info.set("Theme", self.presets[self.preset_idx].name.into());
+        info.set("Appearance", look(self.dark).to_ascii_lowercase().into());
+        info.set("Author", self.author.clone().into());
+        info.set("Audience", self.audience.clone().into());
+        info.set("Logo", self.logo.clone().into());
+        info.set("LogoSize", (self.logo_size as f64).into());
+        info.set(
+            "Slots",
+            Json::Arr(
+                self.slots
+                    .iter()
+                    .map(|sl| {
+                        obj([
+                            ("Kind", format!("{:?}", sl.kind).into()),
+                            ("Text", sl.text.clone().into()),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
+        let gradients = [false, true].map(|d| {
+            let i = usize::from(d);
+            (
+                look(d),
+                obj([
+                    ("Enabled", self.deck_gradient[i].into()),
+                    (
+                        "Colors",
+                        Json::Arr(
+                            self.gradient_colors[i]
+                                .iter()
+                                .map(|c| themefile::color_hex(*c).into())
+                                .collect(),
+                        ),
+                    ),
+                ]),
+            )
+        });
+        info.set("DeckGradient", obj(gradients));
+        info
+    }
+
+    /// Restores document settings from `info.json`; missing keys keep the
+    /// current values.
+    fn apply_doc_info(&mut self, info: &json::Json) {
+        if let Some(a) = info.str("Appearance") {
+            self.dark = a.eq_ignore_ascii_case("dark");
+        }
+        if let Some(a) = info.str("Author") {
+            self.author = a.to_string();
+        }
+        if let Some(a) = info.str("Audience") {
+            self.audience = a.to_string();
+        }
+        if let Some(l) = info.str("Logo") {
+            self.logo = l.to_string();
+        }
+        if let Some(n) = info.num("LogoSize") {
+            self.logo_size = (n as f32).clamp(0.01, 0.5);
+        }
+        for (slot, j) in self.slots.iter_mut().zip(info.arr("Slots")) {
+            if let Some(k) = j.str("Kind") {
+                slot.kind = theme::SlotKind::ALL
+                    .into_iter()
+                    .find(|sk| format!("{sk:?}").eq_ignore_ascii_case(k))
+                    .unwrap_or_default();
+            }
+            slot.text = j.str("Text").unwrap_or_default().to_string();
+        }
+        if let Some(g) = info.get("DeckGradient") {
+            for (i, look) in ["Light", "Dark"].into_iter().enumerate() {
+                let Some(v) = g.get(look) else { continue };
+                self.deck_gradient[i] = v.bool("Enabled").unwrap_or(false);
+                let colors: Vec<Color32> = v
+                    .arr("Colors")
+                    .iter()
+                    .filter_map(|c| match c {
+                        json::Json::Str(s) => themefile::parse_color(s),
+                        _ => None,
+                    })
+                    .collect();
+                if colors.len() >= 2 {
+                    self.gradient_colors[i] = colors;
+                }
+            }
         }
     }
 
     pub fn open_dialog(&mut self) {
         if let Some(p) = rfd::FileDialog::new()
+            .add_filter(
+                "Presentations",
+                &[
+                    package::EXT,
+                    package::IA_EXT,
+                    "md",
+                    "markdown",
+                    "txt",
+                    "text",
+                ],
+            )
+            .add_filter("PresentCraft", &[package::EXT])
+            .add_filter("iA Presenter", &[package::IA_EXT])
             .add_filter("Markdown", &["md", "markdown", "txt", "text"])
             .pick_file()
         {
@@ -651,36 +880,95 @@ impl App {
         }
     }
 
+    /// Saves as a `.prcraft` package; asks where when there's no package yet.
     pub fn save(&mut self, save_as: bool) {
         let target = if save_as || self.path.is_none() {
-            rfd::FileDialog::new()
-                .add_filter("Markdown", &["md"])
-                .set_file_name("Presentation.md")
-                .save_file()
+            let mut d = rfd::FileDialog::new()
+                .add_filter("PresentCraft Presentation", &[package::EXT])
+                .set_file_name(format!("{}.{}", self.doc_name(), package::EXT));
+            let dir = self
+                .import_dir
+                .clone()
+                .or_else(|| self.path.as_ref().and_then(|p| p.parent()).map(|d| d.to_path_buf()));
+            if let Some(dir) = dir {
+                d = d.set_directory(dir);
+            }
+            d.save_file().map(package::with_ext)
         } else {
             self.path.clone()
         };
         if let Some(p) = target {
-            match std::fs::write(&p, &self.text) {
-                Ok(_) => {
-                    self.images.set_doc_dir(p.parent().map(|d| d.to_path_buf()));
-                    self.status = format!(
-                        "Saved {}",
-                        p.file_name().unwrap_or_default().to_string_lossy()
-                    );
-                    self.path = Some(p);
-                    self.dirty = false;
-                }
-                Err(e) => self.status = format!("Couldn't save: {e}"),
-            }
+            self.save_to(p);
         }
+    }
+
+    pub fn save_to(&mut self, p: PathBuf) -> bool {
+        let theme = self.current_as_preset();
+        let info = self.doc_info_json();
+        let images = &self.images;
+        let resolve = |src: &str| images.resolve(src);
+        let form = self.doc_form.unwrap_or_else(package::default_form);
+        let result = package::save(
+            &p,
+            form,
+            package::SaveRequest {
+                text: &self.text,
+                info: info.clone(),
+                theme: &theme,
+                dark: self.dark,
+                logo: &self.logo,
+                resolve: &resolve,
+            },
+        );
+        let saved = match result {
+            Ok(saved) => saved,
+            Err(e) => {
+                self.status = format!("Couldn't save: {e}");
+                return false;
+            }
+        };
+        if saved.text != self.text {
+            self.text = saved.text;
+            let n = self.text.chars().count();
+            self.cursor = self.cursor.min(n);
+            self.sel_start = self.sel_start.min(n);
+            self.reparse();
+        }
+        if !saved.logo.is_empty() {
+            self.logo = saved.logo;
+        }
+        self.images.set_doc_dir(Some(saved.root.clone()));
+        self.doc_form = Some(saved.form);
+        self.status = match saved.copied {
+            0 => format!("Saved {}", p.file_name().unwrap_or_default().to_string_lossy()),
+            n => format!(
+                "Saved {} and copied {n} media file{} into it",
+                p.file_name().unwrap_or_default().to_string_lossy(),
+                if n == 1 { "" } else { "s" }
+            ),
+        };
+        self.recent_files.retain(|recent| recent != &p);
+        self.recent_files.insert(0, p.clone());
+        self.recent_files.truncate(10);
+        self.path = Some(p);
+        self.import_name = None;
+        self.import_dir = None;
+        self.doc_info = Some(info);
+        self.dirty = false;
+        true
     }
 
     /// How a dropped or chosen media file is written in the script: `./name`
     /// when it sits in the saved document's folder (or below), otherwise the
     /// full path. Spaces are written as %20 so the line stays one word.
+    /// In a saved package the file is copied into its `assets/` folder.
     pub fn media_ref(&self, file: &std::path::Path) -> String {
-        media_ref_for(self.path.as_ref().and_then(|d| d.parent()), file)
+        if let (Some(_), Some(root)) = (&self.path, &self.images.doc_dir) {
+            if let Ok(r) = package::add_asset(root, file) {
+                return r;
+            }
+        }
+        media_ref_for(self.images.doc_dir.as_deref(), file)
     }
 
     /// Opens a slide's video in the system's video player.
@@ -725,6 +1013,10 @@ impl App {
     fn blank_doc(&mut self) {
         self.text = self.settings.new_template.clone();
         self.path = None;
+        self.import_name = None;
+        self.import_dir = None;
+        self.doc_info = None;
+        self.doc_form = None;
         self.dirty = false;
         self.current = 0;
         self.cursor = 0;
@@ -784,6 +1076,19 @@ impl App {
                 if menu_item(ui, "Open…", "⌘O") {
                     ui.close_menu();
                     self.open_dialog();
+                }
+                // Outside macOS a package is a plain folder, which the file
+                // picker can't choose as a document.
+                if !cfg!(target_os = "macos") && ui.button("Open Package Folder…").clicked() {
+                    ui.close_menu();
+                    if let Some(p) = rfd::FileDialog::new()
+                        .set_title("Choose a .prcraft or .iapresenter folder")
+                        .pick_folder()
+                    {
+                        if self.confirm_replace() {
+                            self.open_path(p);
+                        }
+                    }
                 }
                 ui.menu_button("Open Recent", |ui| {
                     crate::tabletools::style_menu(ui);
@@ -1128,8 +1433,13 @@ impl App {
                 self.logo = p.to_string_lossy().into_owned();
                 continue;
             }
-            if matches!(ext.as_str(), "md" | "markdown" | "txt" | "text") {
-                self.open_path(p);
+            if matches!(
+                ext.as_str(),
+                "md" | "markdown" | "txt" | "text" | package::EXT | package::IA_EXT
+            ) {
+                if self.confirm_replace() {
+                    self.open_path(p);
+                }
             } else if ext == "csv" {
                 if let Ok(t) = std::fs::read_to_string(&p) {
                     self.insert_block(&inspector::csv_to_table(&t));
@@ -1162,6 +1472,7 @@ impl App {
             .as_ref()
             .and_then(|p| p.file_stem())
             .map(|n| n.to_string_lossy().to_string())
+            .or_else(|| self.import_name.clone())
             .unwrap_or_else(|| "Untitled".into())
     }
 
@@ -2543,6 +2854,10 @@ fn highlight(s: &str, settings: &settings::Settings, current: usize) -> LayoutJo
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        for p in macos_open::take_pending() {
+            self.open_requested(p);
+        }
         // A newly picked system font: load it now, draw with it next frame.
         if fonts::begin_frame() {
             theme::install_fonts(ctx);

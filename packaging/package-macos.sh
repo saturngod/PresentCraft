@@ -48,6 +48,81 @@ cat >"$app/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>PresentCraft Presentation</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Owner</string>
+      <key>LSTypeIsPackage</key><true/>
+      <key>CFBundleTypeIconFile</key><string>PresentCraft.icns</string>
+      <key>LSItemContentTypes</key><array><string>app.presentcraft.prcraft</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>PresentCraft Presentation</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Owner</string>
+      <key>CFBundleTypeIconFile</key><string>PresentCraft.icns</string>
+      <key>LSItemContentTypes</key><array><string>app.presentcraft.prcraft.zip</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>iA Presenter Document</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array><string>net.ia.presenter.package</string><string>net.ia.presenter.package.zip</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Markdown</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>net.daringfireball.markdown</string></array>
+    </dict>
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>app.presentcraft.prcraft</string>
+      <key>UTTypeDescription</key><string>PresentCraft Presentation</string>
+      <key>UTTypeConformsTo</key><array><string>com.apple.package</string><string>public.composite-content</string></array>
+      <key>UTTypeIconFile</key><string>PresentCraft.icns</string>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>prcraft</string></array></dict>
+    </dict>
+    <!-- The same extension as a single zip file (saved on Windows and Linux). -->
+    <dict>
+      <key>UTTypeIdentifier</key><string>app.presentcraft.prcraft.zip</string>
+      <key>UTTypeDescription</key><string>PresentCraft Presentation</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string><string>public.composite-content</string></array>
+      <key>UTTypeIconFile</key><string>PresentCraft.icns</string>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>prcraft</string></array></dict>
+    </dict>
+  </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>net.ia.presenter.package</string>
+      <key>UTTypeDescription</key><string>iA Presenter Document</string>
+      <key>UTTypeConformsTo</key><array><string>com.apple.package</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>iapresenter</string></array></dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>net.ia.presenter.package.zip</string>
+      <key>UTTypeDescription</key><string>iA Presenter Document</string>
+      <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>iapresenter</string></array></dict>
+    </dict>
+    <dict>
+      <key>UTTypeIdentifier</key><string>net.daringfireball.markdown</string>
+      <key>UTTypeDescription</key><string>Markdown</string>
+      <key>UTTypeConformsTo</key><array><string>public.plain-text</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict><key>public.filename-extension</key><array><string>md</string><string>markdown</string></array></dict>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

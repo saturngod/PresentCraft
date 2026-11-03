@@ -224,6 +224,10 @@ pub struct Palette {
 pub struct Preset {
     pub name: &'static str,
     pub custom: bool,
+    /// The theme folder this came from, for the person's saved themes.
+    pub file: Option<std::path::PathBuf>,
+    /// Background gradient stops for light and dark slides (empty: none).
+    pub gradients: [Vec<Color32>; 2],
     pub title_face: crate::fonts::Face,
     pub body_face: crate::fonts::Face,
     /// Index into the shared slide text sizes.
@@ -272,6 +276,8 @@ pub fn presets() -> Vec<Preset> {
     vec![
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Swiss",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -285,6 +291,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Contrast Serif",
             title_face: crate::fonts::Face::SERIF,
             body_face: crate::fonts::Face::SERIF,
@@ -298,6 +306,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Paper",
             title_face: crate::fonts::Face::SERIF,
             body_face: crate::fonts::Face::SERIF,
@@ -318,6 +328,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Signal",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -331,6 +343,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Graphite",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -344,6 +358,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Studio",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -364,6 +380,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Midnight",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -384,6 +402,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Editorial",
             title_face: crate::fonts::Face::SERIF,
             body_face: crate::fonts::Face::SANS,
@@ -404,6 +424,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Corporate",
             title_face: crate::fonts::Face::SANS,
             body_face: crate::fonts::Face::SANS,
@@ -424,6 +446,8 @@ pub fn presets() -> Vec<Preset> {
         },
         Preset {
             custom: false,
+            file: None,
+            gradients: [Vec::new(), Vec::new()],
             name: "Sunset",
             title_face: crate::fonts::Face::SERIF,
             body_face: crate::fonts::Face::SANS,

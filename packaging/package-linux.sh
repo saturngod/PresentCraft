@@ -6,7 +6,7 @@
 #   packaging/package-linux.sh
 #
 # Output: dist/presentcraft-<version>-linux-<arch>.tar.gz containing
-#   PresentCraft, ffmpeg/ffmpeg, licenses/
+#   PresentCraft, ffmpeg/ffmpeg, licenses/, install.sh (menu entry and .prcraft file type)
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -47,8 +47,10 @@ cp "$root/target/release/PresentCraft" "$dir/PresentCraft"
 cp "$ff/ffmpeg" "$dir/ffmpeg/ffmpeg"
 cp "$here/FFMPEG-NOTICE.txt" "$ff/COPYING.LGPLv2.1" "$ff/BUILD-INFO.txt" "$dir/licenses/"
 # Desktop integration assets; install under ~/.local/share or /usr/share.
-mkdir -p "$dir/share/applications"
+mkdir -p "$dir/share/applications" "$dir/share/mime/packages"
 cp "$here/app.presentcraft.PresentCraft.desktop" "$dir/share/applications/"
+cp "$here/linux/app.presentcraft.PresentCraft.xml" "$dir/share/mime/packages/"
+cp "$here/linux/install.sh" "$dir/install.sh"
 for size in 16 24 32 48 64 128 256 512 1024; do
   icons="$dir/share/icons/hicolor/${size}x${size}/apps"
   mkdir -p "$icons"

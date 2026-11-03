@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-presentcraft">
+    <comment>PresentCraft presentation</comment>
+    <sub-class-of type="application/zip"/>
+    <generic-icon name="x-office-presentation"/>
+    <glob pattern="*.prcraft" weight="60"/>
+  </mime-type>
+  <mime-type type="application/x-iapresenter">
+    <comment>iA Presenter document</comment>
+    <sub-class-of type="application/zip"/>
+    <generic-icon name="x-office-presentation"/>
+    <glob pattern="*.iapresenter" weight="60"/>
+  </mime-type>
+</mime-info>

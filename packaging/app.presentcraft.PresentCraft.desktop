@@ -6,4 +6,5 @@ Exec=PresentCraft %f
 Icon=app.presentcraft.PresentCraft
 Terminal=false
 Categories=Office;Presentation;
+MimeType=application/x-presentcraft;application/x-iapresenter;text/markdown;
 StartupWMClass=app.presentcraft.PresentCraft
