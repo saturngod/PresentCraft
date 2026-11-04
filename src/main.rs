@@ -11,6 +11,7 @@ mod imagetools;
 mod inline;
 mod inspector;
 mod json;
+mod math;
 mod mechanics;
 mod optionicons;
 #[cfg(target_os = "macos")]

@@ -74,7 +74,7 @@ fn slide_lines(slide: &Slide) -> Vec<Line> {
             Block::Table(_) => out.push(placeholder("Table")),
             Block::Chart(_) => out.push(placeholder("Chart")),
             Block::Code(..) => out.push(placeholder("Code")),
-            Block::Math(m) => out.push(line(m.clone(), false)),
+            Block::Math(m) => out.push(line(crate::math::plain(m), false)),
         }
     }
     if out.is_empty() {

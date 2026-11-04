@@ -368,6 +368,22 @@ pub fn install_fonts(ctx: &egui::Context) {
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
+    // Math symbols (arrows, set and logic signs) that text fonts often lack.
+    let symbols = [
+        "/System/Library/Fonts/Supplemental/STIXGeneral.otf".to_string(),
+        format!("{}seguisym.ttf", windows_fonts_dir()),
+        format!("{}cambria.ttc", windows_fonts_dir()),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf".to_string(),
+        "/usr/share/fonts/TTF/DejaVuSans.ttf".to_string(),
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf".to_string(),
+    ];
+    let mut fallback = fallback;
+    if let Some(bytes) = symbols.iter().find_map(|p| std::fs::read(p).ok()) {
+        fonts
+            .font_data
+            .insert("math-symbols".into(), Arc::new(FontData::from_owned(bytes)));
+        fallback.insert(0, "math-symbols".into());
+    }
     let mono_fallback = fonts
         .families
         .get(&FontFamily::Monospace)

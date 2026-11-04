@@ -24,7 +24,6 @@ struct Flags {
     mark: bool,
     strike: bool,
     link: bool,
-    math: bool,
 }
 
 fn format(style: &Style, f: Flags) -> TextFormat {
@@ -33,15 +32,7 @@ fn format(style: &Style, f: Flags) -> TextFormat {
     } else {
         FontId::new(
             style.size,
-            family(
-                if f.math {
-                    crate::fonts::Face::SERIF
-                } else {
-                    style.face
-                },
-                style.bold || f.bold,
-                style.italic ^ (f.italic || f.math),
-            ),
+            family(style.face, style.bold || f.bold, style.italic ^ f.italic),
         )
     };
     let mut tf = TextFormat {
@@ -147,11 +138,18 @@ pub fn append(job: &mut LayoutJob, text: &str, style: &Style) {
                 continue;
             }
         }
-        if c == '$' && (flags.math || (i + 1 < n && !chars[i + 1].is_whitespace())) {
-            flush(job, &mut buf, flags);
-            flags.math = !flags.math;
-            i += 1;
-            continue;
+        if c == '$' && i + 1 < n && !chars[i + 1].is_whitespace() {
+            // $...$ up to the next unescaped dollar sign.
+            let close = (i + 1..n).find(|&k| chars[k] == '$' && chars[k - 1] != '\\');
+            if let Some(close) = close {
+                flush(job, &mut buf, flags);
+                let src: String = chars[i + 1..close].iter().collect();
+                let mut st = *style;
+                st.bold |= flags.bold;
+                append_math(job, &src, &st);
+                i = close + 1;
+                continue;
+            }
         }
         if c == '[' {
             // [text](url) → link text; [^note] footnotes are dropped.
@@ -186,6 +184,34 @@ pub fn append(job: &mut LayoutJob, text: &str, style: &Style) {
         i += 1;
     }
     flush(job, &mut buf, flags);
+}
+
+/// Appends LaTeX math `src` to `job`: serif, italic variables, and smaller
+/// raised or lowered text for superscripts and subscripts.
+pub fn append_math(job: &mut LayoutJob, src: &str, style: &Style) {
+    use crate::math::Script;
+    for run in crate::math::runs(src) {
+        let small = run.script != Script::Normal;
+        let size = if small { style.size * 0.68 } else { style.size };
+        let mut tf = TextFormat {
+            font_id: FontId::new(
+                size,
+                family(crate::fonts::Face::SERIF, style.bold, run.italic),
+            ),
+            color: style.color,
+            line_height: (!small).then_some(style.size * style.line_height),
+            valign: match run.script {
+                Script::Normal => egui::Align::Center,
+                Script::Sup => egui::Align::TOP,
+                Script::Sub => egui::Align::BOTTOM,
+            },
+            ..Default::default()
+        };
+        if small {
+            tf.extra_letter_spacing = size * 0.02;
+        }
+        job.append(&run.text, 0.0, tf);
+    }
 }
 
 pub fn job(text: &str, style: &Style, wrap: f32) -> LayoutJob {

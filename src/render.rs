@@ -715,7 +715,9 @@ fn text_galley(
         Block::Math(t) => {
             let mut st = style(base * 1.2, colors.body, false, true);
             st.face = crate::fonts::Face::SERIF;
-            let mut job = inline::job(t, &st, width);
+            let mut job = egui::text::LayoutJob::default();
+            inline::append_math(&mut job, t, &st);
+            job.wrap.max_width = width;
             job.halign = egui::Align::Center;
             (job, base * 0.6)
         }
