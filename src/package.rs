@@ -686,7 +686,8 @@ mod tests {
         let photo = dir.join("my photo.png");
         std::fs::write(&photo, b"png-bytes").unwrap();
         let text = "# Hi\n\n./my%20photo.png\n\n---\n\n![Alt](./my%20photo.png)\n\n```\n./my%20photo.png\n```\n";
-        let preset = crate::theme::presets()[5].clone();
+        let mut preset = crate::theme::presets()[5].clone();
+        preset.line_idx = crate::line_idx_for(1.5);
         let pkg = dir.join("Deck.prcraft");
         let root = dir.clone();
         let resolve = move |s: &str| {
@@ -725,6 +726,7 @@ mod tests {
         let theme = opened.theme.unwrap();
         assert_eq!(theme.name, preset.name);
         assert!(theme.starts_dark);
+        assert_eq!(crate::LINE_HEIGHTS[theme.line_idx].1, 1.5);
         let d = crate::docinfo::read(&opened.info.unwrap());
         assert_eq!(d.theme.as_deref(), Some(preset.name));
         let _ = std::fs::remove_dir_all(&dir);

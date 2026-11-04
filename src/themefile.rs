@@ -135,6 +135,11 @@ pub fn from_json(template: &Json, presets: &Json, dir: &Path) -> Preset {
             .num("TextSize")
             .map(|n| (n.max(0.0) as usize).min(crate::SIZES.len() - 1))
             .unwrap_or(1),
+        // Stored as a percentage, like the inspector shows it.
+        line_idx: template
+            .num("LineHeight")
+            .map(|n| crate::line_idx_for(n as f32 / 100.0))
+            .unwrap_or(crate::DEFAULT_LINE_IDX),
         invert_titles: template.bool("InvertTitles").unwrap_or_else(|| {
             layouts_inverted(template) || classes.split_whitespace().any(|c| c == "invert")
         }),
@@ -242,6 +247,10 @@ fn merge_json(
     set_default(&mut t, "LayoutExamples", Json::Arr(Vec::new()));
     t.set("Decoration", decor_name(p.decor).into());
     t.set("TextSize", p.size_idx.into());
+    t.set(
+        "LineHeight",
+        ((crate::LINE_HEIGHTS[p.line_idx].1 * 100.0).round() as usize).into(),
+    );
     t.set("InvertTitles", p.invert_titles.into());
 
     let mut list = base_presets
@@ -686,6 +695,7 @@ pub fn same_look(a: &Preset, b: &Preset) -> bool {
         && a.title_face == b.title_face
         && a.body_face == b.body_face
         && a.size_idx == b.size_idx
+        && a.line_idx == b.line_idx
         && a.invert_titles == b.invert_titles
         && a.decor == b.decor
         && a.gradients == b.gradients
@@ -1106,6 +1116,7 @@ mod tests {
             assert_eq!(back.decor, original.decor);
             assert_eq!(back.gradients, original.gradients);
             assert_eq!(back.size_idx, original.size_idx);
+            assert_eq!(back.line_idx, original.line_idx);
             assert_eq!(back.invert_titles, original.invert_titles);
             assert_eq!(back.title_face, original.title_face, "{}", original.name);
             assert_eq!(back.body_face, original.body_face, "{}", original.name);

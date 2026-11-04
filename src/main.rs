@@ -471,6 +471,8 @@ pub struct App {
     pub title_font: FontChoice,
     pub body_font: FontChoice,
     pub size_idx: usize,
+    /// Index into [`LINE_HEIGHTS`].
+    pub line_idx: usize,
     /// Header and footer slots, and the one selected in the inspector.
     pub slots: [theme::Slot; 6],
     pub slot_sel: usize,
@@ -559,6 +561,30 @@ pub const SIZES: [(&str, f32); 4] = [
     ("XL — Extra Large", 1.3),
 ];
 
+/// Line spacing for slide text, relative to each theme's own spacing.
+/// Scripts with tall stacked marks (Myanmar, Thai, Khmer) need more room.
+pub const LINE_HEIGHTS: [(&str, f32); 8] = [
+    ("80%", 0.8),
+    ("90%", 0.9),
+    ("100% — Default", 1.0),
+    ("115%", 1.15),
+    ("130%", 1.3),
+    ("150%", 1.5),
+    ("175%", 1.75),
+    ("200%", 2.0),
+];
+pub const DEFAULT_LINE_IDX: usize = 2;
+
+/// The [`LINE_HEIGHTS`] entry nearest a scale (1.0 is 100%).
+pub fn line_idx_for(scale: f32) -> usize {
+    LINE_HEIGHTS
+        .iter()
+        .enumerate()
+        .min_by(|a, b| (a.1 .1 - scale).abs().total_cmp(&(b.1 .1 - scale).abs()))
+        .map(|(i, _)| i)
+        .unwrap_or(DEFAULT_LINE_IDX)
+}
+
 impl App {
     fn new(cc: &eframe::CreationContext, file: Option<PathBuf>, shot: Option<PathBuf>) -> Self {
         theme::install_fonts(&cc.egui_ctx);
@@ -592,6 +618,7 @@ impl App {
             title_font: FontChoice::Theme,
             body_font: FontChoice::Theme,
             size_idx: 1,
+            line_idx: DEFAULT_LINE_IDX,
             slots: Default::default(),
             slot_sel: 5,
             logo: String::new(),
@@ -799,6 +826,7 @@ impl App {
         self.title_font = FontChoice::Theme;
         self.body_font = FontChoice::Theme;
         self.size_idx = self.presets[i].size_idx;
+        self.line_idx = self.presets[i].line_idx;
     }
 
     pub fn theme(&self) -> Theme {
@@ -864,6 +892,7 @@ impl App {
             invert_titles: p.invert_titles,
             inverse,
             size_scale: SIZES[if current { self.size_idx } else { p.size_idx }].1,
+            line_scale: LINE_HEIGHTS[if current { self.line_idx } else { p.line_idx }].1,
             slots: self.slots.clone(),
             date: self.today.clone(),
             logo: self.logo.clone(),
@@ -1001,6 +1030,7 @@ impl App {
         p.title_face = resolved.title_face;
         p.body_face = resolved.face;
         p.size_idx = self.size_idx;
+        p.line_idx = self.line_idx;
         p.light = self.light_override.unwrap_or(p.light);
         p.dark = self.dark_override.unwrap_or(p.dark);
         p.starts_dark = self.dark;

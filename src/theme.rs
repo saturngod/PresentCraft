@@ -19,6 +19,8 @@ pub struct Theme {
     /// The other appearance's colours, for inverted slides.
     pub inverse: Palette,
     pub size_scale: f32,
+    /// Multiplies slide text line spacing (1.0 is the default).
+    pub line_scale: f32,
     /// Header and footer slots (see [`SLOT_NAMES`] for the order).
     pub slots: [Slot; 6],
     /// Today's date, shown by `SlotKind::Date` slots.
@@ -244,6 +246,8 @@ pub struct Preset {
     pub body_face: crate::fonts::Face,
     /// Index into the shared slide text sizes.
     pub size_idx: usize,
+    /// Index into the shared line heights.
+    pub line_idx: usize,
     pub invert_titles: bool,
     pub light: Palette,
     pub dark: Palette,

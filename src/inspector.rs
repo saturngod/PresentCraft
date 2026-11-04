@@ -1922,6 +1922,14 @@ impl App {
                     SIZES.iter().enumerate().map(|(i, (n, _))| (i, *n)).collect();
                 menu_combo(ui, "size", &mut self.size_idx, &options);
             });
+            labeled(ui, "Line Height", |ui| {
+                let options: Vec<(usize, &str)> = crate::LINE_HEIGHTS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (n, _))| (i, *n))
+                    .collect();
+                menu_combo(ui, "line height", &mut self.line_idx, &options);
+            });
         }
         divider(ui);
 

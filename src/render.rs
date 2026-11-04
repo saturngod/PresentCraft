@@ -612,7 +612,7 @@ fn text_galley(
         bold,
         italic,
         accent: theme.accents[0],
-        line_height: 1.3,
+        line_height: 1.3 * theme.line_scale,
     };
     let mut quote = false;
     let mut code = false;
@@ -630,7 +630,7 @@ fn text_galley(
                 false,
             );
             st.face = theme.title_face;
-            st.line_height = 1.12;
+            st.line_height = 1.12 * theme.line_scale;
             (inline::job(text, &st, width), base * 0.45)
         }
         Block::Paragraph(t) => (
@@ -659,7 +659,7 @@ fn text_galley(
                         0.0,
                         TextFormat {
                             font_id: FontId::new(base, family(theme.face, false, false)),
-                            line_height: Some(base * 1.55),
+                            line_height: Some(base * 1.55 * theme.line_scale),
                             ..Default::default()
                         },
                     );
@@ -680,7 +680,7 @@ fn text_galley(
                     TextFormat {
                         font_id: FontId::new(base, family(theme.face, false, false)),
                         color: theme.accents[0],
-                        line_height: Some(base * 1.3),
+                        line_height: Some(base * 1.3 * theme.line_scale),
                         ..Default::default()
                     },
                 );
@@ -920,7 +920,7 @@ fn draw_table(
                 bold,
                 italic: false,
                 accent: theme.accents[0],
-                line_height: 1.2,
+                line_height: 1.2 * theme.line_scale,
             },
             wrap,
         )
