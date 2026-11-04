@@ -547,6 +547,9 @@ pub struct App {
     /// A running check for a newer release, and a newer release to offer.
     pub update_check: Option<update::Check>,
     update_available: Option<update::Release>,
+    /// When the next automatic update check may run (seconds since 1970).
+    /// Zero, so the first one runs as soon as the app opens.
+    next_auto_check: u64,
 }
 
 pub const SIZES: [(&str, f32); 4] = [
@@ -642,6 +645,7 @@ impl App {
             doc_form: None,
             update_check: None,
             update_available: None,
+            next_auto_check: 0,
         };
         #[cfg(target_os = "macos")]
         macos_open::set_context(&cc.egui_ctx);
@@ -650,13 +654,6 @@ impl App {
             app.open_path(f);
         }
         app.reparse();
-        // Screenshot runs stay offline and show no banner.
-        if app.shot_path.is_none()
-            && app.settings.check_updates
-            && update::due(app.settings.last_update_check, update::now_secs())
-        {
-            app.check_for_updates(&cc.egui_ctx, false);
-        }
         app
     }
 
@@ -673,12 +670,35 @@ impl App {
         self.update_check = Some(update::Check::start(ctx, manual));
     }
 
+    /// Checks for a newer release when the app opens, then once a day while
+    /// it stays open. Screenshot runs stay offline and show no banner.
+    fn auto_check_updates(&mut self, ctx: &egui::Context) {
+        if self.shot_path.is_some()
+            || !self.settings.check_updates
+            || self.update_check.is_some()
+            || self.update_available.is_some()
+        {
+            return;
+        }
+        let now = update::now_secs();
+        if now < self.next_auto_check {
+            return;
+        }
+        self.next_auto_check = now + update::CHECK_INTERVAL_SECS;
+        self.check_for_updates(ctx, false);
+    }
+
     fn poll_update_check(&mut self) {
         let Some(outcome) = self.update_check.as_ref().and_then(|c| c.poll()) else {
             return;
         };
         let manual = self.update_check.take().is_some_and(|c| c.manual);
-        if !matches!(outcome, update::Outcome::Failed(_)) {
+        if matches!(outcome, update::Outcome::Failed(_)) {
+            // Offline or GitHub unreachable: try again in a while.
+            if !manual {
+                self.next_auto_check = update::now_secs() + update::RETRY_SECS;
+            }
+        } else {
             self.settings.last_update_check = update::now_secs();
             self.settings.save();
         }
@@ -3413,6 +3433,7 @@ impl eframe::App for App {
         }
         settings::apply_appearance(ctx, &self.settings);
         self.poll_update_check();
+        self.auto_check_updates(ctx);
         self.screenshot_tick(ctx);
         if self.pending_present {
             self.pending_present = false;

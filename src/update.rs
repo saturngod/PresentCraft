@@ -13,8 +13,10 @@ pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 const LATEST_API: &str = "https://api.github.com/repos/saturngod/PresentCraft/releases/latest";
 /// Where to send people when the API doesn't give a page address.
 pub const RELEASES_PAGE: &str = "https://github.com/saturngod/PresentCraft/releases/latest";
-/// Automatic checks happen at most this often.
+/// While the app stays open, automatic checks repeat this often.
 pub const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
+/// How long to wait before retrying an automatic check that failed.
+pub const RETRY_SECS: u64 = 60 * 60;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Release {
@@ -73,11 +75,6 @@ pub fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Whether an automatic check is due, given when the last one succeeded.
-pub fn due(last_check: u64, now: u64) -> bool {
-    // A clock set backwards also counts as due.
-    now < last_check || now - last_check >= CHECK_INTERVAL_SECS
-}
 
 fn fetch_latest() -> Result<Release, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
@@ -197,11 +194,4 @@ mod tests {
         println!("latest release: {release:?}");
     }
 
-    #[test]
-    fn checks_are_spaced_a_day_apart() {
-        assert!(due(0, 1_000_000));
-        assert!(!due(1_000_000, 1_000_000 + 3600));
-        assert!(due(1_000_000, 1_000_000 + CHECK_INTERVAL_SECS));
-        assert!(due(2_000_000, 1_000_000));
-    }
 }
