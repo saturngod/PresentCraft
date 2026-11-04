@@ -71,6 +71,8 @@ pub struct TableEditor {
     sel: Option<Sel>,
     focus: Option<(usize, usize)>,
     pending_focus: Option<(usize, usize)>,
+    /// Caret position (in characters) to place in the cell that gets `pending_focus`.
+    pending_caret: Option<usize>,
 }
 
 enum Outcome {
@@ -117,6 +119,7 @@ impl TableEditor {
             sel: None,
             focus: None,
             pending_focus: Some((0, 0)),
+            pending_caret: None,
         }
     }
 
@@ -529,7 +532,16 @@ impl TableEditor {
                             (i.key_pressed(Key::ArrowUp), i.key_pressed(Key::ArrowDown))
                         });
                         let shift = ui.input(|i| i.modifiers.shift);
+                        // plain Left/Right at the edge of a cell's text moves to the next cell
+                        let (left, right) = ui.input(|i| {
+                            let plain = i.modifiers.is_none();
+                            (
+                                plain && i.key_pressed(Key::ArrowLeft),
+                                plain && i.key_pressed(Key::ArrowRight),
+                            )
+                        });
                         let mut move_to: Option<(usize, usize)> = None;
+                        let mut caret: Option<usize> = None;
                         let mut grow = false;
                         let nrows = self.rows.len();
                         let row_h = ui.fonts_mut(|f| f.row_height(&font));
@@ -548,10 +560,60 @@ impl TableEditor {
                                     Align::Right => egui::Align::Max,
                                     _ => egui::Align::Min,
                                 };
+                                let cell_id = Id::unique(("te-cell", i, j));
+                                let ncols = widths.len();
+                                // read the caret before the TextEdit handles this frame's keys
+                                let edge = if (left || right) && ui.memory(|m| m.has_focus(cell_id)) {
+                                    let len = self.rows[i][j].chars().count();
+                                    egui::text_edit::TextEditState::load(ui.ctx(), cell_id)
+                                        .and_then(|s| s.cursor.char_range())
+                                        .filter(|c| c.is_empty())
+                                        .map(|c| c.primary.index.0)
+                                        .map(|at| (left && at == 0, right && at >= len))
+                                } else {
+                                    None
+                                };
+                                if let Some((at_start, at_end)) = edge {
+                                    if at_end {
+                                        if j + 1 < ncols {
+                                            move_to = Some((i, j + 1));
+                                        } else if i + 1 < nrows {
+                                            move_to = Some((i + 1, 0));
+                                        }
+                                        caret = Some(0);
+                                    } else if at_start {
+                                        let to = if j > 0 {
+                                            Some((i, j - 1))
+                                        } else if i > 0 {
+                                            Some((i - 1, ncols - 1))
+                                        } else {
+                                            None
+                                        };
+                                        if let Some((ti, tj)) = to {
+                                            move_to = Some((ti, tj));
+                                            caret = Some(self.rows[ti][tj].chars().count());
+                                        }
+                                    }
+                                }
+                                if self.pending_focus == Some((i, j)) {
+                                    if let Some(at) = self.pending_caret.take() {
+                                        let mut st = egui::text_edit::TextEditState::load(
+                                            ui.ctx(),
+                                            cell_id,
+                                        )
+                                        .unwrap_or_default();
+                                        st.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::one(
+                                                egui::text::CCursor::new(at),
+                                            ),
+                                        ));
+                                        st.store(ui.ctx(), cell_id);
+                                    }
+                                }
                                 let resp = ui.put(
                                     r,
                                     egui::TextEdit::singleline(&mut self.rows[i][j])
-                                        .id(Id::unique(("te-cell", i, j)))
+                                        .id(cell_id)
                                         .frame(
                                             egui::Frame::NONE
                                                 .inner_margin(egui::Margin::symmetric(4, 2)),
@@ -593,6 +655,7 @@ impl TableEditor {
                         }
                         if move_to.is_some() {
                             self.pending_focus = move_to;
+                            self.pending_caret = caret;
                             ctx.request_repaint();
                         }
                     });
