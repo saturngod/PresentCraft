@@ -2852,7 +2852,10 @@ impl App {
                                     let r = out.galley.pos_from_cursor(CCursor::new(*ch));
                                     let c = pos2(
                                         out.galley_pos.x + r.left() - gap * 0.55,
-                                        out.galley_pos.y + r.center().y - size * 0.3,
+                                        // text is centred in the row; nudge up to the
+                                        // middle of capitals and digits
+                                        out.galley_pos.y + r.center().y
+                                            - editor_settings.editor_font * 0.04,
                                     );
                                     optionicons::paint(painter, key, c, size, *color);
                                 }
