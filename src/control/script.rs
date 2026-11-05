@@ -43,9 +43,34 @@ pub enum Edit {
         index: usize,
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
-        chart: Option<String>,
+        caption: Option<String>,
+        chart: Option<Chart>,
     },
 }
+
+/// How a table is drawn as a chart: the `Chart:` line and the option lines
+/// the parser reads under a table.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Chart {
+    /// bar, line, spline, area, step, pie, donut, radar, gauge or bubble.
+    pub kind: String,
+    pub horizontal: bool,
+    pub stacked: bool,
+    pub title: Option<String>,
+    pub xlabel: Option<String>,
+    pub ylabel: Option<String>,
+    /// Hex colours (`#E63946`) or theme accents (`accent 1`).
+    pub colors: Vec<String>,
+    /// categorical, sequential or diverging.
+    pub color_type: Option<String>,
+    /// `Some(false)` hides the legend.
+    pub legend: Option<bool>,
+}
+
+/// The chart types the parser draws.
+pub const CHART_KINDS: [&str; 10] = [
+    "bar", "line", "spline", "area", "step", "pie", "donut", "radar", "gauge", "bubble",
+];
 
 /// The body text of every slide, split as `parse_document` splits them.
 pub fn bodies(text: &str) -> Vec<String> {
@@ -127,8 +152,18 @@ pub fn picture_block(src: &str, caption: Option<&str>, opts: &[(String, String)]
     out
 }
 
-/// A Markdown table, with an optional `Chart: <kind>` line under it.
-pub fn table_block(headers: &[String], rows: &[Vec<String>], chart: Option<&str>) -> String {
+/// One line of text: option values and captions cannot span lines.
+fn one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A Markdown table, with an optional `[caption]` line and chart lines under it.
+pub fn table_block(
+    headers: &[String],
+    rows: &[Vec<String>],
+    caption: Option<&str>,
+    chart: Option<&Chart>,
+) -> String {
     let cell = |s: &str| s.replace('|', "\\|").replace('\n', " ");
     let width = headers.len();
     let mut lines = vec![
@@ -155,8 +190,42 @@ pub fn table_block(headers: &[String], rows: &[Vec<String>], chart: Option<&str>
             .collect();
         lines.push(format!("| {} |", cells.join(" | ")));
     }
-    if let Some(kind) = chart {
+    if let Some(cap) = caption {
+        let cap: String = one_line(cap)
+            .chars()
+            .filter(|c| *c != '[' && *c != ']')
+            .collect();
+        if !cap.is_empty() {
+            lines.push(format!("[{cap}]"));
+        }
+    }
+    if let Some(c) = chart {
+        let mut kind = c.kind.clone();
+        if c.horizontal {
+            kind.push_str(", horizontal");
+        }
+        if c.stacked {
+            kind.push_str(", stacked");
+        }
         lines.push(format!("Chart: {kind}"));
+        for (key, value) in [
+            ("title", &c.title),
+            ("xlabel", &c.xlabel),
+            ("ylabel", &c.ylabel),
+        ] {
+            if let Some(v) = value.as_deref().map(one_line).filter(|v| !v.is_empty()) {
+                lines.push(format!("{key}: {v}"));
+            }
+        }
+        if !c.colors.is_empty() {
+            lines.push(format!("colors: {}", c.colors.join(", ")));
+        }
+        if let Some(t) = &c.color_type {
+            lines.push(format!("color-type: {t}"));
+        }
+        if c.legend == Some(false) {
+            lines.push("legend: off".to_string());
+        }
     }
     lines.join("\n")
 }
@@ -241,13 +310,14 @@ pub fn apply(text: &str, edit: &Edit) -> Result<String, String> {
             index,
             headers,
             rows,
+            caption,
             chart,
         } => {
             let i = check(*index)?;
             if headers.is_empty() {
                 return Err("A table needs at least one column heading.".to_string());
             }
-            let block = table_block(headers, rows, chart.as_deref());
+            let block = table_block(headers, rows, caption.as_deref(), chart.as_ref());
             b[i] = append_block(&b[i], &block);
         }
     }
@@ -322,12 +392,76 @@ pub fn parse_edit(tool: &str, a: &Json) -> Result<Option<Edit>, String> {
                 index: slide_arg(a, "slide")?,
                 headers,
                 rows,
-                chart: text_arg(a, "chart"),
+                caption: text_arg(a, "caption"),
+                chart: chart_arg(a)?,
             }
         }
         _ => return Ok(None),
     };
     Ok(Some(edit))
+}
+
+/// The chart arguments of `insert_table`, checked against what the parser
+/// understands. Chart options without `chart` are refused.
+fn chart_arg(a: &Json) -> Result<Option<Chart>, String> {
+    let options = [
+        "horizontal",
+        "stacked",
+        "title",
+        "xlabel",
+        "ylabel",
+        "colors",
+        "color_type",
+        "legend",
+    ];
+    let Some(kind) = text_arg(a, "chart") else {
+        if let Some(o) = options.iter().find(|o| a.get(o).is_some()) {
+            return Err(format!(
+                "{o} is a chart option; also pass chart (for example bar)."
+            ));
+        }
+        return Ok(None);
+    };
+    let kind = kind.trim().to_ascii_lowercase();
+    if !CHART_KINDS.contains(&kind.as_str()) {
+        return Err(format!(
+            "{kind} is not a chart type. Use one of: {}.",
+            CHART_KINDS.join(", ")
+        ));
+    }
+    let colors: Vec<String> = strings(a, "colors")
+        .iter()
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    if let Some(bad) = colors
+        .iter()
+        .find(|c| crate::parse::parse_colors(c).len() != 1)
+    {
+        return Err(format!(
+            "{bad} is not a chart colour. Use hex such as #E63946, or a theme accent such as accent 1."
+        ));
+    }
+    let color_type = match text_arg(a, "color_type").map(|t| t.trim().to_ascii_lowercase()) {
+        None => None,
+        Some(t) if matches!(t.as_str(), "categorical" | "sequential" | "diverging") => Some(t),
+        Some(t) => {
+            return Err(format!(
+                "{t} is not a colour type. Use categorical, sequential or diverging."
+            ))
+        }
+    };
+    Ok(Some(Chart {
+        kind,
+        horizontal: a.bool("horizontal") == Some(true),
+        stacked: a.bool("stacked") == Some(true),
+        title: text_arg(a, "title"),
+        xlabel: text_arg(a, "xlabel"),
+        ylabel: text_arg(a, "ylabel"),
+        colors,
+        color_type,
+        legend: a.bool("legend"),
+    }))
 }
 
 /// Array of strings under `key`, skipping other values.
@@ -464,11 +598,119 @@ mod tests {
         let slides = crate::parse::parse_document(&t);
         assert_eq!(slides.len(), 3);
 
+        let bar = Chart {
+            kind: "bar".into(),
+            ..Default::default()
+        };
         let block = table_block(
             &["A".into(), "B|".into()],
             &[vec!["1".into(), "2".into()]],
-            Some("bar"),
+            None,
+            Some(&bar),
         );
         assert_eq!(block, "| A | B\\| |\n| --- | --- |\n| 1 | 2 |\nChart: bar");
+    }
+
+    /// The first chart the parser finds on slide `i` of a script.
+    fn chart_on(text: &str, i: usize) -> crate::parse::ChartSpec {
+        let slides = crate::parse::parse_document(text);
+        slides[i]
+            .groups
+            .iter()
+            .flatten()
+            .find_map(|b| match b {
+                crate::parse::Block::Chart(c) => Some(c.clone()),
+                _ => None,
+            })
+            .expect("a chart on the slide")
+    }
+
+    fn table_args(extra: &str) -> Json {
+        Json::parse(&format!(
+            r#"{{"slide": 1, "headers": ["Quarter", "Sales", "Costs"],
+                "rows": [["Q1", "12", "8"], ["Q2", "18", "9"]]{extra}}}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn every_chart_type_is_drawn_as_that_type() {
+        for kind in CHART_KINDS {
+            let a = table_args(&format!(r#", "chart": "{kind}""#));
+            let edit = parse_edit("insert_table", &a).unwrap().unwrap();
+            let t = apply(SAMPLE, &edit).unwrap();
+            let spec = chart_on(&t, 0);
+            assert_eq!(
+                Some(spec.kind),
+                crate::parse::ChartKind::from_word(kind),
+                "{kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn chart_options_are_read_back() {
+        let a = table_args(
+            r##", "chart": "Bar", "horizontal": true, "stacked": true,
+                "title": "Sales by quarter", "xlabel": "Quarter", "ylabel": "USD",
+                "caption": "Source: finance", "colors": ["#E63946", "accent 2"],
+                "color_type": "sequential", "legend": false"##,
+        );
+        let edit = parse_edit("insert_table", &a).unwrap().unwrap();
+        let t = apply(SAMPLE, &edit).unwrap();
+        let c = chart_on(&t, 0);
+        assert_eq!(c.kind, crate::parse::ChartKind::Bar);
+        assert!(c.horizontal && c.stacked);
+        assert_eq!(c.title.as_deref(), Some("Sales by quarter"));
+        assert_eq!(c.xlabel.as_deref(), Some("Quarter"));
+        assert_eq!(c.ylabel.as_deref(), Some("USD"));
+        assert_eq!(c.table.caption.as_deref(), Some("Source: finance"));
+        assert_eq!(
+            c.colors,
+            vec![
+                crate::parse::ChartColor::Rgb([0xE6, 0x39, 0x46]),
+                crate::parse::ChartColor::Accent(2)
+            ]
+        );
+        assert_eq!(c.color_type, crate::parse::ColorType::Sequential);
+        assert!(!c.legend);
+        assert_eq!(c.table.rows.len(), 2);
+    }
+
+    #[test]
+    fn diverging_colours_and_plain_table_caption() {
+        let a = table_args(r#", "chart": "line", "color_type": "diverging""#);
+        let t = apply(SAMPLE, &parse_edit("insert_table", &a).unwrap().unwrap()).unwrap();
+        assert_eq!(
+            chart_on(&t, 0).color_type,
+            crate::parse::ColorType::Differential
+        );
+        assert!(chart_on(&t, 0).legend, "the legend shows unless turned off");
+
+        let a = table_args(r#", "caption": "Plain [table]""#);
+        let t = apply(SAMPLE, &parse_edit("insert_table", &a).unwrap().unwrap()).unwrap();
+        assert!(t.contains("\n[Plain table]"));
+        let slides = crate::parse::parse_document(&t);
+        let caption = slides[0].groups.iter().flatten().find_map(|b| match b {
+            crate::parse::Block::Table(tb) => tb.caption.clone(),
+            _ => None,
+        });
+        assert_eq!(caption.as_deref(), Some("Plain table"));
+    }
+
+    #[test]
+    fn bad_chart_arguments_are_refused() {
+        let bad = [
+            r#", "chart": "histogram""#,
+            r#", "chart": "bar", "colors": ["blue"]"#,
+            r#", "chart": "bar", "color_type": "rainbow""#,
+            r#", "stacked": true"#,
+        ];
+        for extra in bad {
+            assert!(
+                parse_edit("insert_table", &table_args(extra)).is_err(),
+                "{extra}"
+            );
+        }
     }
 }

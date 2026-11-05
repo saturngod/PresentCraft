@@ -25,6 +25,7 @@ For other clients, use the same command and arguments in their MCP configuration
 - With the app closed, the script tools can still edit a folder-form `.prcraft` package. Pass its path in the `package` argument. Zipped presentations need the app open.
 - Slide numbers start at 1, as the app shows them.
 - Every change made through the server is one step in the undo list. `undo_ai_change` reverts the last one. It refuses if you have edited the presentation by hand since that change, so your own work is never lost.
+- `insert_table` adds a table, or draws it as any of the app's 10 chart types: bar, line, spline, area, step, pie, donut, radar, gauge and bubble. It also sets the chart options: horizontal, stacked, title, axis labels, caption, series colours (hex or theme accents), colour type (categorical, sequential, diverging) and legend.
 - `slide_screenshot` returns a PNG of the window with that slide shown. `deck_check` reports empty slides, missing pictures, a missing logo, and text contrast under 4.5:1.
 
 ## Tools
