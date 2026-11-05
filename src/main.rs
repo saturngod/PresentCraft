@@ -2,6 +2,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod chart;
+mod control;
 mod docinfo;
 mod export;
 mod find;
@@ -260,6 +261,10 @@ fn menu_item(ui: &mut egui::Ui, label: &str, shortcut: &str) -> bool {
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--mcp") {
+        // The MCP server AI clients start over stdio; it never opens a window.
+        std::process::exit(control::shim::run());
+    }
     let mut screenshot = None;
     let mut settings_page = None;
     let mut blank = false;
@@ -274,6 +279,7 @@ fn main() -> eframe::Result<()> {
     let mut export_req: Option<(export::Format, PathBuf)> = None;
     let mut cursor_line: Option<usize> = None;
     let mut find_query: Option<String> = None;
+    let mut start_mcp = false;
     let mut i = 1;
     while i < args.len() {
         let next = args.get(i + 1).cloned().unwrap_or_default();
@@ -287,6 +293,10 @@ fn main() -> eframe::Result<()> {
                     _ => settings::Page::General,
                 });
                 i += 2;
+            }
+            "--start-mcp" => {
+                start_mcp = true;
+                i += 1;
             }
             "--new" => {
                 blank = true;
@@ -390,6 +400,9 @@ fn main() -> eframe::Result<()> {
             if let Some(page) = settings_page {
                 app.settings_open = true;
                 app.settings_page = page;
+            }
+            if start_mcp {
+                app.control_start(&cc.egui_ctx);
             }
             app.pending_present = present;
             app.pending_play = play_video;
@@ -552,6 +565,8 @@ pub struct App {
     /// When the next automatic update check may run (seconds since 1970).
     /// Zero, so the first one runs as soon as the app opens.
     next_auto_check: u64,
+    /// The MCP control channel (File > MCP).
+    pub control: control::Control,
 }
 
 pub const SIZES: [(&str, f32); 4] = [
@@ -673,6 +688,7 @@ impl App {
             update_check: None,
             update_available: None,
             next_auto_check: 0,
+            control: Default::default(),
         };
         #[cfg(target_os = "macos")]
         macos_open::set_context(&cc.egui_ctx);
@@ -1450,6 +1466,30 @@ impl App {
                     if ui.button("Markdown…").clicked() {
                         ui.close();
                         self.export_markdown();
+                    }
+                });
+                ui.separator();
+                ui.menu_button("MCP", |ui| {
+                    crate::tabletools::style_menu(ui);
+                    let port = self.control.running.as_ref().map(|r| r.port);
+                    let status = match port {
+                        Some(p) => format!("Server running on port {p}"),
+                        None => "Server stopped".to_string(),
+                    };
+                    menu_note(ui, &status);
+                    if ui
+                        .add_enabled(port.is_none(), egui::Button::new("Start Server"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.control_start(ctx);
+                    }
+                    if ui
+                        .add_enabled(port.is_some(), egui::Button::new("Stop Server"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.control_stop();
                     }
                 });
                 ui.separator();
@@ -3465,6 +3505,7 @@ impl eframe::App for App {
         self.poll_update_check();
         self.auto_check_updates(ctx);
         self.screenshot_tick(ctx);
+        self.control_drain(ctx);
         if self.pending_present {
             self.pending_present = false;
             self.start_presenting(ctx);

@@ -30,6 +30,8 @@ Pass options after Cargo's `--` separator:
 | `--play-video` | Start presenting and play the slide's first video (for checks). |
 | `--screenshot shots/check.png` | Save the window as a PNG and close. |
 | `--export pdf\|pptx\|images\|html PATH` | Export and close; use a directory for `images`. |
+| `--start-mcp` | Start the MCP server when the window opens (same as File › MCP › Start Server). |
+| `--mcp` | Run the MCP server over stdio for an AI client. Does not open a window. See [MCP server](mcp-server.md). |
 
 ## Project files
 

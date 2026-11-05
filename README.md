@@ -79,6 +79,12 @@ python3 Skills/create-prcraft/scripts/prcraft.py build talk.md Talk.prcraft --th
 python3 Skills/create-prcraft/scripts/prcraft.py check Talk.prcraft
 ```
 
+PresentCraft also runs an [MCP server](docs/mcp-server.md), so an AI client can work in the open window: write slides, change themes, colours and fonts, add pictures and logos, set headers and footers, export and present. Choose **File › MCP › Start Server** to turn it on. Then add it to your client, for example:
+
+```sh
+claude mcp add presentcraft -- /path/to/PresentCraft --mcp
+```
+
 ## Documentation
 
 - [Document and theme format](docs/format.md): packages, media, videos in exports, theme folders, file types.

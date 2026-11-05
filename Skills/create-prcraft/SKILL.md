@@ -384,3 +384,7 @@ To use it in the app for every deck, add it with Settings → Themes → Import 
 - Never put PresentCraft-only data anywhere other than the `app.myanmars.presentcraft` block of `info.json` or `Theme/`. The app preserves other files in a folder package but doesn't read them.
 - **Zip form:** members go at the top level (`text.md`, not `Talk/text.md`, though the app accepts one wrapping folder). Store media uncompressed and Deflate text. The helper's `--zip` and `zip` commands do this.
 - **Editing an existing package:** change `text.md` and add files to `assets/`, leaving other members alone. For a zip, `unzip` it, edit the folder, then `zip` it back.
+
+## When the PresentCraft MCP tools are available
+
+If the client lists PresentCraft's MCP tools (`deck_info`, `slide_add`, `insert_picture`, …), prefer them over editing files by hand when the app is open: changes appear in the window at once and each one can be undone with `undo_ai_change`. Slide numbers start at 1. Call `deck_info` first, and check the result with `slide_screenshot` and `deck_check`. Without the app, the script tools still edit a folder-form package when given its path in the `package` argument.
