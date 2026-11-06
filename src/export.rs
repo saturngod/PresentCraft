@@ -196,11 +196,14 @@ pub fn html_text_layer(boxes: &[crate::render::TextBox], slide: egui::Rect) -> S
             continue;
         }
         let centered = job.halign == egui::Align::Center;
+        let right = job.halign == egui::Align::RIGHT;
         let wrap = job.wrap.max_width;
         let (x, bw, nowrap) = if wrap.is_finite() && wrap > 0.0 {
             let bw = wrap.max(b.rect.width()) * 1.03;
             let x = if centered {
                 b.rect.center().x - bw / 2.0
+            } else if right {
+                b.rect.right() - bw
             } else {
                 b.rect.left()
             };
@@ -220,7 +223,13 @@ pub fn html_text_layer(boxes: &[crate::render::TextBox], slide: egui::Rect) -> S
             (b.rect.top() - slide.top()) / h * 100.0,
             bw / w * 100.0,
             line,
-            if centered { "text-align:center;" } else { "" },
+            if centered {
+                "text-align:center;"
+            } else if right {
+                "text-align:right;"
+            } else {
+                ""
+            },
             if nowrap { "white-space:pre;" } else { "" },
         ));
         for sec in &job.sections {
@@ -284,12 +293,15 @@ pub fn pptx_text_shapes(boxes: &[crate::render::TextBox], slide: egui::Rect) -> 
             continue;
         }
         let centered = job.halign == egui::Align::Center;
+        let right = job.halign == egui::Align::RIGHT;
         let wrap = job.wrap.max_width;
         // Give PowerPoint a little slack so lines break where the app breaks them.
         let (x, w, wrap_attr) = if wrap.is_finite() && wrap > 0.0 {
             let w = wrap.max(b.rect.width()) * 1.03;
             let x = if centered {
                 b.rect.center().x - w / 2.0
+            } else if right {
+                b.rect.right() - w
             } else {
                 b.rect.left()
             };
@@ -352,6 +364,8 @@ pub fn pptx_text_shapes(boxes: &[crate::render::TextBox], slide: egui::Rect) -> 
             body.push_str("<a:p><a:pPr");
             if centered {
                 body.push_str(" algn=\"ctr\"");
+            } else if right {
+                body.push_str(" algn=\"r\"");
             }
             body.push('>');
             if let Some(l) = line_pt {

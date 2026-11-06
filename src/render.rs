@@ -1,11 +1,12 @@
 //! Lays out and paints one slide into a rectangle.
-//! Layout picks: cover (first heading level 1), centred title (level 2 alone),
+//! Layout picks: cover (first heading level 1, placed by the slide's `x:` / `y:`),
+//! centred title (level 2 alone),
 //! single picture full-bleed, split (2–3 groups side by side), grid (4+ groups).
 
 use crate::chart::{draw_chart, ChartStyle};
 use crate::images::{draw_image, ImageCache};
 use crate::inline::{self, Style};
-use crate::parse::{Align, Block, Slide, TableSpec};
+use crate::parse::{Align, Block, Slide, TableSpec, VAlign};
 use crate::theme::{family, Decor, Theme};
 use egui::text::{LayoutJob, TextFormat};
 use egui::{pos2, vec2, Color32, FontId, Galley, Painter, Rect, Stroke};
@@ -87,6 +88,7 @@ fn put_text(
 enum Anchor {
     Top,
     Center,
+    Bottom,
 }
 
 struct Colors {
@@ -244,14 +246,19 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
             }
             return colors.body;
         }
-        let (anchor, centered) = if cover {
-            (Anchor::Center, false)
+        let (anchor, halign) = if cover {
+            let anchor = match slide.title_y {
+                VAlign::Top => Anchor::Top,
+                VAlign::Middle => Anchor::Center,
+                VAlign::Bottom => Anchor::Bottom,
+            };
+            (anchor, slide.title_x)
         } else if title {
-            (Anchor::Center, true)
+            (Anchor::Center, Align::Center)
         } else {
-            (Anchor::Top, false)
+            (Anchor::Top, Align::Left)
         };
-        draw_group(&mut sub, inner, g, base, &colors, anchor, centered);
+        draw_group(&mut sub, inner, g, base, &colors, anchor, halign);
         return colors.body;
     }
 
@@ -278,7 +285,7 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
                 } else {
                     Anchor::Top
                 };
-                draw_group(&mut sub, c, g, base * 0.9, &colors, anchor, false);
+                draw_group(&mut sub, c, g, base * 0.9, &colors, anchor, Align::Left);
             }
         }
         return colors.body;
@@ -304,7 +311,7 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
                 draw_image(&painter, cell, img, sub.images, &theme.accents, None);
             }
         } else {
-            draw_group(&mut sub, cell, g, base * 0.8, &colors, Anchor::Top, false);
+            draw_group(&mut sub, cell, g, base * 0.8, &colors, Anchor::Top, Align::Left);
         }
     }
     colors.body
@@ -603,7 +610,7 @@ fn text_galley(
     base: f32,
     colors: &Colors,
     theme: &Theme,
-    centered: bool,
+    halign: Align,
 ) -> Option<(Arc<Galley>, f32, bool, bool)> {
     let style = |size: f32, color: Color32, bold: bool, italic: bool| Style {
         size,
@@ -723,8 +730,10 @@ fn text_galley(
         }
         _ => return None,
     };
-    if centered {
-        job.halign = egui::Align::Center;
+    match halign {
+        Align::Left => {}
+        Align::Center => job.halign = egui::Align::Center,
+        Align::Right => job.halign = egui::Align::RIGHT,
     }
     Some((painter.layout_job(job), after, quote, code))
 }
@@ -736,7 +745,7 @@ fn draw_group(
     base: f32,
     colors: &Colors,
     anchor: Anchor,
-    centered: bool,
+    halign: Align,
 ) {
     let painter = cx.painter;
     let theme = cx.theme;
@@ -758,7 +767,7 @@ fn draw_group(
                 base * scale,
                 colors,
                 theme,
-                centered,
+                halign,
             ) {
                 let extra = if code { base * scale } else { 0.0 };
                 text_total += g.size().y + after + extra;
@@ -796,11 +805,13 @@ fn draw_group(
         _ if flex_count > 0 => rect.top(),
         Anchor::Top => rect.top(),
         Anchor::Center => rect.center().y - content_h / 2.0,
+        Anchor::Bottom => rect.bottom() - content_h,
     };
-    let x = if centered {
-        rect.center().x
-    } else {
-        rect.left()
+    // Galleys with a centre or right alignment are laid out around this x.
+    let x = match halign {
+        Align::Left => rect.left(),
+        Align::Center => rect.center().x,
+        Align::Right => rect.right(),
     };
     let n = items.len();
     for (i, it) in items.into_iter().enumerate() {
@@ -839,7 +850,7 @@ fn draw_group(
                     );
                     y += gh;
                 } else {
-                    let gx = if galley.job.halign == egui::Align::Center && !centered {
+                    let gx = if galley.job.halign == egui::Align::Center && halign != Align::Center {
                         rect.center().x
                     } else {
                         x

@@ -9,11 +9,44 @@
 //! * visible elements separated by an empty line (or by notes) form separate groups,
 //!   and the number of groups picks the layout.
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum Align {
+    #[default]
     Left,
     Center,
     Right,
+}
+
+/// Vertical place of a cover title.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum VAlign {
+    Top,
+    #[default]
+    Middle,
+    Bottom,
+}
+
+/// An `x:` or `y:` line under a level-one heading.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TitleOption {
+    X(Align),
+    Y(VAlign),
+}
+
+/// Reads `x: left|center|right` or `y: top|middle|bottom`. Other values are
+/// not options, so a note such as `y: why it matters` stays a note.
+pub fn title_option(line: &str) -> Option<TitleOption> {
+    let (k, v) = key_value(line)?;
+    let v = v.to_ascii_lowercase();
+    match (k.as_str(), v.as_str()) {
+        ("x", "left") => Some(TitleOption::X(Align::Left)),
+        ("x", "center" | "centre" | "middle") => Some(TitleOption::X(Align::Center)),
+        ("x", "right") => Some(TitleOption::X(Align::Right)),
+        ("y", "top") => Some(TitleOption::Y(VAlign::Top)),
+        ("y", "middle" | "center" | "centre") => Some(TitleOption::Y(VAlign::Middle)),
+        ("y", "bottom") => Some(TitleOption::Y(VAlign::Bottom)),
+        _ => None,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -159,6 +192,9 @@ pub struct Slide {
     pub groups: Vec<Vec<Block>>,
     pub backgrounds: Vec<ImageSpec>,
     pub notes: Vec<String>,
+    /// Cover title alignment (`x:` / `y:` under a level-one heading).
+    pub title_x: Align,
+    pub title_y: VAlign,
     /// Character offset of the slide's first line in the document.
     pub start_char: usize,
 }
@@ -552,6 +588,16 @@ pub fn parse_slide(lines: &[&str]) -> Slide {
                     });
                 }
                 i += 1;
+                if level == 1 {
+                    while i < n && !lines[i].starts_with('\t') {
+                        match title_option(lines[i].trim_end_matches('\r')) {
+                            Some(TitleOption::X(x)) => b.slide.title_x = x,
+                            Some(TitleOption::Y(y)) => b.slide.title_y = y,
+                            None => break,
+                        }
+                        i += 1;
+                    }
+                }
                 continue;
             }
         }
@@ -883,6 +929,30 @@ mod tests {
         assert!(matches!(s[1].groups[0][1], Block::Chart(_)));
         assert_eq!(s[2].groups.len(), 2);
         assert_eq!(slide_at_char(&s, 0), 0);
+    }
+
+    #[test]
+    fn cover_title_alignment() {
+        let s = parse_document("# Markdown Slides\nx: right\ny: bottom\n\tSaturngod");
+        assert_eq!(s[0].title_x, Align::Right);
+        assert_eq!(s[0].title_y, VAlign::Bottom);
+        // the subtitle still joins the title's group
+        assert_eq!(s[0].groups.len(), 1);
+        assert_eq!(s[0].groups[0].len(), 2);
+        assert!(s[0].notes.is_empty());
+
+        let s = parse_document("# T\ny: Top\nx: Center");
+        assert_eq!((s[0].title_x, s[0].title_y), (Align::Center, VAlign::Top));
+
+        // defaults, and lines that are not options stay notes
+        let s = parse_document("# T\ny: why it matters");
+        assert_eq!((s[0].title_x, s[0].title_y), (Align::Left, VAlign::Middle));
+        assert_eq!(s[0].notes, vec!["y: why it matters".to_string()]);
+
+        // only under a level-one heading
+        let s = parse_document("## T\nx: right");
+        assert_eq!(s[0].title_x, Align::Left);
+        assert_eq!(s[0].notes.len(), 1);
     }
 
     #[test]

@@ -27,6 +27,7 @@ mod tableblock;
 mod tableeditor;
 mod tabletools;
 mod theme;
+mod titletools;
 mod themefile;
 mod update;
 mod video;
@@ -2956,6 +2957,7 @@ impl App {
                             if !changed {
                                 self.table_toolbar(ui, &out.galley, out.galley_pos);
                                 self.image_toolbar(ui, &out.galley, out.galley_pos);
+                                self.title_toolbar(ui, &out.galley, out.galley_pos);
                             }
                             if let Some((a, b)) = find_scroll {
                                 let r = out
@@ -3395,6 +3397,8 @@ fn highlight(
     );
     let mut slide = 0usize;
     let mut prev_media = false;
+    // Just after a level-one heading, where `x:` / `y:` place the cover title.
+    let mut prev_cover = false;
     let mut in_fence = false;
     let fmt = |font: &FontId, color: Color32| TextFormat {
         font_id: font.clone(),
@@ -3416,6 +3420,7 @@ fn highlight(
         };
         if t.starts_with("```") {
             in_fence = !in_fence;
+            prev_cover = false;
             job.append(line, 0.0, fmt(&reg, col));
             continue;
         }
@@ -3427,8 +3432,10 @@ fn highlight(
             job.append(line, 0.0, fmt(&reg, crate::settings::pal().sep_grey));
             slide += 1;
             prev_media = false;
+            prev_cover = false;
             continue;
         }
+        let cover_opt = prev_cover && !body.starts_with('\t') && parse::title_option(t).is_some();
         let is_kv = optionicons::key_of(t).is_some();
         let is_media = !t.contains(' ')
             && !t.is_empty()
@@ -3442,7 +3449,8 @@ fn highlight(
         let media_line = t.starts_with('|')
             || is_media
             || t.starts_with("![")
-            || (prev_media && (is_kv || t.starts_with('[')));
+            || (prev_media && (is_kv || t.starts_with('[')))
+            || cover_opt;
         // Syntax (pipes, option lines, alignment rows) is quieter than content.
         let quiet = col.gamma_multiply(0.55);
         if body.starts_with('#') {
@@ -3499,7 +3507,12 @@ fn highlight(
         } else {
             job.append(line, 0.0, fmt(&reg, crate::settings::pal().note_grey));
         }
-        prev_media = if t.is_empty() { false } else { media_line };
+        prev_media = if t.is_empty() || cover_opt {
+            false
+        } else {
+            media_line
+        };
+        prev_cover = cover_opt || (body.starts_with("# ") || body.trim_end() == "#");
     }
     job
 }

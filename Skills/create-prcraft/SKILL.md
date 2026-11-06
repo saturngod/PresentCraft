@@ -81,6 +81,7 @@ PresentCraft splits the script into slides and decides what the audience sees. *
   - `opacity: 40%`.
   - `filter: grayscale|sepia|darken|lighten|blur`.
   - `caption: Text`.
+- **Cover title placement**: on the lines directly under an `#` heading, `x: left|center|right` and `y: top|middle|bottom` place the title and its subtitle on the cover. The default is `x: left`, `y: middle`. Only level-one headings take these; a `##` title alone is always centred.
 - **Chart options** go on the lines directly under the table:
   - `Chart:` with a type: `bar`, `line`, `spline`, `area`, `step`, `pie`, `donut`, `radar`, `gauge` or `bubble`. Add `horizontal` and/or `stacked`, for example `Chart: bar, horizontal, stacked`.
   - For bars you can also write `Bar-Type: stacked` and `Orientation: horizontal` on their own lines.

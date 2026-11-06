@@ -1,5 +1,18 @@
 # Document and theme format
 
+## Cover titles
+
+A slide that starts with an `#` heading is a cover. Its title and subtitle sit on the left, in the middle of the slide. To move them, put `x:` and `y:` lines directly under the heading:
+
+```markdown
+# Markdown Slides
+x: left
+y: bottom
+	Saturngod
+```
+
+`x:` takes `left`, `center` or `right`; `y:` takes `top`, `middle` or `bottom`. Other values are read as speaker notes. You can also set them from the toolbar that appears when the cursor is on the heading: three buttons for left, centre and right, three for top, middle and bottom, and the same choices in its ••• menu. Only level-one headings take these options; a `##` heading alone on a slide is always centred.
+
 ## Pictures and videos
 
 Local image paths are resolved relative to the document. Web pictures (`https://…`) download in the background with the system's `curl` (built into macOS, Windows 10+ and most Linux systems) and are cached in the temp folder under `presentcraft-web`; exports wait for them. Pictures that can't be loaded display a placeholder.
