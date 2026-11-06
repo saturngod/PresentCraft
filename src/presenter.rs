@@ -5,7 +5,7 @@
 //! slide in the presentation window, and the other way round.
 
 use crate::parse::{Block, Slide};
-use crate::{icon_button, slide_color, theme, App, Icon, ACCENT_BLUE, FORMAT_BLUE, TOP_BAR};
+use crate::{icon_button, slide_color, theme, App, Icon, ACCENT_BLUE, TOP_BAR};
 use eframe::egui;
 use egui::{pos2, vec2, Color32, FontId, Key, Modifiers, Rect, Sense, Stroke};
 
@@ -397,9 +397,9 @@ impl App {
                         }
                         let p = ui.painter();
                         let fill = if is_sel {
-                            FORMAT_BLUE.gamma_multiply(if dark { 0.28 } else { 0.30 })
+                            ACCENT_BLUE.gamma_multiply(if dark { 0.28 } else { 0.30 })
                         } else if on_slide {
-                            FORMAT_BLUE.gamma_multiply(if dark { 0.12 } else { 0.12 })
+                            ACCENT_BLUE.gamma_multiply(if dark { 0.12 } else { 0.12 })
                         } else {
                             pal.sidebar_bg
                         };
@@ -408,7 +408,7 @@ impl App {
                             p.rect_stroke(
                                 card,
                                 8.0,
-                                Stroke::new(2.5_f32, FORMAT_BLUE),
+                                Stroke::new(2.5_f32, ACCENT_BLUE),
                                 egui::StrokeKind::Inside,
                             );
                         }
@@ -416,7 +416,7 @@ impl App {
                         p.rect_filled(
                             Rect::from_min_size(card.min, vec2(3.0, card.height())),
                             1.5,
-                            FORMAT_BLUE,
+                            ACCENT_BLUE,
                         );
                     }
                     let mut y = card.top() + if is_slide { PAD - 3.0 } else { 6.0 };

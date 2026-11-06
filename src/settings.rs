@@ -436,7 +436,7 @@ pub fn set_visuals(ctx: &egui::Context, dark: bool) {
     v.faint_bg_color = p.sidebar_bg;
     v.code_bg_color = p.control;
     v.selection.bg_fill = if dark { hex(0x2D4A66) } else { hex(0xC5DCFA) };
-    v.selection.stroke = Stroke::new(1.0_f32, crate::FORMAT_BLUE);
+    v.selection.stroke = Stroke::new(1.0_f32, crate::ACCENT_BLUE);
     v.text_cursor.stroke = Stroke::new(2.0_f32, hex(0x72B8F3));
     v.hyperlink_color = crate::ACCENT_BLUE;
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.divider);
@@ -458,7 +458,7 @@ pub fn set_visuals(ctx: &egui::Context, dark: bool) {
     v.widgets.hovered.expansion = 0.0;
     v.widgets.active.weak_bg_fill = p.hover;
     v.widgets.active.bg_fill = p.hover;
-    v.widgets.active.bg_stroke = Stroke::new(1.0_f32, crate::FORMAT_BLUE);
+    v.widgets.active.bg_stroke = Stroke::new(1.0_f32, crate::ACCENT_BLUE);
     v.widgets.active.fg_stroke = Stroke::new(1.0_f32, p.text_hi);
     v.widgets.active.expansion = 0.0;
     v.widgets.open.weak_bg_fill = p.hover;
@@ -762,7 +762,7 @@ fn switch(ui: &mut egui::Ui, on: bool, label: &str) -> egui::Response {
         painter.rect_stroke(
             r.expand(2.0),
             12.0,
-            Stroke::new(2.0_f32, crate::FORMAT_BLUE),
+            Stroke::new(2.0_f32, crate::ACCENT_BLUE),
             egui::StrokeKind::Outside,
         );
     }

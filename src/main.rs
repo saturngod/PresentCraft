@@ -139,9 +139,11 @@ fn take_shot() -> Option<std::sync::Arc<egui::ColorImage>> {
     SHOT.lock().unwrap().take()
 }
 
-// Editor accent colours.
+// Tab colours: they mark where you are, nothing else.
 pub const FORMAT_BLUE: Color32 = hex(0x59BDFF);
 pub const DESIGN_PINK: Color32 = hex(0xFC44B2);
+/// The one action colour: primary buttons, links, sliders, switches,
+/// selection, focus and drag-over, in every tab.
 pub const ACCENT_BLUE: Color32 = hex(0x3770FF);
 const TOP_BAR: f32 = 52.0;
 pub const SIDEBAR_W: f32 = 180.0;
@@ -3103,7 +3105,7 @@ pub enum Icon {
     Pen,
     Play,
     Menu,
-    Palette,
+    Brush,
     ChevronLeft,
     ChevronRight,
     ChevronDown,
@@ -3228,18 +3230,31 @@ pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
                 Stroke::NONE,
             ));
         }
-        Icon::Palette => {
-            // painter's palette: round board, thumb hole and paint dots
-            p.circle_stroke(c, 8.5, s);
-            p.circle_stroke(c + vec2(3.6, 3.6), 2.0, s);
-            for d in [
-                vec2(-4.2, -2.2),
-                vec2(-1.2, -5.0),
-                vec2(2.8, -4.4),
-                vec2(-4.4, 1.8),
-            ] {
-                p.circle_filled(c + d, 1.5, color);
-            }
+        Icon::Brush => {
+            // paintbrush.pointed: handle at top right, bristles to a point at bottom left
+            let d = vec2(-1.0, 1.0) / 2.0_f32.sqrt(); // along the brush, toward the tip
+            let n = vec2(1.0, 1.0) / 2.0_f32.sqrt(); // across the brush
+            let base = c + vec2(0.5, -0.5);
+            p.line_segment(
+                [c + vec2(7.5, -7.5), base - d * 2.6],
+                Stroke::new(2.4_f32, color),
+            );
+            // ferrule overlaps the bristles so no seam shows between them
+            p.line_segment([base - d * 2.8, base + d * 0.6], Stroke::new(4.6_f32, color));
+            let tip = base + d * 10.0;
+            p.add(egui::Shape::convex_polygon(
+                vec![
+                    base + n * 2.5,
+                    base + d * 2.6 + n * 3.0,
+                    base + d * 6.0 + n * 1.9,
+                    tip,
+                    base + d * 6.0 - n * 1.9,
+                    base + d * 2.6 - n * 3.0,
+                    base - n * 2.5,
+                ],
+                color,
+                Stroke::NONE,
+            ));
         }
         Icon::Menu => {
             for dy in [-5.0, 0.0, 5.0] {

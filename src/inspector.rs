@@ -24,6 +24,8 @@ pub enum Tab {
 
 /// Share button colour (estimated from the person's screenshot).
 const SHARE_ORANGE: Color32 = Color32::from_rgb(0xE5, 0x9A, 0x16);
+/// Media tab colour when selected.
+const MEDIA_GREEN: Color32 = Color32::from_rgb(0x34, 0xB2, 0x7D);
 
 /// Markdown syntax colour in the inspector, readable on either background.
 fn on_slide() -> Color32 {
@@ -724,6 +726,7 @@ impl App {
             if selected {
                 let fill = match t {
                     Tab::Design => DESIGN_PINK,
+                    Tab::Media => MEDIA_GREEN,
                     _ => FORMAT_BLUE,
                 };
                 #[allow(unreachable_patterns)]
@@ -757,7 +760,7 @@ impl App {
                     Tab::Media => {
                         paint_icon(p, r, Icon::Picture, crate::settings::pal().text_hi)
                     }
-                    _ => paint_icon(p, r, Icon::Palette, crate::settings::pal().text_hi),
+                    _ => paint_icon(p, r, Icon::Brush, crate::settings::pal().text_hi),
                 }
             }
             if resp.clicked() {
@@ -1318,7 +1321,7 @@ impl App {
         });
         let active = dragging_here || zone_resp.hovered();
         let fill = if dragging_here {
-            FORMAT_BLUE.gamma_multiply(0.10)
+            ACCENT_BLUE.gamma_multiply(0.10)
         } else if active {
             pal.hover
         } else {
@@ -1332,7 +1335,7 @@ impl App {
             Stroke::new(
                 1.2_f32,
                 if dragging_here {
-                    FORMAT_BLUE
+                    ACCENT_BLUE
                 } else if active {
                     pal.text_dim
                 } else {
@@ -1344,13 +1347,13 @@ impl App {
         ui.painter().circle_filled(
             icon_c,
             16.0,
-            if dragging_here { FORMAT_BLUE.gamma_multiply(0.18) } else { pal.button },
+            if dragging_here { ACCENT_BLUE.gamma_multiply(0.18) } else { pal.button },
         );
         paint_icon(
             ui.painter(),
             Rect::from_center_size(icon_c, vec2(24.0, 24.0)),
             Icon::Picture,
-            if dragging_here { FORMAT_BLUE } else { pal.text_hi },
+            if dragging_here { ACCENT_BLUE } else { pal.text_hi },
         );
         ui.painter().text(
             pos2(zone.center().x, zone.top() + 63.0),
@@ -2085,7 +2088,7 @@ impl App {
                 self.slots[i].resolve(self.current + 1, &self.today)
             };
             let fill = if selected {
-                crate::FORMAT_BLUE
+                ACCENT_BLUE
             } else if resp.hovered() {
                 pal.hover
             } else if !text.is_empty() {
@@ -2609,8 +2612,8 @@ fn menu_row(
     resp
 }
 
-/// Accent used for highlighted menu rows (macOS-style selection blue).
-pub(crate) const MENU_ACCENT: Color32 = Color32::from_rgb(0x1F, 0x6F, 0xEB);
+/// Highlighted menu rows, sliders and switches: the app's one action blue.
+pub(crate) const MENU_ACCENT: Color32 = ACCENT_BLUE;
 
 /// Font dropdown: built-in choices plus every installed family, with a
 /// search box at the top that filters as you type. Arrow keys move the
@@ -2897,7 +2900,7 @@ fn gradient_chip(
         Stroke::new(
             if selected { 2.0_f32 } else { 1.0_f32 },
             if selected || response.hovered() {
-                FORMAT_BLUE
+                ACCENT_BLUE
             } else {
                 crate::settings::pal().border
             },
@@ -3153,11 +3156,11 @@ fn gradient_editor(ui: &mut egui::Ui, id: egui::Id, colors: &mut Vec<Color32>) {
                 pos2(c.x - 4.0, c.y - handle_r + 1.0),
                 pos2(c.x + 4.0, c.y - handle_r + 1.0),
             ],
-            if i == selected { FORMAT_BLUE } else { pal.sep_grey },
+            if i == selected { ACCENT_BLUE } else { pal.sep_grey },
             Stroke::NONE,
         ));
         p.circle_filled(c, handle_r + 1.0, Color32::from_black_alpha(110));
-        p.circle_filled(c, handle_r, if i == selected { FORMAT_BLUE } else { Color32::WHITE });
+        p.circle_filled(c, handle_r, if i == selected { ACCENT_BLUE } else { Color32::WHITE });
         p.circle_filled(c, handle_r - 2.5, colors[i]);
     }
     if let Some((from, to)) = drag_to {

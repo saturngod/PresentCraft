@@ -18,7 +18,7 @@ and the other way round.
 2. **Native, calm, Mac-like.** Soft greys, hairline borders, rounded corners, no
    heavy gradients or bevels. It should feel at home next to Keynote or iA Presenter.
 3. **Colour means something.** Neutral greys for structure. Colour only for the
-   current mode (Format blue, Design pink, Share orange), the primary action
+   current mode (Format blue, Media green, Design pink, Share orange), the primary action
    (Present blue), selection and focus.
 4. **Show on hover, not always.** Secondary controls (section Hide/Show, slide
    speaking time, per-row actions) appear when the pointer is over them.
@@ -64,11 +64,11 @@ For secondary text that must stay readable (more than `text_dim`), use
 
 | Name            | Value     | Meaning |
 |-----------------|-----------|---------|
-| `FORMAT_BLUE`   | `#59BDFF` | Format and Media tabs, selection stroke, focus, drag-over |
-| `DESIGN_PINK`   | `#FC44B2` | Design tab |
-| `SHARE_ORANGE`  | `#E59A16` | Share tab when active |
-| `ACCENT_BLUE`   | `#3770FF` | Primary action (Present), links, hovered primary button |
-| `MENU_ACCENT`   | `#1F6FEB` | Slider fill, checkmarks in menus |
+| `ACCENT_BLUE`   | `#3770FF` | **The one action colour**: primary buttons (Present, Add Table), links, sliders, switches, menu highlight, selection, focus, drag-over |
+| `FORMAT_BLUE`   | `#59BDFF` | Format tab pill only |
+| `MEDIA_GREEN`   | `#34B27D` | Media tab pill only |
+| `DESIGN_PINK`   | `#FC44B2` | Design tab pill only |
+| `SHARE_ORANGE`  | `#E59A16` | Share pill when active |
 | Text cursor     | `#72B8F3` | 2 px caret |
 | Selection fill  | `#2D4A66` / `#C5DCFA` | Selected text (dark / light) |
 
@@ -83,6 +83,8 @@ light mode use the deeper `LIGHT_RAMP` so numbers stay readable.
 
 - Text on an accent fill is always white.
 - Do not introduce a new accent for a single control. Reuse the table above.
+- Tab colours only mark the current tab. Every control in every tab uses
+  `ACCENT_BLUE`, so a button or slider looks the same wherever it is.
 - Contrast: body text must read clearly on its background in both themes. If
   `text_dim` is too faint for something people must read, use `text_mid()`.
 - Light mode needs hairline borders on controls so they stand out from pale
@@ -165,7 +167,7 @@ put it next to its siblings and give it the same states.
 | Rest      | `button` fill (or transparent for flat/icon rows), `text_hi` / `icon` |
 | Hover     | `hover` fill, icon becomes `text_hi`, pointing-hand cursor for custom controls |
 | Pressed   | `button` fill (for flat rows) or `hover` (for filled buttons) |
-| Focus     | 2 px ring in the selection colour (`FORMAT_BLUE`) |
+| Focus     | 2 px ring in `ACCENT_BLUE` |
 | Disabled  | Fill at ~55 % (`gamma_multiply(0.55)`), text `text_dim`, no hover, no click |
 | Selected  | Accent fill with white text, or a raised segment (see 5.4) |
 
@@ -237,7 +239,7 @@ current value, left-aligned rows. Style the popup with `tabletools::style_menu`.
 and `switch_row` in Settings (see 5.8). Label is a short statement of what turns
 on: "Show speaking time".
 
-**Slider** — `pill_slider`: 6 px track in `control`, filled part `MENU_ACCENT`,
+**Slider** — `pill_slider`: 6 px track in `control`, filled part `ACCENT_BLUE`,
 white 22 × 16 knob with a soft shadow and 0.5 px border, optional tick dots below.
 
 ### 5.5 Menus
@@ -268,7 +270,7 @@ Style every menu with `tabletools::style_menu(ui)`:
 - **Card**: `field` fill, radius 8, 1 px `border`, 12 px inner padding.
 - **Drop zone**: radius 10, dashed 1.2 px border. At rest the border is faint
   `text_dim`; on hover `hover` fill; while files are dragged over it the fill and
-  border turn `FORMAT_BLUE` (fill at 10 %) and the text says "Release to add".
+  border turn `ACCENT_BLUE` (fill at 10 %) and the text says "Release to add".
 - **Banner / toast** (`update_banner`): floating `pill` frame, 1 px border, radius
   10, popup shadow, 14 × 10 padding, anchored under the top bar. Bold 13.5 title,
   12.0 `text_dim` detail, then buttons (primary first). Always offer a way to
@@ -287,7 +289,7 @@ Style every menu with `tabletools::style_menu(ui)`:
     `row_div` hairlines (`divider` light / `border` dark). A disabled row dims its
     title to `text_dim` and its control to 55 %.
   - `switch_row` / `switch`: on/off settings use a 34 × 20 switch (track
-    `MENU_ACCENT` when on, `border` light / `tab_grey` dark when off, white knob).
+    `ACCENT_BLUE` when on, `border` light / `tab_grey` dark when off, white knob).
     The whole row toggles it.
   - `seg` / `seg_bool`: two to four exclusive choices, same look as `segmented`.
   - `dropdown`: `menu_combo` at a fixed width (140). Numbers use a 56 × 26
@@ -319,7 +321,7 @@ Style every menu with `tabletools::style_menu(ui)`:
 - Monochrome text symbols that are part of typography are fine: keyboard symbols
   (⌘ ⇧ ⌥), the menu tick ✓, bullets and list markers.
 - Stroke weight 1.3–2.0 px, round and simple; match the existing set
-  (Picture, Palette, Play, chevrons, magnifier).
+  (Picture, Brush, Play, chevrons, magnifier).
 - Colour `icon` at rest, `text_hi` on hover, white on an accent fill.
 - Keep icons centred in a square hit area of at least 24 × 24.
 
