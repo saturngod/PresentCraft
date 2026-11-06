@@ -212,7 +212,7 @@ fn item_row(ui: &mut egui::Ui, it: &Item) -> bool {
         egui::Align2::RIGHT_CENTER,
         kbd(it.shortcut),
         FontId::proportional(12.0),
-        crate::settings::pal().text_dim,
+        text_mid(),
     );
     resp.clicked()
 }
@@ -370,6 +370,19 @@ fn chart_icon(p: &egui::Painter, r: Rect, kind: usize, color: Color32) {
 fn paint_updown(p: &egui::Painter, c: egui::Pos2, color: Color32) {
     let s = Stroke::new(1.6_f32, color);
     let (w, h, gap) = (4.5, 3.5, 3.0);
+    p.line_segment([pos2(c.x - w, c.y - gap), pos2(c.x, c.y - gap - h)], s);
+    p.line_segment([pos2(c.x, c.y - gap - h), pos2(c.x + w, c.y - gap)], s);
+    p.line_segment([pos2(c.x - w, c.y + gap), pos2(c.x, c.y + gap + h)], s);
+    p.line_segment([pos2(c.x, c.y + gap + h), pos2(c.x + w, c.y + gap)], s);
+}
+
+/// Small up/down chevrons for dropdowns, in place of egui's solid triangle,
+/// so every pop-up button matches the Theme picker.
+fn combo_chevrons(ui: &egui::Ui, rect: Rect, _v: &egui::style::WidgetVisuals, _open: bool) {
+    let s = Stroke::new(1.4_f32, crate::settings::pal().icon);
+    let c = rect.center();
+    let (w, h, gap) = (3.5, 2.8, 2.0);
+    let p = ui.painter();
     p.line_segment([pos2(c.x - w, c.y - gap), pos2(c.x, c.y - gap - h)], s);
     p.line_segment([pos2(c.x, c.y - gap - h), pos2(c.x + w, c.y - gap)], s);
     p.line_segment([pos2(c.x - w, c.y + gap), pos2(c.x, c.y + gap + h)], s);
@@ -1763,8 +1776,8 @@ impl App {
             ];
             let mut start = None;
             let mut md = false;
-            for (k, (tag, color, name, note, fmt)) in rows.iter().enumerate() {
-                if export_row(ui, k, tag, *color, name, note) {
+            for (tag, color, name, note, fmt) in rows.iter() {
+                if export_row(ui, tag, *color, name, note) {
                     match fmt {
                         Some(f) => start = Some(*f),
                         None => md = true,
@@ -1935,9 +1948,8 @@ impl App {
 
         if section(ui, "Colors") {
             labeled(ui, "Appearance", |ui| {
-                ui.radio_value(&mut self.dark, false, "Light");
-                ui.add_space(10.0);
-                ui.radio_value(&mut self.dark, true, "Dark");
+                let w = ui.available_width();
+                segmented_w(ui, &mut self.dark, ["Light", "Dark"], w);
             });
             labeled(ui, "", |ui| {
                 let w = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
@@ -2397,7 +2409,6 @@ pub(crate) fn pill_slider(
 /// Export button. The whole row is clickable.
 fn export_row(
     ui: &mut egui::Ui,
-    k: usize,
     tag: &str,
     color: Color32,
     name: &str,
@@ -2405,9 +2416,10 @@ fn export_row(
 ) -> bool {
     let pal = crate::settings::pal();
     let w = ui.available_width();
-    let (pad, tile, btn_w) = (8.0, 34.0, 70.0);
+    // The whole row is the button; a trailing chevron shows it leads somewhere.
+    let (pad, tile, chev_w) = (8.0, 34.0, 16.0);
     let text_x = pad + tile + 10.0;
-    let text_w = w - text_x - btn_w - pad - 8.0;
+    let text_w = w - text_x - chev_w - pad - 6.0;
     let bold = FontId::new(13.5, crate::theme::family(false, true, false));
     let title = ui
         .painter()
@@ -2420,14 +2432,10 @@ fn export_row(
     );
     let h = (title.size().y + 3.0 + desc.size().y).max(tile) + 2.0 * pad + 2.0;
     let (r, row) = ui.allocate_exact_size(vec2(w, h), Sense::click());
-    let btn = Rect::from_min_size(
-        pos2(r.right() - btn_w - pad, r.center().y - 13.0),
-        vec2(btn_w, 26.0),
-    );
-    let b = ui.interact(btn, ui.scope_id().with(("export", k)), Sense::click());
-    let row_hover = ui.rect_contains_pointer(r);
     let p = ui.painter();
-    if row_hover {
+    if row.is_pointer_button_down_on() {
+        p.rect_filled(r, 8.0, pal.hover);
+    } else if row.hovered() {
         p.rect_filled(r, 8.0, pal.hover.gamma_multiply(0.6));
     }
     let t = Rect::from_min_size(pos2(r.left() + pad, r.top() + pad), vec2(tile, tile));
@@ -2449,35 +2457,15 @@ fn export_row(
         desc,
         pal.text_dim,
     );
-    let fill = if b.is_pointer_button_down_on() {
-        pal.hover
-    } else if b.hovered() {
-        ACCENT_BLUE
-    } else {
-        pal.button
-    };
-    p.rect_filled(btn, 6.0, fill);
-    if !crate::settings::is_dark() && !b.hovered() {
-        p.rect_stroke(
-            btn,
-            6.0,
-            Stroke::new(1.0_f32, pal.border),
-            egui::StrokeKind::Inside,
-        );
-    }
-    p.text(
-        btn.center(),
-        egui::Align2::CENTER_CENTER,
-        "Export…",
-        FontId::proportional(12.5),
-        if b.hovered() {
-            Color32::WHITE
-        } else {
-            pal.text_hi
-        },
-    );
-    let row = row.on_hover_text_at_pointer(format!("Export as {name}"));
-    row.clicked() || b.clicked()
+    // chevron.right
+    let c = pos2(r.right() - pad - chev_w / 2.0, r.center().y);
+    let st = Stroke::new(1.6_f32, if row.hovered() { pal.text_hi } else { pal.icon });
+    p.line_segment([c + vec2(-2.0, -5.0), c + vec2(3.0, 0.0)], st);
+    p.line_segment([c + vec2(3.0, 0.0), c + vec2(-2.0, 5.0)], st);
+    let row = row
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text_at_pointer(format!("Export as {name}…"));
+    row.clicked()
 }
 
 /// A form row: right-aligned label, then the control filling the rest.
@@ -2547,6 +2535,7 @@ pub(crate) fn menu_combo<T: PartialEq + Copy>(
     let width = ui.available_width();
     let salt = egui::Id::unique(id_salt);
     egui::ComboBox::from_id_salt(salt)
+        .icon(combo_chevrons)
         .truncate()
         .width(width)
         .selected_text(current)
@@ -2645,6 +2634,7 @@ fn font_combo(
         }
     };
     let shown = egui::ComboBox::from_id_salt(id)
+        .icon(combo_chevrons)
         .truncate()
         .width(ui.available_width())
         .height(520.0)
@@ -2871,24 +2861,35 @@ fn gradient_chip(
 ) -> egui::Response {
     let (r, response) = ui.allocate_exact_size(size, Sense::click());
     let painter = ui.painter();
-    // Vertical strips follow the rounded outline without square end caps.
     let radius = 4.0_f32.min(r.height() / 2.0);
-    let steps = (r.width() * 2.0).ceil().max(2.0) as usize;
-    for i in 0..steps {
-        let x = r.left() + r.width() * i as f32 / steps as f32;
-        let next = r.left() + r.width() * (i + 1) as f32 / steps as f32;
-        let edge = (x - r.left()).min(r.right() - next).max(0.0);
-        let inset = if edge < radius {
-            radius - (radius * radius - (radius - edge).powi(2)).sqrt()
-        } else {
-            0.0
-        };
-        let color = crate::theme::deck_color(colors, i, steps).unwrap_or(Color32::WHITE);
-        painter.rect_filled(
-            Rect::from_min_max(pos2(x, r.top() + inset), pos2(next, r.bottom() - inset)),
-            0.0,
-            color,
-        );
+    if colors.len() <= 1 {
+        let c = colors.first().copied().unwrap_or(Color32::WHITE);
+        painter.rect_filled(r, radius, c);
+    } else {
+        // Vertical strips follow the rounded outline without square end caps.
+        // One mesh, so strips aren't anti-aliased against the panel behind them
+        // (which greyed out pale colours on dark panels).
+        let mut mesh = egui::Mesh::default();
+        let steps = (r.width() * 2.0).ceil().max(2.0) as usize;
+        for i in 0..steps {
+            let x = r.left() + r.width() * i as f32 / steps as f32;
+            let next = r.left() + r.width() * (i + 1) as f32 / steps as f32;
+            let edge = (x - r.left()).min(r.right() - next).max(0.0);
+            let inset = if edge < radius {
+                radius - (radius * radius - (radius - edge).powi(2)).sqrt()
+            } else {
+                0.0
+            };
+            let color = crate::theme::deck_color(colors, i, steps).unwrap_or(Color32::WHITE);
+            let base = mesh.vertices.len() as u32;
+            mesh.colored_vertex(pos2(x, r.top() + inset), color);
+            mesh.colored_vertex(pos2(next, r.top() + inset), color);
+            mesh.colored_vertex(pos2(next, r.bottom() - inset), color);
+            mesh.colored_vertex(pos2(x, r.bottom() - inset), color);
+            mesh.add_triangle(base, base + 1, base + 2);
+            mesh.add_triangle(base, base + 2, base + 3);
+        }
+        painter.add(egui::Shape::mesh(mesh));
     }
     painter.rect_stroke(
         r,
@@ -2920,9 +2921,14 @@ fn picker_heading(ui: &mut egui::Ui, text: &str) {
 
 /// Two-option segmented control (Solid / Gradient).
 fn segmented(ui: &mut egui::Ui, value: &mut bool, labels: [&str; 2]) {
+    segmented_w(ui, value, labels, PICKER_W);
+}
+
+/// Two-option segmented control at a given width.
+fn segmented_w(ui: &mut egui::Ui, value: &mut bool, labels: [&str; 2], width: f32) {
     let pal = crate::settings::pal();
     let dark = std::ptr::eq(pal, &crate::settings::DARK_PAL);
-    let (r, _) = ui.allocate_exact_size(vec2(PICKER_W, 26.0), Sense::hover());
+    let (r, _) = ui.allocate_exact_size(vec2(width, 26.0), Sense::hover());
     ui.painter().rect_filled(r, 7.0, pal.control);
     let half = r.width() / 2.0;
     for (i, label) in labels.iter().enumerate() {
