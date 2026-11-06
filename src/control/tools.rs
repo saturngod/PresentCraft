@@ -69,6 +69,11 @@ pub const TOOLS: &[Tool] = &[
         ("color_type", "enum:categorical|sequential|diverging", "categorical gives each series its own colour (default); sequential uses shades of the first colour; diverging runs from the first colour through a neutral middle to the second."),
         ("legend", "boolean", "false hides the legend. It shows by default."),
     ], &["slide", "headers"]),
+    ("title_align", "Place the title of a cover slide (one that starts with a # heading) and its subtitle. Writes the x: and y: lines under the heading; the defaults are left and middle. A ## title alone is always centred.", &[
+        SLIDE,
+        ("x", "enum:left|center|right", "Horizontal position."),
+        ("y", "enum:top|middle|bottom", "Vertical position."),
+    ], &["slide"]),
     ("undo_ai_change", "Undo the last change made through this server. Changes made by hand in the app are not included.", &[], &[]),
     ("theme_list", "The built-in and saved themes, with their numbers.", &[], &[]),
     ("theme_apply", "Apply a theme by name. This replaces design overrides, as choosing a theme in the app does.", &[("name", "string", "Theme name, as theme_list shows it.")], &["name"]),
@@ -143,6 +148,7 @@ pub const HEADLESS: &[&str] = &[
     "slide_duplicate",
     "insert_picture",
     "insert_table",
+    "title_align",
 ];
 
 fn schema_for(ty: &str) -> Json {

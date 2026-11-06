@@ -19,6 +19,7 @@ const PROTOCOL: &str = "2025-06-18";
 const INSTRUCTIONS: &str = "Tools for PresentCraft presentations. Slide numbers start at 1. \
 Call deck_info first to see what is open. The script is Markdown: a line of three or more dashes \
 starts a new slide; lines starting with a tab show on the slide; other lines are speaker notes. \
+A slide that starts with a # heading is a cover; place its title with title_align. \
 Check your work with slide_screenshot and deck_check. PresentCraft must be running (File > MCP > \
 Start Server) for design tools; the script tools also work on a closed .prcraft folder when given \
 its path in the package argument.";

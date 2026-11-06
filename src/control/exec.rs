@@ -23,6 +23,7 @@ const CHANGES: &[&str] = &[
     "slide_duplicate",
     "insert_picture",
     "insert_table",
+    "title_align",
     "theme_apply",
     "theme_import",
     "appearance_set",
@@ -375,6 +376,7 @@ impl App {
                 Edit::Update { index, .. }
                 | Edit::Picture { index, .. }
                 | Edit::Table { index, .. }
+                | Edit::TitleAlign { index, .. }
                 | Edit::Delete { index } => *index,
                 Edit::Move { to, .. } => *to,
                 Edit::Duplicate { index } => index + 1,

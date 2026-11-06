@@ -46,6 +46,13 @@ pub enum Edit {
         caption: Option<String>,
         chart: Option<Chart>,
     },
+    /// Place a cover title: the `x:` / `y:` lines under the slide's `#`
+    /// heading. `None` keeps the current value.
+    TitleAlign {
+        index: usize,
+        x: Option<String>,
+        y: Option<String>,
+    },
 }
 
 /// How a table is drawn as a chart: the `Chart:` line and the option lines
@@ -230,6 +237,55 @@ pub fn table_block(
     lines.join("\n")
 }
 
+/// Rewrites the `x:` / `y:` lines under the first `#` heading of a slide.
+/// `None` keeps the current value; default values (left, middle) are left out.
+pub fn title_align(body: &str, x: Option<&str>, y: Option<&str>) -> Result<String, String> {
+    use crate::parse::{title_option, Align, TitleOption, VAlign};
+    let mut lines: Vec<String> = body.split('\n').map(|l| l.to_string()).collect();
+    let head = lines
+        .iter()
+        .position(|l| l.starts_with("# ") && !l[2..].trim().is_empty())
+        .ok_or("This slide has no # heading. Only a cover title (a # heading) can be placed.")?;
+    let mut cur_x = Align::Left;
+    let mut cur_y = VAlign::Middle;
+    let mut end = head + 1;
+    while end < lines.len() && !lines[end].starts_with('\t') {
+        match title_option(lines[end].trim_end_matches('\r')) {
+            Some(TitleOption::X(v)) => cur_x = v,
+            Some(TitleOption::Y(v)) => cur_y = v,
+            None => break,
+        }
+        end += 1;
+    }
+    let x = match x {
+        None => cur_x,
+        Some(w) => match title_option(&format!("x: {w}")) {
+            Some(TitleOption::X(v)) => v,
+            _ => return Err(format!("x must be left, center or right, not {w}.")),
+        },
+    };
+    let y = match y {
+        None => cur_y,
+        Some(w) => match title_option(&format!("y: {w}")) {
+            Some(TitleOption::Y(v)) => v,
+            _ => return Err(format!("y must be top, middle or bottom, not {w}.")),
+        },
+    };
+    let mut opts = Vec::new();
+    match x {
+        Align::Left => {}
+        Align::Center => opts.push("x: center".to_string()),
+        Align::Right => opts.push("x: right".to_string()),
+    }
+    match y {
+        VAlign::Middle => {}
+        VAlign::Top => opts.push("y: top".to_string()),
+        VAlign::Bottom => opts.push("y: bottom".to_string()),
+    }
+    lines.splice(head + 1..end, opts);
+    Ok(lines.join("\n"))
+}
+
 /// Applies one edit to a script and returns the new script.
 pub fn apply(text: &str, edit: &Edit) -> Result<String, String> {
     if let Edit::Replace(md) = edit {
@@ -320,6 +376,13 @@ pub fn apply(text: &str, edit: &Edit) -> Result<String, String> {
             let block = table_block(headers, rows, caption.as_deref(), chart.as_ref());
             b[i] = append_block(&b[i], &block);
         }
+        Edit::TitleAlign { index, x, y } => {
+            let i = check(*index)?;
+            if x.is_none() && y.is_none() {
+                return Err("Pass x, y or both.".to_string());
+            }
+            b[i] = title_align(&b[i], x.as_deref(), y.as_deref())?;
+        }
     }
     Ok(join(&b))
 }
@@ -396,6 +459,11 @@ pub fn parse_edit(tool: &str, a: &Json) -> Result<Option<Edit>, String> {
                 chart: chart_arg(a)?,
             }
         }
+        "title_align" => Edit::TitleAlign {
+            index: slide_arg(a, "slide")?,
+            x: text_arg(a, "x"),
+            y: text_arg(a, "y"),
+        },
         _ => return Ok(None),
     };
     Ok(Some(edit))
@@ -504,6 +572,56 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = "# One\n\n\tfirst\n\n---\n\n# Two\n\n```\n---\n```\n\n---\n\n# Three";
+
+    #[test]
+    fn title_align_writes_option_lines() {
+        let t = "# Talk\nx: right\n\tSaturngod\n\nNotes\n\n---\n\n## Part";
+        let set = |text: &str, x: Option<&str>, y: Option<&str>| {
+            apply(
+                text,
+                &Edit::TitleAlign {
+                    index: 0,
+                    x: x.map(String::from),
+                    y: y.map(String::from),
+                },
+            )
+        };
+        // y is added, x is kept
+        let out = set(t, None, Some("bottom")).unwrap();
+        assert!(out.starts_with("# Talk\nx: right\ny: bottom\n\tSaturngod\n"));
+        let s = crate::parse::parse_document(&out);
+        assert_eq!(s[0].title_x, crate::parse::Align::Right);
+        assert_eq!(s[0].title_y, crate::parse::VAlign::Bottom);
+        // defaults remove the lines
+        let out = set(&out, Some("left"), Some("middle")).unwrap();
+        assert!(out.starts_with("# Talk\n\tSaturngod\n"));
+        // errors
+        assert!(set(t, Some("up"), None).is_err());
+        assert!(set(t, None, None).is_err());
+        let two = apply(
+            t,
+            &Edit::TitleAlign {
+                index: 1,
+                x: Some("right".into()),
+                y: None,
+            },
+        );
+        assert!(two.is_err());
+        let edit = parse_edit(
+            "title_align",
+            &Json::parse(r#"{"slide": 1, "x": "center"}"#).unwrap(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            edit,
+            Edit::TitleAlign {
+                index: 0,
+                x: Some("center".into()),
+                y: None
+            }
+        );
+    }
 
     #[test]
     fn bodies_match_parse_document() {

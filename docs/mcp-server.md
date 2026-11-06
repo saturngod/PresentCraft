@@ -26,6 +26,7 @@ For other clients, use the same command and arguments in their MCP configuration
 - Slide numbers start at 1, as the app shows them.
 - Every change made through the server is one step in the undo list. `undo_ai_change` reverts the last one. It refuses if you have edited the presentation by hand since that change, so your own work is never lost.
 - `insert_table` adds a table, or draws it as any of the app's 10 chart types: bar, line, spline, area, step, pie, donut, radar, gauge and bubble. It also sets the chart options: horizontal, stacked, title, axis labels, caption, series colours (hex or theme accents), colour type (categorical, sequential, diverging) and legend.
+- `title_align` places a cover slide's title (a slide that starts with a `#` heading) and its subtitle: `x` is left, center or right and `y` is top, middle or bottom. It writes the `x:` and `y:` lines under the heading.
 - `slide_screenshot` returns a PNG of the window with that slide shown. `deck_check` reports empty slides, missing pictures, a missing logo, and text contrast under 4.5:1.
 
 ## Tools
@@ -33,7 +34,7 @@ For other clients, use the same command and arguments in their MCP configuration
 | Group | Tools |
 | --- | --- |
 | Look at the deck | `deck_info`, `deck_read_markdown`, `deck_check`, `slide_list`, `slide_get`, `slide_screenshot` |
-| Script and slides | `deck_write_markdown`, `slide_add`, `slide_update`, `slide_delete`, `slide_move`, `slide_duplicate`, `slide_select`, `insert_picture`, `insert_table`, `undo_ai_change` |
+| Script and slides | `deck_write_markdown`, `slide_add`, `slide_update`, `slide_delete`, `slide_move`, `slide_duplicate`, `slide_select`, `insert_picture`, `insert_table`, `title_align`, `undo_ai_change` |
 | Themes and colours | `theme_list`, `theme_apply`, `theme_import`, `theme_export`, `appearance_set`, `palette_get`, `palette_set`, `background_set` |
 | Fonts, size and info | `font_set`, `size_set`, `line_height_set`, `document_info_set` |
 | Header, footer and logo | `header_footer_get`, `header_footer_set`, `logo_set`, `logo_size`, `logo_remove` |
