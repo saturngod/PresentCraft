@@ -52,6 +52,7 @@ enum Action {
     Block(&'static str),
     AddPicture,
     AddVideo,
+    AddYoutube,
 }
 
 struct Item {
@@ -692,6 +693,17 @@ impl App {
             Action::Block(b) => self.insert_block(b),
             Action::AddPicture => self.add_media(false),
             Action::AddVideo => self.add_media(true),
+            Action::AddYoutube => {
+                // A link line with the address selected, ready to be
+                // replaced by pasting the video's link.
+                const LINK: &str = "https://www.youtube.com/watch?v=";
+                self.insert_block(LINK);
+                let end = self.cursor;
+                let start = end - LINK.chars().count();
+                self.sel_start = start;
+                self.cursor = end;
+                self.jump_to = Some((start, end));
+            }
         }
     }
 
@@ -943,6 +955,12 @@ impl App {
                 label: dimmed("", "/path/video.mp4", on_slide(), false),
                 shortcut: "",
                 action: Action::AddVideo,
+            },
+            Item {
+                icon: "YT",
+                label: dimmed("", "youtube.com/watch?v=…", on_slide(), false),
+                shortcut: "",
+                action: Action::AddYoutube,
             },
         ];
         let format = [
