@@ -706,8 +706,15 @@ fn rels(items: &[(&str, &str, String)]) -> String {
         } else {
             format!("{REL}/{kind}")
         };
+        // A web address points outside the file.
+        let mode = if target.starts_with("http") {
+            " TargetMode=\"External\""
+        } else {
+            ""
+        };
         s.push_str(&format!(
-            "<Relationship Id=\"{id}\" Type=\"{ty}\" Target=\"{target}\"/>"
+            "<Relationship Id=\"{id}\" Type=\"{ty}\" Target=\"{}\"{mode}/>",
+            xml_escape(target)
         ));
     }
     s.push_str("</Relationships>");
@@ -771,6 +778,48 @@ fn notes_slide_xml(notes: &str) -> String {
 <p:txBody><a:bodyPr/><a:lstStyle/>{paras}</p:txBody></p:sp>\
 </p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>"
     )
+}
+
+/// A video's cover picture in PowerPoint: its full still frame, so
+/// PowerPoint's crop applies the same way to the cover and to the playing
+/// video. Without one, the area as drawn on the slide (no crop needed).
+fn video_cover(slide: &RgbaImage, v: &ExportVideo, still: Option<&RgbaImage>) -> RgbaImage {
+    if let Some(full) = still {
+        return full.clone();
+    }
+    let (iw, ih) = (slide.width() as f32, slide.height() as f32);
+    let px = |f: f32, full: f32| ((f * full).round().max(0.0) as u32).min(full as u32);
+    let (x0, y0) = (px(v.x, iw), px(v.y, ih));
+    let (x1, y1) = (px(v.x + v.w, iw).max(x0 + 1), px(v.y + v.h, ih).max(y0 + 1));
+    image::imageops::crop_imm(slide, x0, y0, x1 - x0, y1 - y0).to_image()
+}
+
+/// The crop that makes a still frame fill ("cover") the video's area the
+/// way the app draws it; empty when the whole frame is shown.
+fn video_src_rect(slide: &RgbaImage, v: &ExportVideo, still: Option<&RgbaImage>) -> String {
+    let (false, Some(full)) = (v.contain, still) else {
+        return String::new();
+    };
+    let va = full.width() as f32 / full.height().max(1) as f32;
+    let ra = (v.w * slide.width() as f32) / (v.h * slide.height() as f32).max(1.0);
+    let pct = |f: f32| (f * 100_000.0).round() as i64;
+    if va > ra {
+        let cut = 1.0 - ra / va;
+        format!(
+            "<a:srcRect l=\"{}\" r=\"{}\"/>",
+            pct(cut * v.align[0]),
+            pct(cut * (1.0 - v.align[0]))
+        )
+    } else if va < ra {
+        let cut = 1.0 - va / ra;
+        format!(
+            "<a:srcRect t=\"{}\" b=\"{}\"/>",
+            pct(cut * v.align[1]),
+            pct(cut * (1.0 - v.align[1]))
+        )
+    } else {
+        String::new()
+    }
 }
 
 /// Writes a PowerPoint file: each slide's picture as the background, with
@@ -972,17 +1021,7 @@ pub fn write_pptx(
             let still = crate::images::poster_file(src)
                 .and_then(|p| image::open(p).ok())
                 .map(|i| i.to_rgba8());
-            let cover = match &still {
-                Some(full) => full.clone(),
-                None => {
-                    let (iw, ih) = (img.width() as f32, img.height() as f32);
-                    let px =
-                        |f: f32, full: f32| ((f * full).round().max(0.0) as u32).min(full as u32);
-                    let (x0, y0) = (px(v.x, iw), px(v.y, ih));
-                    let (x1, y1) = (px(v.x + v.w, iw).max(x0 + 1), px(v.y + v.h, ih).max(y0 + 1));
-                    image::imageops::crop_imm(img, x0, y0, x1 - x0, y1 - y0).to_image()
-                }
-            };
+            let cover = video_cover(img, v, still.as_ref());
             video_files.push((format!("ppt/media/{poster}"), jpeg_bytes(&cover)));
             let (rv, rm, rp) = (
                 format!("rId{}", 10 + 3 * j),
@@ -996,28 +1035,7 @@ pub fn write_pptx(
                 format!("../media/{media}"),
             ));
             video_rels.push((rp.clone(), "image".into(), format!("../media/{poster}")));
-            // Crop like the app does when the video fills ("cover") its area.
-            let mut src_rect = String::new();
-            if let (false, Some(full)) = (v.contain, &still) {
-                let va = full.width() as f32 / full.height().max(1) as f32;
-                let ra = (v.w * img.width() as f32) / (v.h * img.height() as f32).max(1.0);
-                let pct = |f: f32| (f * 100_000.0).round() as i64;
-                if va > ra {
-                    let cut = 1.0 - ra / va;
-                    src_rect = format!(
-                        "<a:srcRect l=\"{}\" r=\"{}\"/>",
-                        pct(cut * v.align[0]),
-                        pct(cut * (1.0 - v.align[0]))
-                    );
-                } else if va < ra {
-                    let cut = 1.0 - va / ra;
-                    src_rect = format!(
-                        "<a:srcRect t=\"{}\" b=\"{}\"/>",
-                        pct(cut * v.align[1]),
-                        pct(cut * (1.0 - v.align[1]))
-                    );
-                }
-            }
+            let src_rect = video_src_rect(img, v, still.as_ref());
             let id = 1000 + j;
             let emu_x = (v.x * SLIDE_W_EMU).round() as i64;
             let emu_y = (v.y * SLIDE_H_EMU).round() as i64;
@@ -1027,6 +1045,43 @@ pub fn write_pptx(
                 "<p:pic><p:nvPicPr><p:cNvPr id=\"{id}\" name=\"Video {}\"><a:hlinkClick r:id=\"\" action=\"ppaction://media\"/></p:cNvPr>\
 <p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr>\
 <p:nvPr><a:videoFile r:link=\"{rv}\"/><p:extLst><p:ext uri=\"{{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}}\"><p14:media xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\" r:embed=\"{rm}\"/></p:ext></p:extLst></p:nvPr></p:nvPicPr>\
+<p:blipFill><a:blip r:embed=\"{rp}\"/>{src_rect}<a:stretch><a:fillRect/></a:stretch></p:blipFill>\
+<p:spPr><a:xfrm><a:off x=\"{emu_x}\" y=\"{emu_y}\"/><a:ext cx=\"{emu_w}\" cy=\"{emu_h}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:pic>",
+                j + 1
+            ));
+        }
+        // YouTube videos become PowerPoint "online videos": the preview
+        // picture as the cover, and YouTube's player in the slideshow.
+        let online = videos.get(k).map(|v| v.as_slice()).unwrap_or(&[]);
+        let online = online.iter().filter(|v| !v.background).filter_map(|v| {
+            let url = v.url.as_deref()?;
+            Some((v, crate::images::youtube_id(url)?, url))
+        });
+        for (j, (v, yt, url)) in online.enumerate() {
+            let still = crate::images::youtube_poster_file(&yt)
+                .and_then(|p| image::open(p).ok())
+                .map(|i| i.to_rgba8());
+            let poster = format!("online{}_{}.jpeg", k + 1, j + 1);
+            let cover = video_cover(img, v, still.as_ref());
+            video_files.push((format!("ppt/media/{poster}"), jpeg_bytes(&cover)));
+            let (rv, rp) = (format!("rId{}", 500 + 2 * j), format!("rId{}", 501 + 2 * j));
+            let start = crate::images::youtube_start(url) as u32;
+            let mut embed = format!("https://www.youtube.com/embed/{yt}?feature=oembed");
+            if start > 0 {
+                embed.push_str(&format!("&start={start}"));
+            }
+            video_rels.push((rv.clone(), "video".into(), embed));
+            video_rels.push((rp.clone(), "image".into(), format!("../media/{poster}")));
+            let src_rect = video_src_rect(img, v, still.as_ref());
+            let id = 2000 + j;
+            let emu_x = (v.x * SLIDE_W_EMU).round() as i64;
+            let emu_y = (v.y * SLIDE_H_EMU).round() as i64;
+            let emu_w = (v.w * SLIDE_W_EMU).round().max(1.0) as i64;
+            let emu_h = (v.h * SLIDE_H_EMU).round().max(1.0) as i64;
+            video_xml.push_str(&format!(
+                "<p:pic><p:nvPicPr><p:cNvPr id=\"{id}\" name=\"Online Media {}\" title=\"YouTube video\"><a:hlinkClick r:id=\"\" action=\"ppaction://media\"/></p:cNvPr>\
+<p:cNvPicPr><a:picLocks noRot=\"1\" noChangeAspect=\"1\"/></p:cNvPicPr>\
+<p:nvPr><a:videoFile r:link=\"{rv}\"/></p:nvPr></p:nvPicPr>\
 <p:blipFill><a:blip r:embed=\"{rp}\"/>{src_rect}<a:stretch><a:fillRect/></a:stretch></p:blipFill>\
 <p:spPr><a:xfrm><a:off x=\"{emu_x}\" y=\"{emu_y}\"/><a:ext cx=\"{emu_w}\" cy=\"{emu_h}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:pic>",
                 j + 1
@@ -1121,9 +1176,38 @@ mod tests {
             &imgs,
             &[],
             &["Say hello & smile".into()],
-            &[],
+            &[vec![ExportVideo {
+                x: 0.5,
+                y: 0.0,
+                w: 0.5,
+                h: 1.0,
+                path: None,
+                url: Some("https://www.youtube.com/watch?v=Eu4vnYbKvCI&t=30".into()),
+                background: false,
+                contain: false,
+                align: [0.5, 0.5],
+                filter: None,
+                opacity: 1.0,
+            }]],
         )
         .unwrap();
+        let mut pptx =
+            zip::ZipArchive::new(std::fs::File::open(dir.join("t.pptx")).unwrap()).unwrap();
+        let mut read = |name: &str| {
+            let mut s = String::new();
+            std::io::Read::read_to_string(&mut pptx.by_name(name).unwrap(), &mut s).unwrap();
+            s
+        };
+        let slide_rels = read("ppt/slides/_rels/slide1.xml.rels");
+        assert!(slide_rels.contains(
+            "Target=\"https://www.youtube.com/embed/Eu4vnYbKvCI?feature=oembed&amp;start=30\" TargetMode=\"External\""
+        ));
+        assert!(slide_rels.contains("Target=\"../media/online1_1.jpeg\"/>"));
+        let slide = read("ppt/slides/slide1.xml");
+        assert!(slide.contains("name=\"Online Media 1\""));
+        assert!(slide.contains("<a:videoFile r:link=\"rId500\"/>"));
+        assert!(!read("ppt/slides/slide2.xml").contains("Online Media"));
+        assert!(pptx.by_name("ppt/media/online1_1.jpeg").is_ok());
         write_html(
             &dir.join("t.html"),
             &imgs,

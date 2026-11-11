@@ -23,6 +23,7 @@ When the document is saved, pictures and videos you add or drop that sit in the 
 
 - **HTML:** videos play on the page, at the same place and crop as in the app. They are copied into a `<name>-media` folder next to the `.html` file, so keep the two together. Background videos start by themselves (silent, looping); other videos have play controls, or press **V**. On slides with a background video, the text is real HTML text drawn above the video.
 - **PowerPoint:** videos are embedded in the `.pptx` (each file once) with their still frame as the cover, and play when clicked in the slideshow. Background videos also play on click there, and picture filters only change the cover, not the playing video.
+- **YouTube in PowerPoint:** a YouTube video is written as a PowerPoint online video, with its preview picture as the cover. In the slideshow it plays in YouTube's player on the slide and needs an internet connection. Apps that don't support online videos show the cover picture. Background YouTube videos stay a picture.
 - **PDF and images** show the video's still frame.
 
 ## Design overrides

@@ -148,6 +148,19 @@ pub fn youtube_start(src: &str) -> f32 {
     total + num.parse::<f32>().unwrap_or(0.0)
 }
 
+/// Where a YouTube video's preview picture is cached.
+fn youtube_poster_path(id: &str) -> PathBuf {
+    std::env::temp_dir()
+        .join("presentcraft-web")
+        .join(format!("youtube-{id}.jpg"))
+}
+
+/// The cached preview picture of a YouTube video, once it has been shown.
+pub fn youtube_poster_file(id: &str) -> Option<PathBuf> {
+    let p = youtube_poster_path(id);
+    p.exists().then_some(p)
+}
+
 /// The plain watch page of a YouTube video.
 pub fn youtube_watch_url(id: &str) -> String {
     format!("https://www.youtube.com/watch?v={id}")
@@ -505,9 +518,7 @@ impl ImageCache {
         if let Some(state) = w.get(&key) {
             return state.clone();
         }
-        let out = std::env::temp_dir()
-            .join("presentcraft-web")
-            .join(format!("youtube-{id}.jpg"));
+        let out = youtube_poster_path(id);
         if out.exists() {
             w.insert(key, Web::Ready(out.clone()));
             return Web::Ready(out);
