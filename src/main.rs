@@ -144,6 +144,9 @@ fn take_shot() -> Option<std::sync::Arc<egui::ColorImage>> {
 // Tab colours: they mark where you are, nothing else.
 pub const FORMAT_BLUE: Color32 = hex(0x59BDFF);
 pub const DESIGN_PINK: Color32 = hex(0xFC44B2);
+// Presenter view segments.
+pub const SLIDE_VIOLET: Color32 = hex(0x8B5CF6);
+pub const SPEAKER_CORAL: Color32 = hex(0xF0624D);
 /// The one action colour: primary buttons, links, sliders, switches,
 /// selection, focus and drag-over, in every tab.
 pub const ACCENT_BLUE: Color32 = hex(0x3770FF);
@@ -276,6 +279,7 @@ fn main() -> eframe::Result<()> {
     let mut dark_ui = false;
     let mut present = false;
     let mut play_video = false;
+    let mut presenter: Option<bool> = None;
     let mut file = None;
     let mut start_slide = 0usize;
     let mut theme_idx: Option<usize> = None;
@@ -317,6 +321,12 @@ fn main() -> eframe::Result<()> {
             "--present" => {
                 present = true;
                 i += 1;
+            }
+            "--presenter" => {
+                // --presenter slide|speaker   (presenter view in the main window)
+                present = true;
+                presenter = Some(next == "slide");
+                i += 2;
             }
             "--play-video" => {
                 present = true;
@@ -410,6 +420,10 @@ fn main() -> eframe::Result<()> {
             }
             app.pending_present = present;
             app.pending_play = play_video;
+            if let Some(slide) = presenter {
+                app.force_presenter = true;
+                app.settings.presenter_slide = slide;
+            }
             if light_ui || dark_ui {
                 app.settings.match_system = false;
                 app.settings.dark = dark_ui;
@@ -547,6 +561,9 @@ pub struct App {
     web_video: Option<webvideo::WebVideo>,
     /// Selected note in the presenter view.
     present_note: usize,
+    /// From the command line: show the presenter view in the main window
+    /// (for screenshots), instead of the slides.
+    force_presenter: bool,
     /// Scroll the presenter view to the selected note.
     note_scroll: bool,
     /// Talk time counted before the timer was last paused.
@@ -684,6 +701,7 @@ impl App {
             auto_play: false,
             web_video: None,
             present_note: 0,
+            force_presenter: false,
             note_scroll: false,
             talk_elapsed: 0.0,
             talk_since: None,
@@ -3234,6 +3252,8 @@ pub enum Icon {
     Pause,
     Gear,
     Copy,
+    Slide,
+    Mic,
 }
 
 pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
@@ -3339,6 +3359,33 @@ pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
             );
             p.line_segment([c + vec2(3.0, -9.0), c + vec2(9.0, -3.0)], s);
             p.line_segment([c + vec2(-8.0, 8.0), c + vec2(-5.0, 7.0)], s);
+        }
+        Icon::Slide => {
+            // rectangle.on.rectangle-like screen: a slide with a title and a line
+            let b = Rect::from_center_size(c, vec2(19.0, 14.0));
+            p.rect_stroke(b, 3.0, s, egui::StrokeKind::Inside);
+            p.line_segment(
+                [pos2(b.left() + 4.5, b.top() + 5.0), pos2(b.right() - 7.5, b.top() + 5.0)],
+                Stroke::new(1.8_f32, color),
+            );
+            p.line_segment(
+                [pos2(b.left() + 4.5, b.top() + 9.0), pos2(b.right() - 4.5, b.top() + 9.0)],
+                Stroke::new(1.2_f32, color.gamma_multiply(0.7)),
+            );
+        }
+        Icon::Mic => {
+            // mic: capsule, cradle and stand
+            let cap = Rect::from_center_size(c + vec2(0.0, -2.5), vec2(6.0, 11.0));
+            p.rect_filled(cap, 3.0, color);
+            let arc: Vec<egui::Pos2> = (0..=12)
+                .map(|k| {
+                    let a = std::f32::consts::PI * k as f32 / 12.0;
+                    c + vec2(a.cos() * 5.6, -1.0 + a.sin() * 5.6)
+                })
+                .collect();
+            p.add(egui::Shape::line(arc, s));
+            p.line_segment([c + vec2(0.0, 4.6), c + vec2(0.0, 8.0)], s);
+            p.line_segment([c + vec2(-3.2, 8.0), c + vec2(3.2, 8.0)], s);
         }
         Icon::Play => {
             p.add(egui::Shape::convex_polygon(
@@ -3705,8 +3752,9 @@ impl eframe::App for App {
         }
         // Presenting normally happens in its own window; screenshot runs and
         // single-window backends draw it here instead of the editor.
-        let inline_present = self.shot_path.is_some() || ctx.embed_viewports();
-        if self.presenting && !inline_present {
+        let inline_present =
+            (self.shot_path.is_some() || ctx.embed_viewports()) && !self.force_presenter;
+        if self.presenting && !inline_present && !self.force_presenter {
             self.present_window(ctx);
         }
         if self.export.is_some() {

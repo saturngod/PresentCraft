@@ -69,6 +69,8 @@ For secondary text that must stay readable (more than `text_dim`), use
 | `MEDIA_GREEN`   | `#34B27D` | Media tab pill only |
 | `DESIGN_PINK`   | `#FC44B2` | Design tab pill only |
 | `SHARE_ORANGE`  | `#E59A16` | Share pill when active |
+| `SLIDE_VIOLET`  | `#8B5CF6` | Presenter view: Slide segment pill only |
+| `SPEAKER_CORAL` | `#F0624D` | Presenter view: Speaker segment pill only |
 | Text cursor     | `#72B8F3` | 2 px caret |
 | Selection fill  | `#2D4A66` / `#C5DCFA` | Selected text (dark / light) |
 

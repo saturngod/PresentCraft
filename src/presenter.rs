@@ -5,7 +5,10 @@
 //! slide in the presentation window, and the other way round.
 
 use crate::parse::{Block, Slide};
-use crate::{icon_button, slide_color, theme, App, Icon, ACCENT_BLUE, TOP_BAR};
+use crate::{
+    icon_button, slide_color, theme, App, Icon, ACCENT_BLUE, IS_MAC, SLIDE_VIOLET, SPEAKER_CORAL,
+    TOP_BAR,
+};
 use eframe::egui;
 use egui::{pos2, vec2, Color32, FontId, Key, Modifiers, Rect, Sense, Stroke};
 
@@ -120,6 +123,9 @@ pub fn clock(secs: f64) -> String {
 const GUTTER: f32 = 150.0;
 const COLUMN_MAX: f32 = 1100.0;
 const PAD: f32 = 22.0;
+/// Slide segment: the narrowest the slide and the notes may be dragged.
+const SLIDE_PANE_MIN: f32 = 240.0;
+const NOTES_PANE_MIN: f32 = 420.0;
 
 impl App {
     /// Seconds the talk has been running (pauses excluded).
@@ -201,16 +207,153 @@ impl App {
                     Stroke::new(1.0_f32, pal.divider.gamma_multiply(0.6)),
                 );
                 let body = Rect::from_min_max(pos2(full.left(), top.bottom()), full.max);
-                self.presenter_notes(ui, body, &notes);
-                self.presenter_nav(ui, body, &notes);
+                let y = body.bottom() - 20.0 - 34.0;
+                if self.settings.presenter_slide {
+                    // Slide: the current slide beside the notes, to practise with.
+                    let (slide_pane, notes_pane) = self.presenter_split(ui, body);
+                    self.presenter_slide_pane(ui, slide_pane);
+                    self.presenter_notes(ui, notes_pane, &notes, false);
+                    self.presenter_nav(
+                        ui,
+                        &notes,
+                        pos2(notes_pane.left() + 20.0, y),
+                        pos2(slide_pane.center().x - 100.0, y),
+                    );
+                } else {
+                    self.presenter_notes(ui, body, &notes, true);
+                    self.presenter_nav(
+                        ui,
+                        &notes,
+                        pos2(body.left() + 20.0, y),
+                        pos2(body.right() - 20.0 - 200.0, y),
+                    );
+                }
             });
         if self.talk_since.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
     }
 
+    /// Slide | Speaker, at the left of the top bar. Like the inspector tabs:
+    /// the selected segment shows its name on its own colour, the other its icon.
+    fn presenter_segment(&mut self, ui: &mut egui::Ui, top: Rect) {
+        let pal = crate::settings::pal();
+        let x0 = top.left() + if IS_MAC { 84.0 } else { 14.0 };
+        let slot = 70.0;
+        let seg = Rect::from_min_size(
+            pos2(x0, top.center().y - 16.0),
+            vec2(2.0 * slot + 4.0, 32.0),
+        );
+        ui.painter().rect_filled(seg, 16.0, pal.control);
+        for (k, slide) in [true, false].into_iter().enumerate() {
+            let r = Rect::from_min_size(
+                pos2(seg.left() + 2.0 + slot * k as f32, seg.top() + 2.0),
+                vec2(slot, 28.0),
+            );
+            let resp = ui
+                .interact(r, egui::Id::unique(("presenter-seg", k)), Sense::click())
+                .on_hover_text(if slide {
+                    "Slide: the current slide beside your notes"
+                } else {
+                    "Speaker: your notes in large text"
+                });
+            let p = ui.painter();
+            if slide == self.settings.presenter_slide {
+                p.rect_filled(r, 14.0, if slide { SLIDE_VIOLET } else { SPEAKER_CORAL });
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    if slide { "Slide" } else { "Speaker" },
+                    FontId::proportional(13.5),
+                    Color32::WHITE,
+                );
+            } else {
+                if resp.hovered() {
+                    p.rect_filled(r, 14.0, pal.button);
+                }
+                let icon = if slide { Icon::Slide } else { Icon::Mic };
+                crate::paint_icon(p, r, icon, pal.text_hi);
+            }
+            if resp.clicked() && slide != self.settings.presenter_slide {
+                self.settings.presenter_slide = slide;
+                self.settings.save();
+                self.note_scroll = true;
+            }
+        }
+    }
+
+    /// Splits the body into the slide (left) and the notes (right), with a
+    /// divider between them that can be dragged.
+    fn presenter_split(&mut self, ui: &mut egui::Ui, body: Rect) -> (Rect, Rect) {
+        let pal = crate::settings::pal();
+        let max_w = (body.width() - NOTES_PANE_MIN).max(SLIDE_PANE_MIN);
+        let mut w = (body.width() * self.settings.presenter_split).clamp(SLIDE_PANE_MIN, max_w);
+        let grip = Rect::from_min_max(
+            pos2(body.left() + w - 4.0, body.top()),
+            pos2(body.left() + w + 4.0, body.bottom()),
+        );
+        let resp = ui
+            .interact(grip, egui::Id::unique("presenter-split"), Sense::drag())
+            .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+        if resp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            if let Some(pos) = resp.interact_pointer_pos() {
+                w = (pos.x - body.left()).clamp(SLIDE_PANE_MIN, max_w);
+                self.settings.presenter_split = (w / body.width()).clamp(0.2, 0.8);
+            }
+        }
+        if resp.drag_stopped() {
+            self.settings.save();
+        }
+        let x = body.left() + w;
+        let active = resp.hovered() || resp.dragged();
+        ui.painter().line_segment(
+            [pos2(x, body.top()), pos2(x, body.bottom())],
+            if active {
+                Stroke::new(2.0_f32, ACCENT_BLUE)
+            } else {
+                Stroke::new(1.0_f32, pal.divider.gamma_multiply(0.6))
+            },
+        );
+        (
+            Rect::from_min_max(body.min, pos2(x - 0.5, body.bottom())),
+            Rect::from_min_max(pos2(x + 0.5, body.top()), body.max),
+        )
+    }
+
+    /// The current slide, as large as the pane allows.
+    fn presenter_slide_pane(&mut self, ui: &mut egui::Ui, pane: Rect) {
+        let pal = crate::settings::pal();
+        ui.painter().rect_filled(pane, 0.0, pal.sidebar_bg);
+        // keep clear of the slide stepper at the bottom
+        let avail = Rect::from_min_max(
+            pane.min + vec2(24.0, 24.0),
+            pane.max - vec2(24.0, 20.0 + 34.0 + 20.0),
+        );
+        if avail.width() < 40.0 || avail.height() < 40.0 {
+            return;
+        }
+        let aspect = crate::render::ASPECT;
+        let w = avail.width().min(avail.height() * aspect);
+        let rect = Rect::from_center_size(avail.center(), vec2(w, w / aspect));
+        ui.painter().rect_filled(
+            rect.translate(vec2(0.0, 3.0)).expand(1.0),
+            4.0,
+            Color32::from_black_alpha(22),
+        );
+        let p = ui.painter().with_clip_rect(rect.intersect(pane));
+        self.paint_slide(&p, rect, self.current);
+        ui.painter().rect_stroke(
+            rect,
+            2.0,
+            Stroke::new(1.0_f32, pal.border),
+            egui::StrokeKind::Outside,
+        );
+    }
+
     fn presenter_top_bar(&mut self, ui: &mut egui::Ui, top: Rect) {
         let pal = crate::settings::pal();
+        self.presenter_segment(ui, top);
         let p = ui.painter().clone();
         p.text(
             top.center(),
@@ -289,12 +432,15 @@ impl App {
             });
     }
 
-    fn presenter_notes(&mut self, ui: &mut egui::Ui, body: Rect, notes: &[Note]) {
+    /// `thumbs`: draw each slide's thumbnail beside its note. The Slide
+    /// segment already shows the slide, so it leaves them out.
+    fn presenter_notes(&mut self, ui: &mut egui::Ui, body: Rect, notes: &[Note], thumbs: bool) {
         let pal = crate::settings::pal();
         let dark = crate::settings::is_dark();
-        let col_w = (body.width() - GUTTER - 60.0).clamp(240.0, COLUMN_MAX);
+        let gutter = if thumbs { GUTTER } else { 46.0 };
+        let col_w = (body.width() - gutter - 60.0).clamp(240.0, COLUMN_MAX);
         let size = (col_w / 36.0).clamp(18.0, 30.0);
-        let total = GUTTER + col_w;
+        let total = gutter + col_w;
         let left_off = ((body.width() - total) / 2.0).max(16.0);
         let sel = self.present_note;
         let scroll = std::mem::take(&mut self.note_scroll);
@@ -358,7 +504,7 @@ impl App {
                     let (row, resp) =
                         ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
                     let x0 = row.left() + left_off;
-                    let card = Rect::from_min_size(pos2(x0 + GUTTER, row.top()), vec2(col_w, h));
+                    let card = Rect::from_min_size(pos2(x0 + gutter, row.top()), vec2(col_w, h));
                     let p = ui.painter();
 
                     if is_slide {
@@ -385,7 +531,7 @@ impl App {
                             pos2(x0 + 38.0, card.top() + 6.0),
                             vec2(tw, tw / crate::render::ASPECT),
                         );
-                        if ui.is_rect_visible(thumb) {
+                        if thumbs && ui.is_rect_visible(thumb) {
                             let tp = ui.painter().with_clip_rect(thumb.intersect(ui.clip_rect()));
                             self.paint_slide(&tp, thumb, note.slide);
                             ui.painter().rect_stroke(
@@ -445,7 +591,13 @@ impl App {
     }
 
     /// Floating note and slide steppers at the bottom corners.
-    fn presenter_nav(&mut self, ui: &mut egui::Ui, body: Rect, notes: &[Note]) {
+    fn presenter_nav(
+        &mut self,
+        ui: &mut egui::Ui,
+        notes: &[Note],
+        note_at: egui::Pos2,
+        slide_at: egui::Pos2,
+    ) {
         let pal = crate::settings::pal();
         let font = FontId::proportional(12.5);
         let pill = |ui: &mut egui::Ui, r: Rect| {
@@ -463,10 +615,8 @@ impl App {
                 egui::StrokeKind::Inside,
             );
         };
-        let y = body.bottom() - 20.0 - 34.0;
-
         // Notes: ↑ Note n of N ↓
-        let r = Rect::from_min_size(pos2(body.left() + 20.0, y), vec2(200.0, 34.0));
+        let r = Rect::from_min_size(note_at, vec2(200.0, 34.0));
         pill(ui, r);
         ui.painter().text(
             r.center(),
@@ -498,7 +648,7 @@ impl App {
 
         // Slides: ‹ Slide n of N ›
         let n = self.slides.len();
-        let r = Rect::from_min_size(pos2(body.right() - 20.0 - 200.0, y), vec2(200.0, 34.0));
+        let r = Rect::from_min_size(slide_at, vec2(200.0, 34.0));
         pill(ui, r);
         ui.painter().text(
             r.center(),

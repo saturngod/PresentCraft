@@ -161,6 +161,10 @@ pub struct Settings {
     pub smart_punct: bool,
     /// Width of the slide list, in points (the person can drag it).
     pub sidebar_width: f32,
+    /// Presenter view: show the slide beside the notes (the Slide segment).
+    pub presenter_slide: bool,
+    /// Presenter view: share of the width given to the slide.
+    pub presenter_split: f32,
     // Updates
     pub check_updates: bool,
     /// When the last update check succeeded (seconds since 1970).
@@ -204,6 +208,8 @@ impl Settings {
             single_return: crate::mechanics::SINGLE_RETURN, // singleReturnStartsANewParagraph = true
             smart_punct: false,                             // smartPonctuation = false
             sidebar_width: crate::SIDEBAR_W,
+            presenter_slide: false,
+            presenter_split: 0.55,
             check_updates: true,
             last_update_check: 0,
             skipped_version: String::new(),
@@ -322,6 +328,10 @@ impl Settings {
                         .unwrap_or(crate::SIDEBAR_W)
                         .clamp(crate::SIDEBAR_MIN, crate::SIDEBAR_MAX)
                 }
+                "presenter_slide" => s.presenter_slide = b,
+                "presenter_split" => {
+                    s.presenter_split = v.parse::<f32>().unwrap_or(0.55).clamp(0.2, 0.8)
+                }
                 "check_updates" => s.check_updates = v.parse().unwrap_or(true),
                 "last_update_check" => s.last_update_check = v.parse().unwrap_or(0),
                 "skipped_version" => s.skipped_version = v.trim().to_string(),
@@ -342,7 +352,7 @@ impl Settings {
             .replace('\n', "\\n")
             .replace('\t', "\\t");
         let out = format!(
-            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\ncheck_updates={}\nlast_update_check={}\nskipped_version={}\nvideo_autoplay={}\nvideo_controls={}\n",
+            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\ncheck_updates={}\nlast_update_check={}\nskipped_version={}\nvideo_autoplay={}\nvideo_controls={}\npresenter_slide={}\npresenter_split={}\n",
             self.match_system,
             self.dark,
             t,
@@ -378,6 +388,8 @@ impl Settings {
             self.skipped_version.replace(['\n', '\r'], ""),
             self.video_autoplay,
             self.video_controls,
+            self.presenter_slide,
+            self.presenter_split,
         );
         let _ = std::fs::write(p, out);
     }
