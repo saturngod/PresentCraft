@@ -1,0 +1,31 @@
+/* Phnom Penh: a PresentCraft theme.
+   Titles: Marcellus. Body: Kantumruy Pro. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Marcellus';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/Marcellus-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Kantumruy Pro';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/KantumruyPro-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Kantumruy Pro';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/KantumruyPro-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Kantumruy Pro';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/KantumruyPro-Bold.ttf') format('truetype');
+}

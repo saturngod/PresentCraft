@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Fraunces",
+      "BodyFont": "Nunito Sans",
+      "DarkBodyTextColor": "#36433F",
+      "LightBodyTextColor": "#D3DAE4",
+      "DarkTitleTextColor": "#1C5148",
+      "LightTitleTextColor": "#F7A84A",
+      "DarkBackgroundColor": "#0F1B2D",
+      "LightBackgroundColor": "#F2F5F3",
+      "Appearance": "light",
+      "Accent1": "#E8792B",
+      "Accent2": "#2E7D6B",
+      "Accent3": "#E3B23C",
+      "Accent4": "#D9788F",
+      "Accent5": "#4F86A8",
+      "Accent6": "#8A6B4E"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Fraunces",
+      "BodyFont": "Nunito Sans",
+      "DarkBodyTextColor": "#36433F",
+      "LightBodyTextColor": "#D3DAE4",
+      "DarkTitleTextColor": "#1C5148",
+      "LightTitleTextColor": "#F7A84A",
+      "DarkBackgroundColor": "#0F1B2D",
+      "LightBackgroundColor": "#F2F5F3",
+      "Appearance": "dark",
+      "Accent1": "#E8792B",
+      "Accent2": "#2E7D6B",
+      "Accent3": "#E3B23C",
+      "Accent4": "#D9788F",
+      "Accent5": "#4F86A8",
+      "Accent6": "#8A6B4E"
+    }
+  ]
+}

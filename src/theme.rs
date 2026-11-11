@@ -266,21 +266,31 @@ pub const DEFAULT_THEME: &str = "Yangon";
 /// The built-in themes: Southeast Asian cities, in menu order. Each is an
 /// iA Presenter theme folder in `themes/` (template.json, presets.json,
 /// stylesheet, preview and its Google Fonts), built into the app.
-pub const BUILT_IN_ORDER: [&str; 14] = [
+pub const BUILT_IN_ORDER: [&str; 24] = [
     "Yangon",
     "Mandalay",
     "Bagan",
+    "Taunggyi",
     "Singapore",
     "Bangkok",
     "Chiang Mai",
     "Hanoi",
     "Hoi An",
+    "Da Nang",
     "Kuala Lumpur",
     "Penang",
+    "Malacca",
     "Siem Reap",
+    "Phnom Penh",
     "Luang Prabang",
+    "Vientiane",
     "Bali",
+    "Jakarta",
+    "Yogyakarta",
     "Manila",
+    "Cebu",
+    "Bandar Seri Begawan",
+    "Dili",
 ];
 
 mod embedded {

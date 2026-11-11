@@ -1,0 +1,68 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Oswald",
+      "BodyFont": "DM Sans",
+      "DarkBodyTextColor": "#2F4A4A",
+      "LightBodyTextColor": "#D5E9E4",
+      "DarkTitleTextColor": "#0B5E63",
+      "LightTitleTextColor": "#FFD166",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#F5B82E",
+      "Accent2": "#12908E",
+      "Accent3": "#EE6C4D",
+      "Accent4": "#3D7EA6",
+      "Accent5": "#7FB069",
+      "Accent6": "#C97B84",
+      "LightBgGradient": [
+        "#FFF1C9",
+        "#FBEFC4",
+        "#EAF0C8",
+        "#D7EFD6",
+        "#C9EDE4"
+      ],
+      "DarkBgGradient": [
+        "#0A3A40",
+        "#0B434A",
+        "#0F4C4F",
+        "#165450",
+        "#215B4C"
+      ]
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Oswald",
+      "BodyFont": "DM Sans",
+      "DarkBodyTextColor": "#2F4A4A",
+      "LightBodyTextColor": "#D5E9E4",
+      "DarkTitleTextColor": "#0B5E63",
+      "LightTitleTextColor": "#FFD166",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#F5B82E",
+      "Accent2": "#12908E",
+      "Accent3": "#EE6C4D",
+      "Accent4": "#3D7EA6",
+      "Accent5": "#7FB069",
+      "Accent6": "#C97B84",
+      "LightBgGradient": [
+        "#FFF1C9",
+        "#FBEFC4",
+        "#EAF0C8",
+        "#D7EFD6",
+        "#C9EDE4"
+      ],
+      "DarkBgGradient": [
+        "#0A3A40",
+        "#0B434A",
+        "#0F4C4F",
+        "#165450",
+        "#215B4C"
+      ]
+    }
+  ]
+}

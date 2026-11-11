@@ -1,0 +1,16 @@
+{
+  "Name": "Phnom Penh",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Palace gold and royal blue.",
+  "LongDescription": "Palace gold and royal blue.\n- Royal blue on palace cream\n- Roof gold on royal blue\n- Gold and garnet accents\n- Fonts: Marcellus and Kantumruy Pro",
+  "Css": "phnom penh.css",
+  "TitleFont": "Marcellus",
+  "BodyFont": "Kantumruy Pro",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

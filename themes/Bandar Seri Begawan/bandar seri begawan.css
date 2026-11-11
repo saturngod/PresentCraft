@@ -1,0 +1,31 @@
+/* Bandar Seri Begawan: a PresentCraft theme.
+   Titles: Cormorant Garamond. Body: Work Sans. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/CormorantGaramond-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/WorkSans-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/WorkSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/WorkSans-Bold.ttf') format('truetype');
+}

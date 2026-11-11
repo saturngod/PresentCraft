@@ -1,0 +1,31 @@
+/* Da Nang: a PresentCraft theme.
+   Titles: Be Vietnam Pro. Body: Mulish. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/BeVietnamPro-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Mulish';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/Mulish-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/Mulish-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/Mulish-Bold.ttf') format('truetype');
+}

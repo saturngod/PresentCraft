@@ -1,0 +1,26 @@
+{
+  "Name": "Bandar Seri Begawan",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Black, white and dome gold.",
+  "LongDescription": "Black, white and dome gold.\n- Black on marble white\n- Dome gold on black\n- Cover and title slides in the dark look\n- Fonts: Cormorant Garamond and Work Sans",
+  "Css": "bandar seri begawan.css",
+  "TitleFont": "Cormorant Garamond",
+  "BodyFont": "Work Sans",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

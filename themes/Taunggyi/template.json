@@ -1,0 +1,26 @@
+{
+  "Name": "Taunggyi",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Pine hills and balloon fire.",
+  "LongDescription": "Pine hills and balloon fire.\n- Pine green on highland mist\n- Balloon flame on a night sky\n- Cover and title slides in the dark look\n- Fonts: Fraunces and Nunito Sans",
+  "Css": "taunggyi.css",
+  "TitleFont": "Fraunces",
+  "BodyFont": "Nunito Sans",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

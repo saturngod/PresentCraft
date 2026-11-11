@@ -1,0 +1,31 @@
+/* Cebu: a PresentCraft theme.
+   Titles: Oswald. Body: DM Sans. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/Oswald-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/DMSans-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/DMSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/DMSans-Bold.ttf') format('truetype');
+}

@@ -1,0 +1,16 @@
+{
+  "Name": "Cebu",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Mango and reef water.",
+  "LongDescription": "Mango and reef water.\n- A different colour on every slide\n- Mango into reef green\n- Dark: deep reef with mango titles\n- Fonts: Oswald and DM Sans",
+  "Css": "cebu.css",
+  "TitleFont": "Oswald",
+  "BodyFont": "DM Sans",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 2,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

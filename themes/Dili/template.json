@@ -1,0 +1,16 @@
+{
+  "Name": "Dili",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Hill green and tais red.",
+  "LongDescription": "Hill green and tais red.\n- Hill green on sea-mist white\n- Sandalwood on forest night\n- Tais red accents\n- Fonts: Space Grotesk and IBM Plex Sans",
+  "Css": "dili.css",
+  "TitleFont": "Space Grotesk",
+  "BodyFont": "IBM Plex Sans",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

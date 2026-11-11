@@ -1,0 +1,31 @@
+/* Vientiane: a PresentCraft theme.
+   Titles: Lora. Body: Karla. Fonts from Google Fonts,
+   SIL Open Font License (see fonts/). */
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/Lora-Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Karla';
+  font-style: italic;
+  font-weight: 400;
+  src: url('fonts/Karla-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Karla';
+  font-style: normal;
+  font-weight: 400;
+  src: url('fonts/Karla-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Karla';
+  font-style: normal;
+  font-weight: 700;
+  src: url('fonts/Karla-Bold.ttf') format('truetype');
+}

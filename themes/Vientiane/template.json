@@ -1,0 +1,16 @@
+{
+  "Name": "Vientiane",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Frangipani and Mekong dusk.",
+  "LongDescription": "Frangipani and Mekong dusk.\n- Dusk plum on frangipani white\n- Champa yellow on river dusk\n- Soft gold and rose accents\n- Fonts: Lora and Karla",
+  "Css": "vientiane.css",
+  "TitleFont": "Lora",
+  "BodyFont": "Karla",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

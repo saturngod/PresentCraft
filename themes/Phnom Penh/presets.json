@@ -1,0 +1,40 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Marcellus",
+      "BodyFont": "Kantumruy Pro",
+      "DarkBodyTextColor": "#3A3D4C",
+      "LightBodyTextColor": "#D9DCEC",
+      "DarkTitleTextColor": "#1D2F74",
+      "LightTitleTextColor": "#F0C24F",
+      "DarkBackgroundColor": "#111A40",
+      "LightBackgroundColor": "#FAF6EA",
+      "Appearance": "light",
+      "Accent1": "#D9A520",
+      "Accent2": "#2743A0",
+      "Accent3": "#B8323A",
+      "Accent4": "#3F8F7B",
+      "Accent5": "#8C7BB8",
+      "Accent6": "#E5C98A"
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Marcellus",
+      "BodyFont": "Kantumruy Pro",
+      "DarkBodyTextColor": "#3A3D4C",
+      "LightBodyTextColor": "#D9DCEC",
+      "DarkTitleTextColor": "#1D2F74",
+      "LightTitleTextColor": "#F0C24F",
+      "DarkBackgroundColor": "#111A40",
+      "LightBackgroundColor": "#FAF6EA",
+      "Appearance": "dark",
+      "Accent1": "#D9A520",
+      "Accent2": "#2743A0",
+      "Accent3": "#B8323A",
+      "Accent4": "#3F8F7B",
+      "Accent5": "#8C7BB8",
+      "Accent6": "#E5C98A"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "Name": "Da Nang",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Sea blue and bridge gold.",
+  "LongDescription": "Sea blue and bridge gold.\n- A different sea colour on every slide\n- Sky blue into lagoon green\n- Dark: deep water with gold titles\n- Fonts: Be Vietnam Pro and Mulish",
+  "Css": "da nang.css",
+  "TitleFont": "Be Vietnam Pro",
+  "BodyFont": "Mulish",
+  "CssClasses": "variable-size-headings has-graph-background",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

@@ -1,0 +1,26 @@
+{
+  "Name": "Yogyakarta",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Batik sogan and indigo.",
+  "LongDescription": "Batik sogan and indigo.\n- Sogan brown on batik cream\n- Wax gold on indigo\n- Cover and title slides in the dark look\n- Fonts: Playfair Display and Source Sans 3",
+  "Css": "yogyakarta.css",
+  "TitleFont": "Playfair Display",
+  "BodyFont": "Source Sans 3",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Layouts": [
+    {
+      "Name": "Cover",
+      "Classes": "invert"
+    },
+    {
+      "Name": "Title",
+      "Classes": "invert"
+    }
+  ],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": true,
+  "PreviewGenerated": true
+}

@@ -959,7 +959,7 @@ mod tests {
     #[test]
     fn built_in_themes_load_from_their_folders() {
         let all = crate::theme::presets();
-        assert_eq!(all.len(), 14);
+        assert_eq!(all.len(), crate::theme::BUILT_IN_ORDER.len());
         assert_eq!(all[0].name, crate::theme::DEFAULT_THEME);
         for p in &all {
             assert!(!p.custom, "{}", p.name);

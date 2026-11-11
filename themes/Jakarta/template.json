@@ -1,0 +1,16 @@
+{
+  "Name": "Jakarta",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Graphite and Betawi orange.",
+  "LongDescription": "Graphite and Betawi orange.\n- White on graphite\n- Graphite on warm white\n- One orange accent\n- Fonts: Poppins and Inter",
+  "Css": "jakarta.css",
+  "TitleFont": "Poppins",
+  "BodyFont": "Inter",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

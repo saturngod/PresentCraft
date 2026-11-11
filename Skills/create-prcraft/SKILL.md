@@ -199,24 +199,34 @@ The built-in themes are named after Southeast Asian cities. Each has its own col
 | Yangon (default) | lacquer maroon on ivory; gold on twilight indigo | Cormorant Garamond / Lato | covers in the dark look |
 | Mandalay | vermilion on warm paper; gold on teak | Cinzel / EB Garamond | solid |
 | Bagan | dawn: rose, apricot, amber | Marcellus / Nunito Sans | gradient |
+| Taunggyi | pine green on mist; balloon flame on night navy | Fraunces / Nunito Sans | covers in the dark look |
 | Singapore | Singapore red on white; night-bay navy | Space Grotesk / Inter | covers in the dark look |
 | Bangkok | emerald, sapphire, ruby, gold; white titles | Prompt / Sarabun | gradient |
 | Chiang Mai | forest green on mist; lantern orange on night | Lora / Source Sans 3 | solid |
 | Hanoi | shutter green on mustard; mustard on deep green | Be Vietnam Pro | covers in the dark look |
 | Hoi An | silk-lantern colours, dark by default | Playfair Display / Mulish | gradient |
+| Da Nang | sea blues into lagoon green; gold on deep water | Be Vietnam Pro / Mulish | gradient |
 | Kuala Lumpur | navy on cool white; steel on night, dark by default | Archivo / IBM Plex Sans | solid |
 | Penang | Peranakan pastels; jewel tones when dark | Fraunces / Karla | gradient |
+| Malacca | terracotta on lime-wash white; clay on maroon | Libre Baskerville / Lato | solid |
 | Siem Reap | temple brown on sandstone; sunrise on pre-dawn | Spectral / Kantumruy Pro | covers in the dark look |
+| Phnom Penh | royal blue on cream; gold on royal blue | Marcellus / Kantumruy Pro | solid |
 | Luang Prabang | saffron on temple white and dark teak | Libre Baskerville / Work Sans | solid |
+| Vientiane | dusk plum on white; champa yellow on dusk | Lora / Karla | solid |
 | Bali | terrace greens to ripe gold | DM Serif Display / DM Sans | gradient |
+| Jakarta | graphite and white, one orange accent, dark by default | Poppins / Inter | solid |
+| Yogyakarta | sogan brown on cream; wax gold on indigo | Playfair Display / Source Sans 3 | covers in the dark look |
 | Manila | bay blue to sunset; white titles | Oswald / Poppins | gradient |
+| Cebu | mango into reef green; mango on deep reef | Oswald / DM Sans | gradient |
+| Bandar Seri Begawan | black on marble white; dome gold on black | Cormorant Garamond / Work Sans | covers in the dark look |
+| Dili | hill green on sea mist; sandalwood on forest night | Space Grotesk / IBM Plex Sans | solid |
 
 Choose by mood and by the deck's text:
-- **Formal** decks: Yangon, Mandalay, Luang Prabang.
-- **Modern** decks: Singapore, Kuala Lumpur.
-- **Warm and colourful** decks: Bagan, Bangkok, Hoi An, Penang, Bali, Manila.
-- **Calm** decks: Chiang Mai, Siem Reap.
-- **Vietnamese** text: Hanoi or Hoi An, whose fonts cover Vietnamese.
+- **Formal** decks: Yangon, Mandalay, Luang Prabang, Phnom Penh, Yogyakarta, Bandar Seri Begawan, Malacca.
+- **Modern** decks: Singapore, Kuala Lumpur, Jakarta, Dili.
+- **Warm and colourful** decks: Bagan, Bangkok, Hoi An, Penang, Bali, Manila, Cebu.
+- **Calm** decks: Chiang Mai, Siem Reap, Taunggyi, Vientiane, Da Nang.
+- **Vietnamese** text: Hanoi, Hoi An or Da Nang, whose fonts cover Vietnamese.
 
 Use `"appearance": "dark"` for a dark deck.
 

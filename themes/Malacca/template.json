@@ -1,0 +1,16 @@
+{
+  "Name": "Malacca",
+  "Version": "1.0",
+  "Author": "PresentCraft",
+  "ShortDescription": "Terracotta and tile blue.",
+  "LongDescription": "Terracotta and tile blue.\n- Terracotta red on lime-wash white\n- Warm clay on deep maroon\n- Tile blue accents\n- Fonts: Libre Baskerville and Lato",
+  "Css": "malacca.css",
+  "TitleFont": "Libre Baskerville",
+  "BodyFont": "Lato",
+  "CssClasses": "variable-size-headings",
+  "LayoutExamples": [],
+  "Decoration": "None",
+  "TextSize": 1,
+  "InvertTitles": false,
+  "PreviewGenerated": true
+}

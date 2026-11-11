@@ -1,0 +1,68 @@
+{
+  "Presets": [
+    {
+      "Name": "Light",
+      "TitleFont": "Be Vietnam Pro",
+      "BodyFont": "Mulish",
+      "DarkBodyTextColor": "#2C4352",
+      "LightBodyTextColor": "#D4E4EC",
+      "DarkTitleTextColor": "#0A4C78",
+      "LightTitleTextColor": "#FFD27A",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "light",
+      "Accent1": "#F2B134",
+      "Accent2": "#0E86C7",
+      "Accent3": "#17A398",
+      "Accent4": "#E4572E",
+      "Accent5": "#7C8FA3",
+      "Accent6": "#8FD3E8",
+      "LightBgGradient": [
+        "#E6F2FA",
+        "#DCEEF7",
+        "#D3EBF3",
+        "#D2ECEC",
+        "#DAF0E6"
+      ],
+      "DarkBgGradient": [
+        "#062A44",
+        "#07334C",
+        "#083D53",
+        "#0A4758",
+        "#0E505A"
+      ]
+    },
+    {
+      "Name": "Dark",
+      "TitleFont": "Be Vietnam Pro",
+      "BodyFont": "Mulish",
+      "DarkBodyTextColor": "#2C4352",
+      "LightBodyTextColor": "#D4E4EC",
+      "DarkTitleTextColor": "#0A4C78",
+      "LightTitleTextColor": "#FFD27A",
+      "DarkBackgroundColor": "transparent",
+      "LightBackgroundColor": "transparent",
+      "Appearance": "dark",
+      "Accent1": "#F2B134",
+      "Accent2": "#0E86C7",
+      "Accent3": "#17A398",
+      "Accent4": "#E4572E",
+      "Accent5": "#7C8FA3",
+      "Accent6": "#8FD3E8",
+      "LightBgGradient": [
+        "#E6F2FA",
+        "#DCEEF7",
+        "#D3EBF3",
+        "#D2ECEC",
+        "#DAF0E6"
+      ],
+      "DarkBgGradient": [
+        "#062A44",
+        "#07334C",
+        "#083D53",
+        "#0A4758",
+        "#0E505A"
+      ]
+    }
+  ]
+}
