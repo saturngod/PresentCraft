@@ -27,6 +27,18 @@ pub struct ImageCache {
     web: Arc<Mutex<HashMap<String, Web>>>,
     /// Videos playing inline (while presenting), by source.
     players: HashMap<String, crate::video::Player>,
+    /// Draw the play button, time and progress bar over playing videos.
+    pub show_controls: bool,
+}
+
+/// An inline video's current frame and where it is in the video.
+struct VideoFrame {
+    tex: egui::TextureId,
+    size: [usize; 2],
+    progress: f32,
+    playing: bool,
+    position: f32,
+    duration: f32,
 }
 
 /// Undoes %XX escapes (used for spaces in file names).
@@ -59,7 +71,86 @@ const VIDEO_EXTS: [&str; 4] = [".mp4", ".mov", ".m4v", ".webm"];
 pub fn is_video(src: &str) -> bool {
     let lower = src.to_ascii_lowercase();
     let path_part = lower.split(['?', '#']).next().unwrap_or(&lower);
-    VIDEO_EXTS.iter().any(|e| path_part.ends_with(e))
+    VIDEO_EXTS.iter().any(|e| path_part.ends_with(e)) || youtube_id(src).is_some()
+}
+
+/// Splits a web address into host, path and query (no fragment).
+fn url_parts(src: &str) -> Option<(String, &str, &str)> {
+    let rest = src
+        .get(..8)
+        .filter(|p| p.eq_ignore_ascii_case("https://"))
+        .map(|_| &src[8..])
+        .or_else(|| {
+            src.get(..7)
+                .filter(|p| p.eq_ignore_ascii_case("http://"))
+                .map(|_| &src[7..])
+        })?;
+    let rest = rest.split('#').next().unwrap_or(rest);
+    let (addr, query) = rest.split_once('?').unwrap_or((rest, ""));
+    let (host, path) = addr.split_once('/').unwrap_or((addr, ""));
+    Some((host.to_ascii_lowercase(), path, query))
+}
+
+/// The video id of a YouTube address: `youtube.com/watch?v=…`,
+/// `youtu.be/…`, and the `/embed/`, `/shorts/` and `/live/` forms.
+pub fn youtube_id(src: &str) -> Option<String> {
+    let (host, path, query) = url_parts(src)?;
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    let id = match host {
+        "youtu.be" => path.split('/').next(),
+        "youtube.com" | "m.youtube.com" | "music.youtube.com" | "youtube-nocookie.com" => {
+            if path == "watch" || path == "watch/" {
+                query.split('&').find_map(|kv| kv.strip_prefix("v="))
+            } else {
+                ["embed/", "shorts/", "live/", "v/"]
+                    .iter()
+                    .find_map(|p| path.strip_prefix(p))
+                    .and_then(|r| r.split('/').next())
+            }
+        }
+        _ => None,
+    }?;
+    let ok = id.len() == 11
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    ok.then(|| id.to_string())
+}
+
+/// Where a YouTube address asks to start, in seconds (`t=90`, `t=1m30s`,
+/// `start=90`); 0 when it doesn't say.
+pub fn youtube_start(src: &str) -> f32 {
+    let Some((_, _, query)) = url_parts(src) else {
+        return 0.0;
+    };
+    let Some(v) = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("t=").or_else(|| kv.strip_prefix("start=")))
+    else {
+        return 0.0;
+    };
+    let (mut total, mut num) = (0.0_f32, String::new());
+    for c in v.chars() {
+        match c {
+            '0'..='9' => num.push(c),
+            'h' | 'm' | 's' => {
+                let n: f32 = num.parse().unwrap_or(0.0);
+                total += n * match c {
+                    'h' => 3600.0,
+                    'm' => 60.0,
+                    _ => 1.0,
+                };
+                num.clear();
+            }
+            _ => return 0.0,
+        }
+    }
+    total + num.parse::<f32>().unwrap_or(0.0)
+}
+
+/// The plain watch page of a YouTube video.
+pub fn youtube_watch_url(id: &str) -> String {
+    format!("https://www.youtube.com/watch?v={id}")
 }
 
 /// A video drawn on screen: where and how, so presenting can play it and
@@ -349,6 +440,25 @@ impl ImageCache {
         self.players.clear();
     }
 
+    /// A video that was asked to play and hasn't shown a frame yet.
+    fn video_loading(&self, src: &str) -> bool {
+        self.players
+            .get(src)
+            .is_some_and(|p| p.texture.is_none() && !p.looping)
+    }
+
+    /// Jumps to `fraction` (0–1) of a video that is playing or paused.
+    pub fn seek_video(&mut self, src: &str, fraction: f32) {
+        if let Some(p) = self.players.get_mut(src) {
+            p.seek(fraction);
+        }
+    }
+
+    /// Whether a video has a player (playing or paused) right now.
+    pub fn has_player(&self, src: &str) -> bool {
+        self.players.contains_key(src)
+    }
+
     /// Moves playing videos to their current frame; true while any plays.
     pub fn tick_videos(&mut self, ctx: &egui::Context) -> bool {
         let mut any = false;
@@ -372,10 +482,51 @@ impl ImageCache {
     }
 
     /// The current frame of an inline video: texture, size, progress, playing.
-    fn video_frame(&self, src: &str) -> Option<(egui::TextureId, [usize; 2], f32, bool)> {
+    fn video_frame(&self, src: &str) -> Option<VideoFrame> {
         let p = self.players.get(src)?;
         let t = p.texture.as_ref()?;
-        Some((t.id(), p.size, p.progress(), p.playing))
+        Some(VideoFrame {
+            tex: t.id(),
+            size: p.size,
+            progress: p.progress(),
+            playing: p.playing,
+            position: p.position().min(p.info.duration.max(0.0)),
+            duration: p.info.duration,
+        })
+    }
+
+    /// A YouTube video's preview picture: downloaded the first time.
+    fn youtube_poster_state(&self, ctx: &egui::Context, id: &str) -> Web {
+        let key = format!("poster:youtube:{id}");
+        let mut w = match self.web.lock() {
+            Ok(w) => w,
+            Err(_) => return Web::Failed,
+        };
+        if let Some(state) = w.get(&key) {
+            return state.clone();
+        }
+        let out = std::env::temp_dir()
+            .join("presentcraft-web")
+            .join(format!("youtube-{id}.jpg"));
+        if out.exists() {
+            w.insert(key, Web::Ready(out.clone()));
+            return Web::Ready(out);
+        }
+        w.insert(key.clone(), Web::Pending);
+        let (web, ctx, id) = (self.web.clone(), ctx.clone(), id.to_string());
+        std::thread::spawn(move || {
+            // The large picture isn't there for every video; the medium one
+            // is, and both are 16:9 without black bars.
+            let got = ["maxresdefault", "mqdefault"].iter().any(|name| {
+                download(&format!("https://i.ytimg.com/vi/{id}/{name}.jpg"), &out).is_ok()
+            });
+            let state = if got { Web::Ready(out) } else { Web::Failed };
+            if let Ok(mut w) = web.lock() {
+                w.insert(key, state);
+            }
+            ctx.request_repaint();
+        });
+        Web::Pending
     }
 
     /// Number of web pictures still downloading.
@@ -459,7 +610,13 @@ impl ImageCache {
     ) -> Option<(egui::TextureId, [usize; 2])> {
         let key = (src.to_string(), filter);
         if !self.map.contains_key(&key) {
-            let path = if is_video(src) {
+            let path = if let Some(id) = youtube_id(src) {
+                match self.youtube_poster_state(ctx, &id) {
+                    Web::Pending => return None,
+                    Web::Ready(p) => Some(p),
+                    Web::Failed => None,
+                }
+            } else if is_video(src) {
                 match self.resolve(src) {
                     Some(v) => match self.poster_state(ctx, &v) {
                         Web::Pending => return None,
@@ -582,27 +739,31 @@ pub fn draw_image(
     let contain = contain_override.unwrap_or(spec.contain);
     let ctx = painter.ctx().clone();
     // A video playing inline shows its current frame.
-    if let Some((tex, size, progress, playing)) = cache.video_frame(&spec.src) {
-        let drawn = paint_texture(painter, rect, tex, size, spec, contain, alpha);
+    if let Some(f) = cache.video_frame(&spec.src) {
+        let drawn = paint_texture(painter, rect, f.tex, f.size, spec, contain, alpha);
         note_video_spot(drawn, spec, contain);
-        if playing && !spec.background {
-            let bar_h = (drawn.height() * 0.006).clamp(2.0, 5.0);
-            let track = Rect::from_min_max(pos2(drawn.left(), drawn.bottom() - bar_h), drawn.max);
-            painter.rect_filled(track, 0.0, Color32::from_black_alpha(90));
-            let mut done = track;
-            done.max.x = track.left() + track.width() * progress;
-            painter.rect_filled(done, 0.0, Color32::WHITE.gamma_multiply(0.9));
-        } else if !spec.background {
-            video_badge(painter, drawn, alpha);
+        if !spec.background {
+            if !f.playing {
+                video_badge(painter, drawn, alpha);
+            }
+            if cache.show_controls {
+                video_controls(painter, drawn, &f);
+            }
         }
-        draw_caption(painter, drawn, spec);
+        // The controls sit where the caption would be.
+        if !cache.show_controls || spec.background {
+            draw_caption(painter, drawn, spec);
+        }
         return drawn;
     }
+    let loading = cache.video_loading(&spec.src);
     if let Some((tex, size)) = cache.get(&ctx, &spec.src, spec.filter) {
         let drawn = paint_texture(painter, rect, tex, size, spec, contain, alpha);
         if is_video(&spec.src) {
             note_video_spot(drawn, spec, contain);
-            if !spec.background {
+            if loading {
+                video_spinner(painter, drawn, alpha);
+            } else if !spec.background {
                 video_badge(painter, drawn, alpha);
             }
         }
@@ -621,7 +782,9 @@ pub fn draw_image(
     );
     if video {
         note_video_spot(rect, spec, contain);
-        if !spec.background {
+        if loading {
+            video_spinner(painter, rect, alpha);
+        } else if !spec.background {
             video_badge(painter, rect, alpha);
         }
     }
@@ -686,6 +849,127 @@ fn note_video_spot(rect: Rect, spec: &ImageSpec, contain: bool) {
             });
         }
     });
+}
+
+/// What a click on a video's controls means.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ControlHit {
+    /// The play / pause button.
+    Toggle,
+    /// A place on the progress bar, as a fraction of the video.
+    Seek(f32),
+}
+
+/// Where the controls sit over a video drawn in `rect`: the strip along
+/// the bottom, the play / pause button, and the progress bar.
+fn control_layout(rect: Rect, duration: f32) -> (Rect, Rect, Rect) {
+    let h = (rect.height() * 0.085).clamp(16.0, 52.0).min(rect.height());
+    let strip = Rect::from_min_max(pos2(rect.left(), rect.bottom() - h), rect.max);
+    let button = Rect::from_min_size(strip.min, egui::vec2(h * 1.15, h));
+    // Room for "0:00 / 0:00" (wider once there are hours).
+    let time_w = h * if duration >= 3600.0 { 4.4 } else { 3.2 };
+    let left = (button.right() + time_w).min(strip.right() - h * 0.5);
+    let track = Rect::from_min_max(
+        pos2(left, strip.top()),
+        pos2(strip.right() - h * 0.5, strip.bottom()),
+    );
+    (strip, button, track)
+}
+
+/// Which control of a video drawn in `rect` is at `pos`, if any.
+pub fn control_hit(rect: Rect, pos: egui::Pos2) -> Option<ControlHit> {
+    let (strip, _, track) = control_layout(rect, 0.0);
+    if !strip.contains(pos) {
+        return None;
+    }
+    // The time's exact width doesn't matter here: anything right of the
+    // button and the shortest time label seeks.
+    if pos.x < track.left() || track.width() <= 0.0 {
+        return Some(ControlHit::Toggle);
+    }
+    Some(ControlHit::Seek(
+        ((pos.x - track.left()) / track.width()).clamp(0.0, 1.0),
+    ))
+}
+
+/// Minutes and seconds (hours when needed): `1:05`, `1:02:03`.
+fn clock(seconds: f32) -> String {
+    let t = seconds.max(0.0) as u32;
+    let (h, m, s) = (t / 3600, t / 60 % 60, t % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+/// Play / pause button, time and progress bar along a video's bottom edge.
+fn video_controls(painter: &Painter, rect: Rect, f: &VideoFrame) {
+    let (strip, button, track) = control_layout(rect, f.duration);
+    let h = strip.height();
+    let white = Color32::WHITE.gamma_multiply(0.95);
+    painter.rect_filled(strip, 0.0, Color32::from_black_alpha(140));
+    let c = button.center();
+    let g = h * 0.2;
+    if f.playing {
+        for dx in [-g * 0.75, g * 0.75] {
+            painter.rect_filled(
+                Rect::from_center_size(pos2(c.x + dx, c.y), egui::vec2(g * 0.6, g * 2.0)),
+                g * 0.12,
+                white,
+            );
+        }
+    } else {
+        painter.add(egui::Shape::convex_polygon(
+            vec![
+                pos2(c.x - g * 0.75, c.y - g),
+                pos2(c.x + g, c.y),
+                pos2(c.x - g * 0.75, c.y + g),
+            ],
+            white,
+            egui::Stroke::NONE,
+        ));
+    }
+    if f.duration > 0.0 && track.left() - button.right() > h {
+        painter.text(
+            pos2(button.right(), c.y),
+            egui::Align2::LEFT_CENTER,
+            format!("{} / {}", clock(f.position), clock(f.duration)),
+            egui::FontId::new(h * 0.4, crate::theme::family(false, false, false)),
+            white,
+        );
+    }
+    if track.width() > h {
+        let bar_h = (h * 0.1).max(2.0);
+        let line = Rect::from_center_size(track.center(), egui::vec2(track.width(), bar_h));
+        painter.rect_filled(line, bar_h / 2.0, Color32::from_white_alpha(70));
+        let x = line.left() + line.width() * f.progress;
+        let mut done = line;
+        done.max.x = x;
+        painter.rect_filled(done, bar_h / 2.0, white);
+        painter.circle_filled(pos2(x, line.center().y), bar_h * 1.6, white);
+    }
+}
+
+/// Turning dots over a video that is about to start.
+fn video_spinner(painter: &Painter, rect: Rect, alpha: f32) {
+    let r = (rect.width().min(rect.height()) * 0.09).clamp(5.0, 44.0);
+    let c = rect.center();
+    painter.circle_filled(c, r, Color32::from_black_alpha((150.0 * alpha) as u8));
+    let ctx = painter.ctx();
+    let turn = (ctx.input(|i| i.time) * 1.25).fract() as f32;
+    const DOTS: usize = 8;
+    for k in 0..DOTS {
+        let a = k as f32 / DOTS as f32;
+        let ang = a * std::f32::consts::TAU;
+        let age = (turn - a).rem_euclid(1.0);
+        painter.circle_filled(
+            c + egui::vec2(ang.cos(), ang.sin()) * r * 0.52,
+            r * 0.09,
+            Color32::WHITE.gamma_multiply((1.0 - age * 0.85) * alpha),
+        );
+    }
+    ctx.request_repaint();
 }
 
 /// Round play button over a video.
@@ -841,6 +1125,48 @@ mod path_tests {
         assert_eq!(percent_decode("100%"), "100%");
         assert!(is_video("./sagarwar.MP4"));
         assert!(!is_video("./sagarwar.jpg"));
+    }
+
+    #[test]
+    fn spots_youtube_videos() {
+        let id = Some("Eu4vnYbKvCI".to_string());
+        assert_eq!(youtube_id("https://www.youtube.com/watch?v=Eu4vnYbKvCI"), id);
+        assert_eq!(youtube_id("https://youtube.com/watch?t=5&v=Eu4vnYbKvCI&list=x"), id);
+        assert_eq!(youtube_id("https://youtu.be/Eu4vnYbKvCI?si=abc"), id);
+        assert_eq!(youtube_id("https://www.youtube.com/embed/Eu4vnYbKvCI"), id);
+        assert_eq!(youtube_id("https://www.youtube.com/shorts/Eu4vnYbKvCI"), id);
+        assert_eq!(youtube_id("HTTPS://M.YouTube.com/watch?v=Eu4vnYbKvCI#x"), id);
+        assert_eq!(youtube_id("https://www.youtube.com/watch?v=short"), None);
+        assert_eq!(youtube_id("https://www.youtube.com/@channel"), None);
+        assert_eq!(youtube_id("https://example.com/watch?v=Eu4vnYbKvCI"), None);
+        assert_eq!(youtube_id("/assets/watch?v=Eu4vnYbKvCI"), None);
+        assert!(is_video("https://www.youtube.com/watch?v=Eu4vnYbKvCI"));
+        assert!(!is_video("https://example.com/picture.png"));
+    }
+
+    #[test]
+    fn reads_youtube_start_times() {
+        assert_eq!(youtube_start("https://youtu.be/Eu4vnYbKvCI?t=90"), 90.0);
+        assert_eq!(youtube_start("https://youtu.be/Eu4vnYbKvCI?t=1m30s"), 90.0);
+        assert_eq!(
+            youtube_start("https://www.youtube.com/watch?v=Eu4vnYbKvCI&start=12"),
+            12.0
+        );
+        assert_eq!(youtube_start("https://youtu.be/Eu4vnYbKvCI?t=1h2m3s"), 3723.0);
+        assert_eq!(youtube_start("https://youtu.be/Eu4vnYbKvCI"), 0.0);
+    }
+
+    #[test]
+    fn finds_video_controls() {
+        let r = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(800.0, 450.0));
+        assert_eq!(control_hit(r, pos2(400.0, 200.0)), None);
+        assert_eq!(control_hit(r, pos2(10.0, 440.0)), Some(ControlHit::Toggle));
+        match control_hit(r, pos2(780.0, 440.0)) {
+            Some(ControlHit::Seek(f)) => assert!(f > 0.9),
+            other => panic!("expected a seek, got {other:?}"),
+        }
+        assert_eq!(clock(65.0), "1:05");
+        assert_eq!(clock(3723.0), "1:02:03");
     }
 
     #[test]

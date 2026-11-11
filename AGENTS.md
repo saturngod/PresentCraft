@@ -29,6 +29,7 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 - `src/render.rs`, `theme.rs`: slide layout, drawing, and themes.
 - `src/inspector.rs`, `settings.rs`: inspector controls and preferences.
 - `src/images.rs`, `chart.rs`, `tableblock.rs`, `tabletools.rs`: media and structured content.
+- `src/video.rs`, `webvideo.rs`: inline video playback with ffmpeg; YouTube's player in the system web view.
 - `src/export.rs`: PDF, PowerPoint, image, and HTML export.
 - `src/mechanics.rs`: application defaults and editor behavior constants.
 

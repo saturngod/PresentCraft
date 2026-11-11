@@ -31,6 +31,7 @@ mod titletools;
 mod themefile;
 mod update;
 mod video;
+mod webvideo;
 
 use eframe::egui;
 use egui::text::{CCursor, CCursorRange, LayoutJob, TextFormat};
@@ -538,6 +539,12 @@ pub struct App {
     /// From the command line: start presenting / play the first video.
     pending_present: bool,
     pending_play: bool,
+    /// Presenting: Escape was pressed inside the YouTube player.
+    present_stop: bool,
+    /// Presenting: start this slide's video by itself (auto play setting).
+    auto_play: bool,
+    /// Presenting: the YouTube player over the current slide, if open.
+    web_video: Option<webvideo::WebVideo>,
     /// Selected note in the presenter view.
     present_note: usize,
     /// Scroll the presenter view to the selected note.
@@ -673,6 +680,9 @@ impl App {
             video_slide: usize::MAX,
             pending_present: false,
             pending_play: false,
+            present_stop: false,
+            auto_play: false,
+            web_video: None,
             present_note: 0,
             note_scroll: false,
             talk_elapsed: 0.0,
@@ -1291,6 +1301,22 @@ impl App {
         Some(work)
     }
 
+    /// Shows YouTube's player over `rect` of the presenting window. False
+    /// when it can't be shown here.
+    fn open_web_video(&mut self, ctx: &egui::Context, src: &str, rect: Rect) -> bool {
+        if !rect.is_positive() {
+            return false;
+        }
+        self.web_video = webvideo::WebVideo::open(
+            ctx,
+            Self::PRESENT_TITLE,
+            src,
+            rect,
+            self.settings.video_controls,
+        );
+        self.web_video.is_some()
+    }
+
     /// Opens a slide's video in the system's video player.
     pub fn play_video(&mut self, src: &str) {
         let target: Option<std::ffi::OsString> = if images::is_web(src) {
@@ -1905,6 +1931,9 @@ impl App {
 
     fn stop_presenting(&mut self, ctx: &egui::Context) {
         self.images.stop_videos();
+        self.web_video = None;
+        self.video_slide = usize::MAX;
+        self.auto_play = false;
         if self.presenting && self.shot_path.is_none() && ctx.embed_viewports() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
         }
@@ -2093,6 +2122,10 @@ impl App {
                     &self.doc_name(),
                     &job.videos,
                     &job.texts,
+                    export::VideoOptions {
+                        autoplay: self.settings.video_autoplay,
+                        controls: self.settings.video_controls,
+                    },
                 )
                 .map_err(|e| e.to_string()),
             };
@@ -2219,7 +2252,7 @@ impl App {
     fn present_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         let mut next = 0;
-        let mut stop = false;
+        let mut stop = std::mem::take(&mut self.present_stop);
         ctx.input(|i| {
             for k in if self.settings.custom_keys {
                 vec![self.settings.key(self.settings.next_key)]
@@ -2265,8 +2298,11 @@ impl App {
         self.go(next);
         if self.current != self.video_slide {
             self.images.stop_videos();
+            self.web_video = None;
             self.video_slide = self.current;
+            self.auto_play = self.settings.video_autoplay;
         }
+        self.images.show_controls = self.settings.video_controls;
         if stop {
             self.stop_presenting(ctx);
             return;
@@ -2343,6 +2379,7 @@ impl App {
                     }
                 }
                 let mut play: Option<(String, Option<parse::Filter>)> = None;
+                let mut seek: Option<(String, f32)> = None;
                 for (k, vs) in videos.iter().enumerate() {
                     // Clicking a background still moves to the next slide.
                     if vs.background {
@@ -2356,8 +2393,68 @@ impl App {
                         .interact(r, egui::Id::unique(("present-video", k)), Sense::click())
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                     if v.clicked() {
-                        play = Some((vs.src.clone(), vs.filter));
+                        // The progress bar jumps; everything else plays or pauses.
+                        let hit = v
+                            .interact_pointer_pos()
+                            .filter(|_| {
+                                self.settings.video_controls && self.images.has_player(&vs.src)
+                            })
+                            .and_then(|p| images::control_hit(vs.rect, p));
+                        match hit {
+                            Some(images::ControlHit::Seek(f)) => seek = Some((vs.src.clone(), f)),
+                            _ => play = Some((vs.src.clone(), vs.filter)),
+                        }
                     }
+                }
+                if let Some((src, f)) = seek {
+                    self.images.seek_video(&src, f);
+                    ctx.request_repaint();
+                }
+                // Auto play: the slide's first video starts by itself. It
+                // stays quiet if it can't (no browser or player pops up).
+                if std::mem::take(&mut self.auto_play) && play.is_none() {
+                    if let Some(v) = videos.iter().find(|v| !v.background) {
+                        if images::youtube_id(&v.src).is_some() {
+                            self.open_web_video(ctx, &v.src, v.rect.intersect(rect));
+                        } else if !self.images.has_player(&v.src) {
+                            let _ = self.images.toggle_video(&v.src, v.filter);
+                        }
+                        ctx.request_repaint();
+                    }
+                }
+                // The YouTube player follows its video's place on the slide,
+                // and hands back the keys that belong to the slides.
+                let mut web_stop = false;
+                if let Some(web) = &mut self.web_video {
+                    let spot = videos
+                        .iter()
+                        .find(|v| v.src == web.src)
+                        .map(|v| v.rect.intersect(rect))
+                        .filter(|r| r.is_positive());
+                    let mut close = spot.is_none();
+                    if let Some(r) = spot {
+                        web.set_rect(r);
+                    }
+                    let mut step = 0;
+                    for e in web.take_events() {
+                        match e {
+                            webvideo::Event::Next => step = 1,
+                            webvideo::Event::Prev => step = -1,
+                            webvideo::Event::Close => close = true,
+                            webvideo::Event::Stop => web_stop = true,
+                        }
+                    }
+                    if close || web_stop {
+                        self.web_video = None;
+                    }
+                    if step != 0 {
+                        self.go(step);
+                        ctx.request_repaint();
+                    }
+                }
+                if web_stop {
+                    self.present_stop = true;
+                    ctx.request_repaint();
                 }
                 if ui.input(|i| i.key_pressed(Key::V)) || (self.pending_play && !videos.is_empty())
                 {
@@ -2369,8 +2466,22 @@ impl App {
                         .map(|v| (v.src.clone(), v.filter));
                 }
                 if let Some((src, filter)) = play {
-                    // Inline with ffmpeg; otherwise the system's player.
-                    if self.images.toggle_video(&src, filter).is_err() {
+                    if images::youtube_id(&src).is_some() {
+                        // YouTube's own player over the video; V closes it.
+                        if self.web_video.take().is_none() {
+                            let spot = videos
+                                .iter()
+                                .find(|v| v.src == src)
+                                .map(|v| v.rect.intersect(rect));
+                            let opened =
+                                spot.is_some_and(|r| self.open_web_video(ctx, &src, r));
+                            // No web view here: the browser plays it.
+                            if !opened {
+                                self.play_video(&src);
+                            }
+                        }
+                    } else if self.images.toggle_video(&src, filter).is_err() {
+                        // Inline with ffmpeg; otherwise the system's player.
                         self.play_video(&src);
                     }
                     ctx.request_repaint();

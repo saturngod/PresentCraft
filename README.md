@@ -70,6 +70,8 @@ cargo build --locked --release                                 # optimized build
 
 For video when running from source, install `ffmpeg` (`brew install ffmpeg`, `winget install ffmpeg`, or your Linux package manager).
 
+YouTube links (`![](https://www.youtube.com/watch?v=…)`) show the video's preview picture and, while presenting, play in YouTube's own player over the slide (the system's web view on macOS and Windows; on Linux they open in the browser). Settings → Presentation → Content has Auto play and Show controls for all videos.
+
 ## For AI agents
 
 The [`create-prcraft`](Skills/create-prcraft/SKILL.md) skill lets Claude Code, Codex and the Claude apps write `.prcraft` presentations. [`Skills/README.md`](Skills/README.md) shows how to install it. Its helper script needs only Python 3:

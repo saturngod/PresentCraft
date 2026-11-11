@@ -7,6 +7,9 @@
 //! installed, otherwise ffmpeg writes a WAV file that the system plays.
 //! Pausing stops both processes; resuming starts them again from the paused
 //! time. Without ffmpeg, callers fall back to the system's video player.
+//!
+//! YouTube videos don't come through here: they play in YouTube's own
+//! player (see `webvideo`).
 
 use crate::parse::Filter;
 use std::io::Read;
@@ -353,11 +356,21 @@ impl Player {
         looping: bool,
         muted: bool,
     ) -> Option<Player> {
-        tool("ffmpeg")?;
         let info = probe(path)?;
+        Self::begin(path.to_path_buf(), info, filter, looping, muted)
+    }
+
+    fn begin(
+        path: PathBuf,
+        info: Info,
+        filter: Option<Filter>,
+        looping: bool,
+        muted: bool,
+    ) -> Option<Player> {
+        tool("ffmpeg")?;
         let (w, h) = out_size(info.width, info.height);
         let mut p = Player {
-            path: path.to_path_buf(),
+            path,
             filter,
             info,
             size: [w, h],
@@ -411,6 +424,21 @@ impl Player {
             self.offset = self.position();
             self.playing = false;
             self.kill();
+        }
+    }
+
+    /// Jumps to `fraction` (0–1) of the video, keeping it playing or paused.
+    pub fn seek(&mut self, fraction: f32) {
+        if self.info.duration <= 0.0 {
+            return;
+        }
+        let was_playing = self.playing;
+        self.pause();
+        self.ended = false;
+        self.offset = (fraction.clamp(0.0, 1.0) * self.info.duration)
+            .min((self.info.duration - 0.5).max(0.0));
+        if was_playing {
+            let _ = self.resume();
         }
     }
 

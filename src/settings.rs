@@ -147,6 +147,10 @@ pub struct Settings {
     pub warn_empty: bool,
     pub wpm: u32,
     pub show_speaking_time: bool,
+    /// Videos start by themselves when their slide appears.
+    pub video_autoplay: bool,
+    /// Play button, time and progress bar over videos.
+    pub video_controls: bool,
     // Markdown
     pub bullet: usize,
     pub ordered_paren: bool,
@@ -190,6 +194,8 @@ impl Settings {
             warn_empty: crate::mechanics::WARN_EMPTY, // showEmptySlidesWarning = true
             wpm: crate::mechanics::SPEECH_WPM, // speechWordsPerMinute = 110
             show_speaking_time: crate::mechanics::SHOW_SPEAKING_TIME,
+            video_autoplay: crate::mechanics::VIDEO_AUTOPLAY,
+            video_controls: crate::mechanics::VIDEO_CONTROLS,
             bullet: 0,                // markdownListBullet = 0 (hyphen)
             ordered_paren: false,     // markdownOrderedListDelimiter = 0 (period)
             table_padded: true,       // markdownTableFormatting = 1 (padded)
@@ -295,6 +301,12 @@ impl Settings {
                 "show_speaking_time" => {
                     s.show_speaking_time = v.parse().unwrap_or(crate::mechanics::SHOW_SPEAKING_TIME)
                 }
+                "video_autoplay" => {
+                    s.video_autoplay = v.parse().unwrap_or(crate::mechanics::VIDEO_AUTOPLAY)
+                }
+                "video_controls" => {
+                    s.video_controls = v.parse().unwrap_or(crate::mechanics::VIDEO_CONTROLS)
+                }
                 "bullet" => s.bullet = (n as usize).min(2),
                 "ordered_paren" => s.ordered_paren = b,
                 "table_padded" => s.table_padded = b,
@@ -330,7 +342,7 @@ impl Settings {
             .replace('\n', "\\n")
             .replace('\t', "\\t");
         let out = format!(
-            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\ncheck_updates={}\nlast_update_check={}\nskipped_version={}\n",
+            "match_system={}\ndark={}\nnew_template={}\neditor_font={}\ntypography={}\nline_length={}\nfocus_slide={}\nfade_tasks={}\nstrike_tasks={}\nthree_returns={}\nsmart_quotes={}\nsmart_dashes={}\nresponsive={}\naspect={}\nfit_text={}\nfocus_note={}\ncustom_keys={}\nprev_key={}\nnext_key={}\nwarn_empty={}\nwpm={}\nshow_speaking_time={}\nbullet={}\nordered_paren={}\ntable_padded={}\nitalic_underscore={}\nbold_underscore={}\nsingle_return={}\nsmart_punct={}\nsidebar_width={}\ncheck_updates={}\nlast_update_check={}\nskipped_version={}\nvideo_autoplay={}\nvideo_controls={}\n",
             self.match_system,
             self.dark,
             t,
@@ -364,6 +376,8 @@ impl Settings {
             self.check_updates,
             self.last_update_check,
             self.skipped_version.replace(['\n', '\r'], ""),
+            self.video_autoplay,
+            self.video_controls,
         );
         let _ = std::fs::write(p, out);
     }
@@ -1214,6 +1228,24 @@ impl crate::App {
                 "Warn on empty slides with speaker notes",
                 None,
                 &mut s.warn_empty,
+            );
+        });
+        heading(ui, "Content");
+        card(ui, |ui| {
+            switch_row(
+                ui,
+                true,
+                "Auto play",
+                Some("Videos start when their slide appears."),
+                &mut s.video_autoplay,
+            );
+            row_div(ui);
+            switch_row(
+                ui,
+                true,
+                "Show controls",
+                Some("Play button, time and progress bar on videos."),
+                &mut s.video_controls,
             );
         });
         heading(ui, "Navigation");

@@ -15,3 +15,7 @@ pub const SMART_DASHES_INVALID: bool = true;
 pub const SINGLE_RETURN: bool = true;
 pub const FADE_TASKS: bool = true;
 pub const STRIKE_TASKS: bool = true;
+/// Videos wait for a click (or V) unless auto play is turned on.
+pub const VIDEO_AUTOPLAY: bool = false;
+/// Videos show their play button, time and progress bar.
+pub const VIDEO_CONTROLS: bool = true;

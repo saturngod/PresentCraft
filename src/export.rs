@@ -546,6 +546,15 @@ fn xml_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// How videos behave in an exported web page (the Content settings).
+#[derive(Clone, Copy, Debug)]
+pub struct VideoOptions {
+    /// Start when the slide appears.
+    pub autoplay: bool,
+    /// Show the player's own controls.
+    pub controls: bool,
+}
+
 /// A single web page: arrows/space/click to move, N for speaker notes.
 /// One web page: slide pictures, with real videos placed over their still
 /// frames. Videos are copied into a "<name>-media" folder next to the page.
@@ -556,6 +565,7 @@ pub fn write_html(
     title: &str,
     videos: &[Vec<ExportVideo>],
     texts: &[String],
+    options: VideoOptions,
 ) -> std::io::Result<()> {
     let stem = path
         .file_stem()
@@ -578,6 +588,8 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden}}\
 .frame{{position:relative;width:min(100vw,calc(100vh*{aspect:.5}));aspect-ratio:{aspect:.5};container-type:size}}\
 .frame img{{display:block;width:100%;height:100%}}\
 .frame video{{position:absolute;background:transparent}}\
+.frame .yt{{position:absolute;display:block;cursor:pointer}}\
+.frame .yt iframe{{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}}\
 .frame .t{{position:absolute;white-space:pre-wrap;pointer-events:none}}\
 #notes{{display:none;position:fixed;left:0;right:0;bottom:0;max-height:35vh;overflow:auto;background:rgba(20,20,20,.94);color:#eee;font:20px/1.5 -apple-system,Helvetica,sans-serif;padding:16px 28px;white-space:pre-wrap}}\
 #n{{position:fixed;right:12px;bottom:8px;color:#777;font:12px -apple-system,sans-serif}}\
@@ -587,6 +599,22 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden}}\
     for (k, img) in imgs.iter().enumerate() {
         let mut vids = String::new();
         for v in videos.get(k).map(|v| v.as_slice()).unwrap_or(&[]) {
+            // YouTube: a link over the still picture (it already shows the
+            // play button); the script turns it into the player.
+            if let Some(id) = v.url.as_deref().and_then(crate::images::youtube_id) {
+                let start = crate::images::youtube_start(v.url.as_deref().unwrap_or("")) as u32;
+                vids.push_str(&format!(
+                    "<a class=\"yt\" target=\"_blank\" rel=\"noopener\" href=\"{}\" data-yt=\"{id}\" data-start=\"{start}\"{} style=\"left:{:.4}%;top:{:.4}%;width:{:.4}%;height:{:.4}%;opacity:{:.3}\"></a>",
+                    xml_escape(&crate::images::youtube_watch_url(&id)),
+                    if v.background { " data-bg" } else { "" },
+                    v.x * 100.0,
+                    v.y * 100.0,
+                    v.w * 100.0,
+                    v.h * 100.0,
+                    v.opacity,
+                ));
+                continue;
+            }
             let src = if let Some(p) = &v.path {
                 let name = match copied.get(p) {
                     Some(n) => n.clone(),
@@ -615,7 +643,13 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden}}\
             };
             vids.push_str(&format!(
                 "<video src=\"{src}\" playsinline preload=\"metadata\" {} style=\"left:{:.4}%;top:{:.4}%;width:{:.4}%;height:{:.4}%;object-fit:{};object-position:{:.1}% {:.1}%;opacity:{:.3};filter:{}\"></video>",
-                if v.background { "muted loop data-bg" } else { "controls" },
+                if v.background {
+                    "muted loop data-bg"
+                } else if options.controls {
+                    "controls"
+                } else {
+                    ""
+                },
                 v.x * 100.0,
                 v.y * 100.0,
                 v.w * 100.0,
@@ -637,16 +671,24 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden}}\
     let notes_js: Vec<String> = notes.iter().map(|n| json_str(n)).collect();
     h.push_str(&format!(
         "<div id=\"notes\"></div><div id=\"n\"></div><script>\
-const notes=[{}];let i=0;const s=document.querySelectorAll('.slide');\
+const notes=[{}];const AUTO={},CTRL={};let i=0;const s=document.querySelectorAll('.slide');\
+const WEB=location.protocol.startsWith('http');\
+function yt(a,auto){{if(!WEB||a.firstChild)return;const bg='bg' in a.dataset,f=document.createElement('iframe');\
+f.src='https://www.youtube-nocookie.com/embed/'+a.dataset.yt+'?rel=0&playsinline=1&autoplay='+(auto||bg?1:0)+'&controls='+(CTRL&&!bg?1:0)+(bg?'&mute=1&loop=1&playlist='+a.dataset.yt:'&start='+a.dataset.start);\
+f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';if(bg)f.style.pointerEvents='none';a.appendChild(f)}}\
+function vplay(v){{v.play().catch(()=>{{}});if(!CTRL)v.onclick=()=>v.paused?v.play():v.pause()}}\
 function show(k){{i=Math.max(0,Math.min(s.length-1,k));s.forEach((e,j)=>e.classList.toggle('on',j==i));\
-document.querySelectorAll('video').forEach(v=>{{if(v.closest('.slide')!==s[i])v.pause();else if('bg' in v.dataset)v.play().catch(()=>{{}})}});\
-document.getElementById('notes').textContent=notes[i]||'';document.getElementById('n').textContent=(i+1)+' / '+s.length+'  ·  N notes'+(s[i].querySelector('video:not([data-bg])')?'  ·  V video':'')}}\
+document.querySelectorAll('video').forEach(v=>{{if(v.closest('.slide')!==s[i])v.pause();else if('bg' in v.dataset||AUTO)vplay(v)}});\
+document.querySelectorAll('.yt').forEach(a=>{{if(a.closest('.slide')!==s[i])a.textContent='';else if('bg' in a.dataset||AUTO)yt(a,true)}});\
+document.getElementById('notes').textContent=notes[i]||'';document.getElementById('n').textContent=(i+1)+' / '+s.length+'  ·  N notes'+(s[i].querySelector('video:not([data-bg]),.yt:not([data-bg])')?'  ·  V video':'')}}\
 document.addEventListener('keydown',e=>{{if(['ArrowRight','ArrowDown',' ','PageDown','Enter'].includes(e.key)){{e.preventDefault();show(i+1)}}\
 if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key))show(i-1);if(e.key=='Home')show(0);if(e.key=='End')show(s.length-1);\
-if(e.key=='v'||e.key=='V'){{const v=s[i].querySelector('video:not([data-bg])');if(v)v.paused?v.play():v.pause()}}\
+if(e.key=='v'||e.key=='V'){{const v=s[i].querySelector('video:not([data-bg])');if(v)v.paused?v.play():v.pause();const a=s[i].querySelector('.yt:not([data-bg])');if(a){{if(!WEB)window.open(a.href,'_blank');else if(a.firstChild)a.textContent='';else yt(a,true)}}}}\
 if(e.key=='n'||e.key=='N'){{const n=document.getElementById('notes');n.style.display=n.style.display=='block'?'none':'block'}}}});\
-document.addEventListener('click',e=>{{if(e.target.id!='notes'&&e.target.tagName!='VIDEO')show(i+1)}});show(0);</script></body></html>\n",
-        notes_js.join(",")
+document.addEventListener('click',e=>{{const a=e.target.closest('.yt');if(a){{if(WEB){{e.preventDefault();yt(a,true)}}return}}if(e.target.id!='notes'&&e.target.tagName!='VIDEO')show(i+1)}});show(0);</script></body></html>\n",
+        notes_js.join(","),
+        options.autoplay,
+        options.controls
     ));
     std::fs::write(path, h)
 }
@@ -1087,10 +1129,31 @@ mod tests {
             &imgs,
             &["a \"b\"".into(), "c".into()],
             "T",
+            &[vec![ExportVideo {
+                x: 0.1,
+                y: 0.1,
+                w: 0.8,
+                h: 0.8,
+                path: None,
+                url: Some("https://youtu.be/Eu4vnYbKvCI?t=1m5s".into()),
+                background: false,
+                contain: true,
+                align: [0.5, 0.5],
+                filter: None,
+                opacity: 1.0,
+            }]],
             &[],
-            &[],
+            VideoOptions {
+                autoplay: true,
+                controls: false,
+            },
         )
         .unwrap();
+        let html = std::fs::read_to_string(dir.join("t.html")).unwrap();
+        assert!(html.contains("data-yt=\"Eu4vnYbKvCI\" data-start=\"65\""));
+        assert!(html.contains("href=\"https://www.youtube.com/watch?v=Eu4vnYbKvCI\""));
+        assert!(html.contains("const AUTO=true,CTRL=false;"));
+        assert!(!html.contains("<video"));
         write_images(&dir, &imgs).unwrap();
         assert!(std::fs::read(dir.join("t.pdf"))
             .unwrap()
