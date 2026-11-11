@@ -1000,6 +1000,14 @@ impl App {
         self.reparse();
     }
 
+    /// True for a picture or video the built-in sample names but does not
+    /// ship, while that sample has never been saved or replaced.
+    pub fn sample_media(&self, src: &str) -> bool {
+        self.path.is_none()
+            && self.import_name.is_none()
+            && SAMPLE.lines().any(|l| l.trim() == src)
+    }
+
     /// Opens a document macOS or another window asked for: here when this
     /// window holds an untouched new document, otherwise in a new window.
     pub fn open_requested(&mut self, p: PathBuf) {

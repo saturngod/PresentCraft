@@ -148,16 +148,28 @@ impl App {
         let start_ch = char_of_line(&lines, block.head);
         let r = galley.pos_from_cursor(CCursor::new(start_ch));
         let clip = ui.clip_rect();
-        // Above the heading; below it when there is no room, so the bar
-        // never covers the title being edited.
+        // Above the heading. When there is no room there, beside it at the
+        // right edge of the column, so the bar never covers the title or the
+        // lines under it; below only when the heading is too long for that.
+        const BAR_W: f32 = 322.0;
         let above = galley_pos.y + r.top() - 50.0;
-        let y = if above < clip.top() + 6.0 {
-            galley_pos.y + r.bottom() + 6.0
-        } else {
+        let mut left = galley_pos.x - 14.0;
+        let y = if above >= clip.top() + 6.0 {
             above
+        } else {
+            let head_end = start_ch + lines[block.head].chars().count();
+            let e = galley.pos_from_cursor(CCursor::new(head_end));
+            let beside = galley_pos.x + galley.job.wrap.max_width + 14.0 - BAR_W;
+            let one_row = (e.top() - r.top()).abs() < 1.0;
+            if one_row && galley_pos.x + e.right() + 24.0 <= beside {
+                left = beside;
+                (galley_pos.y + r.center().y - 22.0).max(clip.top() + 6.0)
+            } else {
+                galley_pos.y + r.bottom() + 6.0
+            }
         }
         .min(clip.bottom() - 50.0);
-        let bar = Rect::from_min_size(pos2(galley_pos.x - 14.0, y), vec2(322.0, 44.0));
+        let bar = Rect::from_min_size(pos2(left, y), vec2(BAR_W, 44.0));
         let accent = slide_color(self.current);
         let x = block.x(&lines);
         let yv = block.y(&lines);

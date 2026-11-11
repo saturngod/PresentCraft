@@ -77,7 +77,7 @@ fn job(parts: &[(&str, Color32, bool, bool, bool)]) -> LayoutJob {
         if *mark {
             if crate::settings::is_dark() {
                 tf.background = Color32::from_rgb(0x8A, 0x7A, 0x10);
-                tf.underline = Stroke::new(1.0_f32, Color32::from_rgb(0xF5, 0xD0, 0x30));
+                tf.color = Color32::WHITE;
             } else {
                 tf.background = Color32::from_rgb(0xFB, 0xE7, 0x7E);
                 tf.color = crate::settings::pal().text_hi;
@@ -439,7 +439,7 @@ impl App {
         } else {
             pal.control
         };
-        ui.painter().rect_filled(rect, rect.height() / 2.0, fill);
+        ui.painter().rect_filled(rect, 10.0, fill);
         let t = Rect::from_min_size(
             pos2(rect.left() + 14.0, rect.center().y - thumb.y / 2.0),
             thumb,
@@ -696,17 +696,11 @@ impl App {
         let (top, _) = ui.allocate_exact_size(vec2(ui.available_width(), 52.0), Sense::hover());
         let cy = top.center().y;
         // segmented control
-        let seg = Rect::from_min_size(pos2(top.left(), cy - 16.0), vec2(168.0, 32.0));
+        let seg = Rect::from_min_size(pos2(top.left(), cy - 16.0), vec2(172.0, 32.0));
         ui.painter()
             .rect_filled(seg, 16.0, crate::settings::pal().control);
-        let widths: Vec<f32> = if self.tab == Tab::Share {
-            vec![54.0, 54.0, 56.0]
-        } else {
-            [Tab::Format, Tab::Media, Tab::Design]
-                .iter()
-                .map(|t| if *t == self.tab { 80.0 } else { 42.0 })
-                .collect()
-        };
+        // Equal slots, so a tab stays where it is whichever one is selected.
+        let widths = [56.0_f32; 3];
         let mut x = seg.left() + 2.0;
         for (k, t) in [Tab::Format, Tab::Media, Tab::Design]
             .into_iter()
@@ -768,7 +762,7 @@ impl App {
             }
         }
         // Share
-        let share_r = Rect::from_min_size(pos2(seg.right() + 6.0, cy - 16.0), vec2(62.0, 32.0));
+        let share_r = Rect::from_min_size(pos2(seg.right() + 4.0, cy - 16.0), vec2(58.0, 32.0));
         let resp = ui
             .interact(share_r, ui.scope_id().with("share"), Sense::click())
             .on_hover_text("Export as PDF, PowerPoint, pictures, web page or Markdown");
@@ -1169,7 +1163,7 @@ impl App {
     fn pictures_tab(&mut self, ui: &mut egui::Ui) {
         self.media_library(ui);
         divider(ui);
-        if section(ui, "Media Settings") {
+        if section(ui, "Media Options") {
             for (k, v) in [
                 ("size:", "cover · contain"),
                 ("x:", "left · center · right"),
@@ -1571,8 +1565,11 @@ impl App {
         painter
             .with_clip_rect(clip)
             .galley(pos2(tx, row.top() + 16.0), name_galley, pal.text_hi);
+        // The built-in sample names pictures it does not ship; that is not an error.
+        let placeholder = it.place == Place::Missing && self.sample_media(&it.src);
         let mut sub = match it.place {
             Place::Web => "Web address".to_string(),
+            Place::Missing if placeholder => "Placeholder".to_string(),
             Place::Missing => "Missing file".to_string(),
             Place::Outside => "Not in package".to_string(),
             Place::Package => String::new(),
@@ -1604,7 +1601,7 @@ impl App {
             egui::Align2::LEFT_TOP,
             sub,
             FontId::proportional(12.5),
-            if it.place == Place::Missing {
+            if it.place == Place::Missing && !placeholder {
                 Color32::from_rgb(0xD9, 0x48, 0x3B)
             } else {
                 pal.text_dim
@@ -1886,10 +1883,16 @@ impl App {
             FontId::proportional(12.0),
             crate::settings::pal().text_dim,
         );
-        if c > 0 && icon_button(ui, prev_r, Icon::ChevronLeft, "Previous slide").clicked() {
+        // At either end the arrow stays in place, dimmed, instead of vanishing.
+        let off = crate::settings::pal().icon.gamma_multiply(0.35);
+        if c == 0 {
+            paint_icon(ui.painter(), prev_r, Icon::ChevronLeft, off);
+        } else if icon_button(ui, prev_r, Icon::ChevronLeft, "Previous slide").clicked() {
             self.select_slide(c - 1);
         }
-        if c + 1 < n && icon_button(ui, next_r, Icon::ChevronRight, "Next slide").clicked() {
+        if c + 1 >= n {
+            paint_icon(ui.painter(), next_r, Icon::ChevronRight, off);
+        } else if icon_button(ui, next_r, Icon::ChevronRight, "Next slide").clicked() {
             self.select_slide(c + 1);
         }
         divider(ui);
