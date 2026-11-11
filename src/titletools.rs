@@ -186,7 +186,7 @@ impl App {
                 let c = |dx: f32| pos2(bar.left() + dx, cy);
                 for (dx, a, id, tip) in [
                     (25.0, Align::Left, "tt-left", "Align the title left"),
-                    (69.0, Align::Center, "tt-center", "Centre the title"),
+                    (69.0, Align::Center, "tt-center", "Center the title"),
                     (113.0, Align::Right, "tt-right", "Align the title right"),
                 ] {
                     let (resp, col) = round_button(ui, &p, c(dx), id, tip, x == a, accent);

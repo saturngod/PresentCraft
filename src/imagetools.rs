@@ -154,10 +154,27 @@ impl App {
         let start_ch = char_of_line(&lines, block.src);
         let r = galley.pos_from_cursor(CCursor::new(start_ch));
         let clip = ui.clip_rect();
-        let y = (galley_pos.y + r.top() - 50.0)
-            .max(clip.top() + 6.0)
-            .min(clip.bottom() - 50.0);
-        let bar = Rect::from_min_size(pos2(galley_pos.x - 14.0, y), vec2(234.0, 44.0));
+        // Above the picture line. When there is no room there, beside it at
+        // the right edge of the column, so the bar does not cover the path.
+        const BAR_W: f32 = 234.0;
+        let above = galley_pos.y + r.top() - 50.0;
+        let mut left = galley_pos.x - 14.0;
+        if above < clip.top() + 6.0 {
+            let end_ch = start_ch + lines[block.src].chars().count();
+            let e = galley.pos_from_cursor(CCursor::new(end_ch));
+            let beside = galley_pos.x + galley.job.wrap.max_width + 14.0 - BAR_W;
+            if (e.top() - r.top()).abs() < 1.0 && galley_pos.x + e.right() + 24.0 <= beside {
+                left = beside;
+            }
+        }
+        let y = if left > galley_pos.x {
+            galley_pos.y + r.center().y - 22.0
+        } else {
+            above
+        }
+        .max(clip.top() + 6.0)
+        .min(clip.bottom() - 50.0);
+        let bar = Rect::from_min_size(pos2(left, y), vec2(BAR_W, 44.0));
         let accent = slide_color(self.current);
         let contain = block
             .get(&lines, "size")
@@ -243,15 +260,17 @@ impl App {
                 if r4.clicked() && !background {
                     act = Some(("background", Some("true".into())));
                 }
+                // Size and placement are the bar's own buttons; the menu holds
+                // only what the bar cannot do.
+                let named = |name: &str, value: &Option<String>| match value {
+                    Some(v) => {
+                        let mut c = v.chars();
+                        let first = c.next().map(|f| f.to_uppercase().collect::<String>());
+                        format!("✓  {name}: {}{}", first.unwrap_or_default(), c.as_str())
+                    }
+                    None => name.to_string(),
+                };
                 more_button(ui, &p, c(209.0), "image-more", |ui| {
-                    heading(ui, "Size");
-                    if check(ui, !contain, "Cover — Default") {
-                        act = Some(("size", None));
-                    }
-                    if check(ui, contain, "Contain") {
-                        act = Some(("size", Some("contain".into())));
-                    }
-                    ui.separator();
                     heading(ui, "Horizontal Alignment");
                     for (v, name) in [
                         ("center", "Center — Default"),
@@ -274,18 +293,10 @@ impl App {
                         }
                     }
                     ui.separator();
-                    heading(ui, "Order");
-                    if check(ui, !background, "Content — Default") {
-                        act = Some(("background", None));
-                    }
-                    if check(ui, background, "Background") {
-                        act = Some(("background", Some("true".into())));
-                    }
-                    ui.separator();
                     heading(ui, "Style");
                     submenu(
                         ui,
-                        format!("{}Filter", if filter.is_some() { "✓  " } else { "     " }),
+                        named("Filter", &filter),
                         |ui| {
                             if check(ui, filter.is_none(), "None") {
                                 act = Some(("filter", None));
@@ -305,7 +316,7 @@ impl App {
                     );
                     submenu(
                         ui,
-                        format!("{}Opacity", if opacity.is_some() { "✓  " } else { "     " }),
+                        named("Opacity", &opacity),
                         |ui| {
                             for pct in [100, 80, 60, 40, 20] {
                                 let v = format!("{pct}%");
@@ -319,8 +330,6 @@ impl App {
                             }
                         },
                     );
-                    ui.separator();
-                    heading(ui, "Description");
                     if check(ui, caption, "Caption") {
                         act = Some((
                             "title",

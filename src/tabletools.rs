@@ -1,7 +1,8 @@
 //! Floating toolbar over the table under the cursor:
-//! [table] [chart] [•••]. The ••• menu changes chart type, caption, axis
-//! labels and colours, reformats/transposes the table, or opens it in the
-//! spreadsheet-style table editor. The data rows are
+//! [table] [lines] [bars] [pie] | [edit] | [•••]. The bar picks how the data
+//! is shown and opens the spreadsheet-style table editor; the ••• menu holds
+//! chart variants, caption, legend, colours and axis labels, and
+//! reformats/transposes the table. The data rows are
 //! never changed by a type switch — only the `Chart:` line is rewritten.
 
 use crate::parse::{ChartKind, ColorType};
@@ -99,7 +100,13 @@ pub(crate) fn submenu<R>(
 
 /// A menu choice with an optional tick; closes the menu when clicked.
 pub(crate) fn check(ui: &mut egui::Ui, on: bool, text: &str) -> bool {
-    let w = ui.available_width().max(200.0);
+    // While egui measures a new menu the available width is the whole
+    // window; taking it there would make the menu that wide.
+    let w = if ui.is_sizing_pass() {
+        200.0
+    } else {
+        ui.available_width().max(200.0)
+    };
     let (rect, resp) = ui.allocate_exact_size(vec2(w, MENU_ROW_H), Sense::click());
     let pal = crate::settings::pal();
     if resp.hovered() {
@@ -345,21 +352,153 @@ fn chart_icon(p: &egui::Painter, c: Pos2, col: Color32) {
     );
 }
 
+/// A rising line (SF Symbols "chart.xyaxis.line").
+fn line_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.add(egui::Shape::line(
+        vec![
+            c + vec2(-8.0, 5.0),
+            c + vec2(-3.0, -1.0),
+            c + vec2(1.5, 3.0),
+            c + vec2(8.0, -6.0),
+        ],
+        Stroke::new(1.7_f32, col),
+    ));
+}
+
+/// A circle with one slice cut out (SF Symbols "chart.pie").
+fn pie_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    let s = Stroke::new(1.6_f32, col);
+    p.circle_stroke(c, 8.0, s);
+    p.line_segment([c, c + vec2(0.0, -8.0)], s);
+    p.line_segment([c, c + vec2(8.0, 0.0)], s);
+}
+
+/// A sheet with a pencil across its corner (SF Symbols "square.and.pencil").
+fn edit_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    p.add(egui::Shape::line(
+        vec![
+            c + vec2(0.5, -6.5),
+            c + vec2(-7.5, -6.5),
+            c + vec2(-7.5, 7.5),
+            c + vec2(6.5, 7.5),
+            c + vec2(6.5, -0.5),
+        ],
+        Stroke::new(1.6_f32, col),
+    ));
+    p.line_segment(
+        [c + vec2(-1.0, 1.0), c + vec2(8.0, -8.0)],
+        Stroke::new(2.0_f32, col),
+    );
+}
+
+/// Whether the axis-labels popup is open (kept in egui's temporary memory).
+fn axis_popup_id() -> egui::Id {
+    egui::Id::unique("table-axis-labels")
+}
+
+/// A small popup under the bar with the chart's two axis labels. Typing in a
+/// submenu is fragile (it closes when the pointer drifts), so these live here.
+fn axis_labels_popup(
+    ctx: &egui::Context,
+    bar: Rect,
+    block: &crate::tableblock::TableBlock,
+    lines: &[String],
+    has_axes: bool,
+    act: &mut Option<Act>,
+) {
+    let id = axis_popup_id();
+    if !ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
+        return;
+    }
+    let focus = ctx.data_mut(|d| d.remove_temp::<bool>(id.with("focus")).unwrap_or(false));
+    let mut close = !has_axes || ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    let area = egui::Area::new(id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(bar.left_bottom() + vec2(0.0, 6.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                for (k, (label, key, shown)) in
+                    [("X Axis", "xlabel", "xLabel"), ("Y Axis", "ylabel", "yLabel")]
+                        .into_iter()
+                        .enumerate()
+                {
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            [48.0, 24.0],
+                            egui::Label::new(
+                                RichText::new(label).color(crate::settings::pal().text_dim),
+                            ),
+                        );
+                        let mut v = block.get(lines, key).unwrap_or_default();
+                        let resp = ui.add(
+                            egui::TextEdit::singleline(&mut v)
+                                .desired_width(190.0)
+                                .hint_text("None"),
+                        );
+                        if k == 0 && focus {
+                            resp.request_focus();
+                        }
+                        if resp.changed() {
+                            *act = Some(Act::Meta(
+                                key,
+                                shown,
+                                Some(v).filter(|s| !s.trim().is_empty()),
+                            ));
+                        }
+                        if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            close = true;
+                        }
+                    });
+                }
+            });
+        });
+    if close || area.response.clicked_elsewhere() {
+        ctx.data_mut(|d| d.remove::<bool>(id));
+    }
+}
+
 impl App {
     pub fn table_toolbar(&mut self, ui: &mut egui::Ui, galley: &Galley, galley_pos: Pos2) {
         let lines = lines_of(&self.text);
         let cur_line = line_of_char(&self.text, self.cursor);
         let Some(block) = find(&lines, cur_line) else {
+            ui.ctx().data_mut(|d| d.remove::<bool>(axis_popup_id()));
             return;
         };
         let start_ch = char_of_line(&lines, block.start);
         let r = galley.pos_from_cursor(CCursor::new(start_ch));
         let clip = ui.clip_rect();
-        let y = (galley_pos.y + r.top() - 50.0)
-            .max(clip.top() + 6.0)
-            .min(clip.bottom() - 50.0);
-        let bar = Rect::from_min_size(pos2(galley_pos.x - 14.0, y), vec2(142.0, 44.0));
+        // Above the table. When there is no room there, beside its first
+        // line at the right edge of the column, so the bar does not cover it.
+        const BAR_W: f32 = 278.0;
+        let above = galley_pos.y + r.top() - 50.0;
+        let mut left = galley_pos.x - 14.0;
+        if above < clip.top() + 6.0 {
+            let end_ch = start_ch + lines[block.start].chars().count();
+            let e = galley.pos_from_cursor(CCursor::new(end_ch));
+            let beside = galley_pos.x + galley.job.wrap.max_width + 14.0 - BAR_W;
+            if (e.top() - r.top()).abs() < 1.0 && galley_pos.x + e.right() + 24.0 <= beside {
+                left = beside;
+            }
+        }
+        let y = if left > galley_pos.x {
+            galley_pos.y + r.center().y - 22.0
+        } else {
+            above
+        }
+        .max(clip.top() + 6.0)
+        .min(clip.bottom() - 50.0);
+        let bar = Rect::from_min_size(pos2(left, y), vec2(BAR_W, 44.0));
         let chart = block.chart(&lines);
+        let kind = chart.map(|c| c.0);
+        let lines_on = matches!(
+            kind,
+            Some(ChartKind::Line | ChartKind::Spline | ChartKind::Area | ChartKind::Step)
+        );
+        let bars_on = kind == Some(ChartKind::Bar);
+        let pie_on = matches!(kind, Some(ChartKind::Pie | ChartKind::Donut));
+        // Pie, donut, radar and gauge charts have no x and y axes to label.
+        let has_axes = lines_on || bars_on || kind == Some(ChartKind::Bubble);
         let accent = slide_color(self.current);
         // Keep the overlay above TextEdit for both painting and hit testing.
         // Sharing the editor layer lets its cursor handling consume toolbar clicks.
@@ -372,41 +511,53 @@ impl App {
                 ui.set_min_size(bar.size());
                 let p = ui.painter().clone();
                 paint_bar(&p, bar);
-                let c_table = pos2(bar.left() + 25.0, bar.center().y);
-                let c_chart = pos2(bar.left() + 69.0, bar.center().y);
-                let c_more = pos2(bar.left() + 117.0, bar.center().y);
-                bar_divider(&p, bar, 93.0);
+                let cy = bar.center().y;
+                let c = |dx: f32| pos2(bar.left() + dx, cy);
+                let c_more = c(253.0);
                 let (t_resp, t_col) = round_button(
                     ui,
                     &p,
-                    c_table,
+                    c(25.0),
                     "tt-table",
                     "Show as table",
                     chart.is_none(),
                     accent,
                 );
-                let (c_resp, c_col) = round_button(
-                    ui,
-                    &p,
-                    c_chart,
-                    "tt-chart",
-                    "Show as chart",
-                    chart.is_some(),
-                    accent,
-                );
-                table_icon(&p, c_table, t_col);
-                chart_icon(&p, c_chart, c_col);
+                table_icon(&p, c(25.0), t_col);
                 if t_resp.clicked() && chart.is_some() {
                     act = Some(Act::Chart(None));
                 }
-                if c_resp.clicked() && chart.is_none() {
-                    act = Some(Act::Chart(Some((ChartKind::Bar, false, false))));
+                type Icon = fn(&egui::Painter, Pos2, Color32);
+                let kinds: [(f32, &str, &str, bool, ChartKind, Icon); 3] = [
+                    (69.0, "tt-lines", "Show as line chart", lines_on, ChartKind::Line, line_icon),
+                    (113.0, "tt-chart", "Show as bar chart", bars_on, ChartKind::Bar, chart_icon),
+                    (157.0, "tt-pie", "Show as pie chart", pie_on, ChartKind::Pie, pie_icon),
+                ];
+                for (dx, id, tip, on, k, icon) in kinds {
+                    let (resp, col) = round_button(ui, &p, c(dx), id, tip, on, accent);
+                    icon(&p, c(dx), col);
+                    if resp.clicked() && !on {
+                        act = Some(Act::Chart(Some((k, false, false))));
+                    }
                 }
+                bar_divider(&p, bar, 181.0);
+                let (e_resp, e_col) = round_button(
+                    ui,
+                    &p,
+                    c(205.0),
+                    "tt-edit",
+                    "Edit in the table editor",
+                    false,
+                    accent,
+                );
+                edit_icon(&p, c(205.0), e_col);
+                if e_resp.clicked() {
+                    act = Some(Act::EditTable);
+                }
+                bar_divider(&p, bar, 229.0);
 
                 // ••• menu
                 let caption_on = block.get(&lines, "[caption]").is_some();
-                let x_label = block.get(&lines, "xlabel").unwrap_or_default();
-                let y_label = block.get(&lines, "ylabel").unwrap_or_default();
                 let colors = block.get(&lines, "colors");
                 let color_type = block
                     .get(&lines, "color-type")
@@ -422,27 +573,13 @@ impl App {
                     })
                     .unwrap_or(false);
                 more_button(ui, &p, c_more, "table-more", |ui| {
-                    heading(ui, "Type");
-                    if check(ui, chart.is_none(), "Table") {
-                        act = Some(Act::Chart(None));
-                    }
-                    let is = |k: ChartKind| chart.map(|c| c.0 == k).unwrap_or(false);
-                    let lines_on = chart
-                        .map(|c| {
-                            matches!(
-                                c.0,
-                                ChartKind::Line
-                                    | ChartKind::Spline
-                                    | ChartKind::Area
-                                    | ChartKind::Step
-                            )
-                        })
-                        .unwrap_or(false);
+                    heading(ui, "Chart");
+                    let is = |k: ChartKind| kind == Some(k);
                     submenu(
                         ui,
                         format!("{}Lines", if lines_on { "✓  " } else { "     " }),
                         |ui| {
-                            heading(ui, "Type");
+                            heading(ui, "Style");
                             let stacked = chart.map(|c| c.2).unwrap_or(false);
                             for (k, s, name) in [
                                 (ChartKind::Line, false, "Lines — Default"),
@@ -468,7 +605,7 @@ impl App {
                                 .filter(|c| c.0 == ChartKind::Bar)
                                 .map(|c| (c.1, c.2))
                                 .unwrap_or((false, false));
-                            heading(ui, "Type");
+                            heading(ui, "Style");
                             for (ss, name) in [(false, "Separated — Default"), (true, "Stacked")] {
                                 if check(ui, bar && s == ss, name) {
                                     act = Some(Act::Chart(Some((ChartKind::Bar, h, ss))));
@@ -496,7 +633,7 @@ impl App {
                             }
                         ),
                         |ui| {
-                            heading(ui, "Type");
+                            heading(ui, "Style");
                             for (k, name) in
                                 [(ChartKind::Pie, "Pie — Default"), (ChartKind::Donut, "Donut")]
                             {
@@ -510,7 +647,7 @@ impl App {
                     submenu(
                         ui,
                         format!(
-                            "{}More",
+                            "{}Other Charts",
                             if is(ChartKind::Radar) || is(ChartKind::Gauge) || is(ChartKind::Bubble)
                             {
                                 "✓  "
@@ -545,73 +682,43 @@ impl App {
                             },
                         ));
                     }
-                    ui.separator();
-                    heading(ui, "Axis");
-                    submenu(ui, "     X Axis", |ui| {
-                        ui.label("Label");
-                        let mut v = x_label.clone();
-                        if ui
-                            .add(
-                                egui::TextEdit::singleline(&mut v)
-                                    .desired_width(180.0)
-                                    .hint_text("None"),
-                            )
-                            .changed()
-                        {
-                            act = Some(Act::Meta(
-                                "xlabel",
-                                "xLabel",
-                                Some(v).filter(|s| !s.trim().is_empty()),
-                            ));
-                        }
-                    });
-                    submenu(ui, "     Y Axis", |ui| {
-                        ui.label("Label");
-                        let mut v = y_label.clone();
-                        if ui
-                            .add(
-                                egui::TextEdit::singleline(&mut v)
-                                    .desired_width(180.0)
-                                    .hint_text("None"),
-                            )
-                            .changed()
-                        {
-                            act = Some(Act::Meta(
-                                "ylabel",
-                                "yLabel",
-                                Some(v).filter(|s| !s.trim().is_empty()),
-                            ));
-                        }
-                    });
-                    submenu(ui, "     Custom Colors", |ui| {
-                        if check(ui, colors.is_none(), "Theme Colors") {
-                            act = Some(Act::Meta("colors", "Colors", None));
-                        }
-                        for (name, set) in COLOR_SETS {
-                            let on = colors.as_deref() == Some(set);
-                            let row_top = ui.cursor().top();
-                            if check(ui, on, name) {
-                                act = Some(Act::Meta("colors", "Colors", Some(set.to_string())));
+                    if chart.is_some() {
+                        submenu(ui, if colors.is_some() { "✓  Colors" } else { "Colors" }, |ui| {
+                            if check(ui, colors.is_none(), "Theme Colors") {
+                                act = Some(Act::Meta("colors", "Colors", None));
                             }
-                            // swatches drawn at the right end of the same row
-                            let row = egui::Rect::from_min_max(
-                                pos2(ui.min_rect().left(), row_top),
-                                pos2(ui.min_rect().right(), row_top + MENU_ROW_H),
-                            );
-                            let hexes: Vec<&str> = set.split(", ").collect();
-                            let mut x = row.right() - 10.0 - hexes.len() as f32 * 14.0;
-                            for hexs in hexes {
-                                let h = u32::from_str_radix(hexs.trim_start_matches('#'), 16)
-                                    .unwrap_or(0);
-                                let r = egui::Rect::from_min_size(
-                                    pos2(x, row.center().y - 5.0),
-                                    vec2(10.0, 10.0),
+                            for (name, set) in COLOR_SETS {
+                                let on = colors.as_deref() == Some(set);
+                                let row_top = ui.cursor().top();
+                                if check(ui, on, name) {
+                                    act = Some(Act::Meta("colors", "Colors", Some(set.to_string())));
+                                }
+                                // swatches drawn at the right end of the same row
+                                let row = egui::Rect::from_min_max(
+                                    pos2(ui.min_rect().left(), row_top),
+                                    pos2(ui.min_rect().right(), row_top + MENU_ROW_H),
                                 );
-                                ui.painter().rect_filled(r, 2.0, crate::theme::hex(h));
-                                x += 14.0;
+                                let hexes: Vec<&str> = set.split(", ").collect();
+                                let mut x = row.right() - 10.0 - hexes.len() as f32 * 14.0;
+                                for hexs in hexes {
+                                    let h = u32::from_str_radix(hexs.trim_start_matches('#'), 16)
+                                        .unwrap_or(0);
+                                    let r = egui::Rect::from_min_size(
+                                        pos2(x, row.center().y - 5.0),
+                                        vec2(10.0, 10.0),
+                                    );
+                                    ui.painter().rect_filled(r, 2.0, crate::theme::hex(h));
+                                    x += 14.0;
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+                    if has_axes && check(ui, false, "Axis Labels…") {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(axis_popup_id(), true);
+                            d.insert_temp(axis_popup_id().with("focus"), true);
+                        });
+                    }
                     ui.separator();
                     if check(ui, false, "Reformat Table") {
                         act = Some(Act::Reformat);
@@ -627,6 +734,7 @@ impl App {
                     }
                 });
             });
+        axis_labels_popup(ui.ctx(), bar, &block, &lines, has_axes, &mut act);
         let Some(a) = act else { return };
         let mut lines = lines;
         let mut block = block;

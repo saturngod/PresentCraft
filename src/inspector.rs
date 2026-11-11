@@ -187,6 +187,44 @@ fn divider(ui: &mut egui::Ui) {
     ui.add_space(2.0);
 }
 
+/// A marker pen leaning right over the stroke it has drawn (SF Symbols "highlighter").
+fn highlighter_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    // u runs along the pen towards its top-right end, v across it.
+    let at = |u: f32, v: f32| c + vec2(1.0, -1.5) + vec2(u + v, v - u) * 0.7071;
+    p.add(egui::Shape::closed_line(
+        vec![at(-1.5, -2.6), at(7.5, -2.6), at(7.5, 2.6), at(-1.5, 2.6)],
+        Stroke::new(1.4_f32, col),
+    ));
+    p.add(egui::Shape::convex_polygon(
+        vec![at(-1.5, -2.6), at(-1.5, 2.6), at(-5.5, 1.3), at(-5.5, -1.3)],
+        col,
+        Stroke::NONE,
+    ));
+    p.line_segment(
+        [c + vec2(-8.0, 7.0), c + vec2(3.0, 7.0)],
+        Stroke::new(1.8_f32, col),
+    );
+}
+
+/// Two chain links joined on the diagonal (SF Symbols "link").
+fn link_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    let at = |u: f32, v: f32| c + vec2(u + v, v - u) * 0.7071;
+    for u0 in [-3.2_f32, 3.2] {
+        // a capsule along u: two half circles of radius 2.8 joined by straight sides
+        let mut pts = Vec::new();
+        for side in [1.0_f32, -1.0] {
+            for k in 0..=8 {
+                let a = std::f32::consts::PI * (k as f32 / 8.0 - 0.5);
+                pts.push(at(
+                    u0 + side * (2.4 + 2.8 * a.cos()),
+                    side * 2.8 * a.sin(),
+                ));
+            }
+        }
+        p.add(egui::Shape::closed_line(pts, Stroke::new(1.5_f32, col)));
+    }
+}
+
 fn item_row(ui: &mut egui::Ui, it: &Item) -> bool {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let resp = resp.on_hover_text_at_pointer("Click to insert at the cursor");
@@ -196,13 +234,22 @@ fn item_row(ui: &mut egui::Ui, it: &Item) -> bool {
     } else if resp.hovered() {
         p.rect_filled(r, 6.0, crate::settings::pal().hover);
     }
-    p.text(
-        pos2(r.left() + 20.0, r.center().y),
-        egui::Align2::CENTER_CENTER,
-        it.icon,
-        FontId::new(12.5, crate::theme::family(false, true, false)),
-        crate::settings::pal().icon,
-    );
+    let ic = pos2(r.left() + 20.0, r.center().y);
+    let icon_col = crate::settings::pal().icon;
+    match it.icon {
+        // These two glyphs come out tiny and faint in the UI font, so draw them.
+        "✎" => highlighter_icon(p, ic, icon_col),
+        "∞" => link_icon(p, ic, icon_col),
+        t => {
+            p.text(
+                ic,
+                egui::Align2::CENTER_CENTER,
+                t,
+                FontId::new(12.5, crate::theme::family(false, true, false)),
+                icon_col,
+            );
+        }
+    }
     let g = ui.fonts_mut(|f| f.layout_job(it.label.clone()));
     p.galley(
         pos2(r.left() + 46.0, r.center().y - g.size().y / 2.0),
