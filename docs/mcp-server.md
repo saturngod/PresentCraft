@@ -27,6 +27,8 @@ For other clients, use the same command and arguments in their MCP configuration
 - Every change made through the server is one step in the undo list. `undo_ai_change` reverts the last one. It refuses if you have edited the presentation by hand since that change, so your own work is never lost.
 - `insert_table` adds a table, or draws it as any of the app's 10 chart types: bar, line, spline, area, step, pie, donut, radar, gauge and bubble. It also sets the chart options: horizontal, stacked, title, axis labels, caption, series colours (hex or theme accents), colour type (categorical, sequential, diverging) and legend.
 - `title_align` places a cover slide's title (a slide that starts with a `#` heading) and its subtitle: `x` is left, center or right and `y` is top, middle or bottom. It writes the `x:` and `y:` lines under the heading.
+- `insert_picture` also takes a YouTube address. The slide shows the video's preview picture, and the video plays while presenting. `settings_set` turns `video_autoplay` and `video_controls` on or off for all videos.
+- `theme_list` names every built-in theme (24) and the themes you have saved; `theme_apply` takes any of those names.
 - `slide_screenshot` returns a PNG of the window with that slide shown. `deck_check` reports empty slides, missing pictures, a missing logo, and text contrast under 4.5:1.
 
 ## Tools

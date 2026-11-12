@@ -727,6 +727,8 @@ impl App {
                     ("wpm", Json::Num(s.wpm as f64)),
                     ("show_speaking_time", Json::Bool(s.show_speaking_time)),
                     ("warn_empty", Json::Bool(s.warn_empty)),
+                    ("video_autoplay", Json::Bool(s.video_autoplay)),
+                    ("video_controls", Json::Bool(s.video_controls)),
                 ]))
             }
             "settings_set" => {
@@ -749,6 +751,8 @@ impl App {
                     "wpm" => s.wpm = value.parse().map_err(|_| "wpm takes a whole number.")?,
                     "show_speaking_time" => s.show_speaking_time = flag()?,
                     "warn_empty" => s.warn_empty = flag()?,
+                    "video_autoplay" => s.video_autoplay = flag()?,
+                    "video_controls" => s.video_controls = flag()?,
                     other => {
                         return Err(format!("{other} is not a preference settings_get lists."))
                     }

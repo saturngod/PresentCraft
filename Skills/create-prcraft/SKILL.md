@@ -64,7 +64,7 @@ PresentCraft splits the script into slides and decides what the audience sees. *
 | `# Title` … `#### Subheading` | Always visible on the slide |
 | A paragraph or list starting with a **tab** (`\t`) | Visible body text |
 | A paragraph, list or quote with no tab | Speaker notes only (not shown) |
-| A path or URL alone on a line: `/assets/photo.jpg`, `https://…/x.png` | Picture. A `.mp4`, `.mov` or `.m4v` path is a video |
+| A path or URL alone on a line: `/assets/photo.jpg`, `https://…/x.png` | Picture. A `.mp4`, `.mov` or `.m4v` path is a video, and so is a YouTube address (`https://www.youtube.com/watch?v=…`, `https://youtu.be/…`), which plays while presenting |
 | `![Caption](/assets/photo.jpg)` alone on a line | Picture with a caption |
 | A Markdown table | Visible table. A `[Caption]` line right after the table adds a caption |
 | `Chart: bar` right after a table | The table is drawn as a chart |

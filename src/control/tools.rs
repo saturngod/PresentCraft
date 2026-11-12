@@ -43,9 +43,9 @@ pub const TOOLS: &[Tool] = &[
     ("slide_duplicate", "Copy a slide to the position after it.", &[SLIDE], &["slide"]),
     ("slide_select", "Open a slide in the editor and show it.", &[SLIDE], &["slide"]),
     ("slide_screenshot", "A PNG of the window with this slide shown. Use it to check layout, contrast and overflow.", &[SLIDE], &["slide"]),
-    ("insert_picture", "Add a picture or video to a slide. A local file is copied into the presentation; /assets/… and web addresses are used as they are. Video files (.mp4, .mov, .m4v) play in exports.", &[
+    ("insert_picture", "Add a picture or video to a slide. A local file is copied into the presentation; /assets/… and web addresses are used as they are. Video files (.mp4, .mov, .m4v, .webm) play in exports. A YouTube address (youtube.com/watch?v=…, youtu.be/…) adds that video: the slide shows its preview picture and it plays while presenting.", &[
         SLIDE,
-        ("src", "string", "Local file path, /assets/… path, or https:// address."),
+        ("src", "string", "Local file path, /assets/… path, or https:// address, including a YouTube link."),
         ("caption", "string", "Caption under the picture."),
         ("size", "enum:fill|contain", "fill crops to the area; contain fits the whole picture."),
         ("x", "enum:left|center|right", "Horizontal position."),
@@ -117,7 +117,7 @@ pub const TOOLS: &[Tool] = &[
     ("media_remove", "Remove an unused picture or video from the presentation. Pass confirm: true.", &[("ref", "string", "/assets/… path."), CONFIRM], &["ref", "confirm"]),
     ("settings_get", "Editor and presentation preferences that the tools may change.", &[], &[]),
     ("settings_set", "Change one preference from settings_get.", &[
-        ("key", "enum:editor_font|smart_quotes|smart_dashes|single_return|fit_text|wpm|show_speaking_time|warn_empty", "Preference name."),
+        ("key", "enum:editor_font|smart_quotes|smart_dashes|single_return|fit_text|wpm|show_speaking_time|warn_empty|video_autoplay|video_controls", "Preference name."),
         ("value", "string", "true, false, or a number."),
     ], &["key", "value"]),
     ("present_start", "Start the full-screen presentation, optionally from a slide.", &[("slide", "integer", "Slide number to start from.")], &[]),
