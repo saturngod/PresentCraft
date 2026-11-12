@@ -48,6 +48,7 @@ pub const TOOLS: &[Tool] = &[
         ("src", "string", "Local file path, /assets/… path, or https:// address, including a YouTube link."),
         ("caption", "string", "Caption under the picture."),
         ("size", "enum:fill|contain", "fill crops to the area; contain fits the whole picture."),
+        ("scale", "number", "Percent of the picture's normal size, 25 to 200. Use it when a picture is too big or too small; the default is 100."),
         ("x", "enum:left|center|right", "Horizontal position."),
         ("y", "enum:top|center|bottom", "Vertical position."),
         ("background", "boolean", "Put the picture behind the slide text, full bleed."),

@@ -76,6 +76,7 @@ PresentCraft splits the script into slides and decides what the audience sees. *
 - **Fenced code blocks** and `$$ … $$` math blocks are supported. A code fence's contents are never treated as media.
 - **Picture options** go on the lines directly under the picture, one `key: value` per line:
   - `size: contain` fits the whole picture; the default fills the area.
+  - `scale: 25%` to `scale: 200%` makes the picture smaller or larger than its normal size (default `100%`).
   - `x: left|center|right`, `y: top|center|bottom`, or `position: top left`.
   - `background: true` puts the picture behind the slide text, full bleed.
   - `opacity: 40%`.

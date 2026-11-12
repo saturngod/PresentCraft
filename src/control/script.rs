@@ -549,6 +549,13 @@ pub fn picture_opts(a: &Json) -> Vec<(String, String)> {
     if let Some(size) = text_arg(a, "size") {
         opts.push(("size".to_string(), size));
     }
+    if let Some(s) = a.num("scale") {
+        let (lo, hi) = crate::parse::SCALE_RANGE;
+        let pct = (s.clamp(lo as f64 * 100.0, hi as f64 * 100.0)).round() as i64;
+        if pct != 100 {
+            opts.push(("scale".to_string(), format!("{pct}%")));
+        }
+    }
     if let Some(x) = text_arg(a, "x") {
         opts.push(("x".to_string(), x));
     }
@@ -698,6 +705,22 @@ mod tests {
             }
         )
         .is_err());
+    }
+
+    #[test]
+    fn picture_scale_argument() {
+        let opts = |json: &str| picture_opts(&Json::parse(json).unwrap());
+        let scale = |json: &str| {
+            opts(json)
+                .into_iter()
+                .find(|(k, _)| k == "scale")
+                .map(|(_, v)| v)
+        };
+        assert_eq!(scale(r#"{"scale": 50}"#).as_deref(), Some("50%"));
+        assert_eq!(scale(r#"{"scale": 5}"#).as_deref(), Some("25%"));
+        assert_eq!(scale(r#"{"scale": 900}"#).as_deref(), Some("200%"));
+        assert_eq!(scale(r#"{"scale": 100}"#), None);
+        assert_eq!(scale("{}"), None);
     }
 
     #[test]
