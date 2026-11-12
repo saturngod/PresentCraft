@@ -41,7 +41,7 @@ use egui::{pos2, vec2, Color32, FontId, Key, Modifiers, Rect, RichText, Sense, S
 use images::ImageCache;
 use parse::{parse_document, slide_at_char, Slide};
 use render::{draw_slide, Ctx, ASPECT};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use theme::{hex, Palette, Preset, Theme};
 
 const SLIDE_TEMPLATES: &[(&str, &[(&str, &str)])] = &[
@@ -716,7 +716,7 @@ impl App {
             frame: 0,
             shot_requested: false,
             scroll_thumb: false,
-            recent_files: Vec::new(),
+            recent_files: settings::load_recent(),
             import_name: None,
             import_dir: None,
             doc_info: None,
@@ -970,6 +970,22 @@ impl App {
         }
     }
 
+    /// Puts a document at the top of Open Recent and saves the list. The
+    /// list is read again first, since each window is its own process.
+    fn note_recent(&mut self, p: &Path) {
+        let p = std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
+        if self.shot_path.is_some() {
+            self.recent_files.retain(|recent| recent != &p);
+            self.recent_files.insert(0, p);
+            return;
+        }
+        self.recent_files = settings::load_recent();
+        self.recent_files.retain(|recent| recent != &p);
+        self.recent_files.insert(0, p);
+        self.recent_files.truncate(settings::RECENT_MAX);
+        settings::save_recent(&self.recent_files);
+    }
+
     pub fn open_path(&mut self, p: PathBuf) {
         let p = package::package_for(&p);
         let doc = match package::open(&p) {
@@ -1015,9 +1031,7 @@ impl App {
                 if n == 1 { "" } else { "s" }
             ),
         };
-        self.recent_files.retain(|recent| recent != &p);
-        self.recent_files.insert(0, p.clone());
-        self.recent_files.truncate(10);
+        self.note_recent(&p);
         if doc.kind == package::Kind::PrCraft {
             self.path = Some(p);
             self.import_name = None;
@@ -1287,9 +1301,7 @@ impl App {
                 if n == 1 { "" } else { "s" }
             ),
         };
-        self.recent_files.retain(|recent| recent != &p);
-        self.recent_files.insert(0, p.clone());
-        self.recent_files.truncate(10);
+        self.note_recent(&p);
         self.path = Some(p);
         self.import_name = None;
         self.import_dir = None;
@@ -3773,6 +3785,15 @@ impl eframe::App for App {
         #[cfg(target_os = "macos")]
         for p in macos_open::take_pending() {
             self.open_requested(p);
+        }
+        // Another window may have opened or saved a document since.
+        let focused = ctx.input(|i| {
+            i.events
+                .iter()
+                .any(|e| matches!(e, egui::Event::WindowFocused(true)))
+        });
+        if focused && self.shot_path.is_none() {
+            self.recent_files = settings::load_recent();
         }
         #[cfg(target_os = "macos")]
         {

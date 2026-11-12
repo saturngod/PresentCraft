@@ -173,6 +173,39 @@ pub struct Settings {
     pub skipped_version: String,
 }
 
+/// How many documents Open Recent keeps.
+pub const RECENT_MAX: usize = 10;
+
+fn recent_path() -> Option<PathBuf> {
+    Settings::app_dir().map(|d| d.join("recent.txt"))
+}
+
+/// The documents in Open Recent, newest first, one path per line on disk.
+/// Documents that are no longer there are left out.
+pub fn load_recent() -> Vec<PathBuf> {
+    let Some(text) = recent_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter(|l| !l.is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .take(RECENT_MAX)
+        .collect()
+}
+
+pub fn save_recent(recent: &[PathBuf]) {
+    let Some(p) = recent_path() else { return };
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let out: String = recent
+        .iter()
+        .map(|r| format!("{}\n", r.display()))
+        .collect();
+    let _ = std::fs::write(p, out);
+}
+
 impl Settings {
     pub fn defaults(sample: &str) -> Self {
         Settings {
