@@ -8,6 +8,7 @@ use egui::{pos2, vec2, Color32, Painter, Pos2, Rect, Stroke};
 /// Option keys that get an icon in the editor, lower case.
 pub const KEYS: &[&str] = &[
     "size",
+    "scale",
     "x",
     "y",
     "background",
@@ -86,6 +87,14 @@ pub fn paint(p: &Painter, key: &str, c: Pos2, s: f32, color: Color32) {
             line(pt(0.75, -0.75), pt(0.75, -0.2));
             line(pt(-0.75, 0.75), pt(-0.2, 0.75));
             line(pt(-0.75, 0.75), pt(-0.75, 0.2));
+        }
+        // scale: a small box growing towards the frame's corner
+        "scale" => {
+            outline(r(-0.85, -0.85, 0.85, 0.85), 0.15);
+            outline(r(-0.85, 0.0, 0.0, 0.85), 0.1);
+            line(pt(0.1, -0.1), pt(0.5, -0.5));
+            line(pt(0.5, -0.5), pt(0.15, -0.5));
+            line(pt(0.5, -0.5), pt(0.5, -0.15));
         }
         // picture: frame, sun, hill
         "background" => {

@@ -70,6 +70,8 @@ pub struct ImageSpec {
     pub opacity: f32,
     pub filter: Option<Filter>,
     pub caption: Option<String>,
+    /// Size relative to the default fit: 1 = as laid out, 0.25 to 2.
+    pub scale: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -328,6 +330,7 @@ fn key_value(line: &str) -> Option<(String, String)> {
 
 const IMAGE_KEYS: &[&str] = &[
     "size",
+    "scale",
     "x",
     "y",
     "background",
@@ -363,13 +366,33 @@ pub(crate) fn new_image(src: String, caption: Option<String>) -> ImageSpec {
         opacity: 1.0,
         filter: None,
         caption: caption.filter(|c| !c.is_empty()),
+        scale: 1.0,
     }
+}
+
+/// Smallest and largest picture scale.
+pub(crate) const SCALE_RANGE: (f32, f32) = (0.25, 2.0);
+
+/// `50%`, `150` or `1.5`: a picture scale, kept within `SCALE_RANGE`.
+pub(crate) fn parse_scale(v: &str) -> Option<f32> {
+    let num: String = v
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    let n = num.parse::<f32>().ok()?;
+    let s = if v.contains('%') || n > 4.0 { n / 100.0 } else { n };
+    Some(s.clamp(SCALE_RANGE.0, SCALE_RANGE.1))
 }
 
 fn apply_image_meta(img: &mut ImageSpec, key: &str, val: &str) {
     let v = val.to_ascii_lowercase();
     match key {
         "size" => img.contain = v.contains("contain"),
+        "scale" => {
+            if let Some(s) = parse_scale(&v) {
+                img.scale = s;
+            }
+        }
         "x" => {
             img.x = match v.as_str() {
                 "left" => 0.0,
@@ -988,5 +1011,20 @@ mod tests {
                 ChartColor::Rgb([0, 0, 0]),
             ]
         );
+    }
+
+    #[test]
+    fn picture_scale_option() {
+        assert_eq!(parse_scale("50%"), Some(0.5));
+        assert_eq!(parse_scale("150"), Some(1.5));
+        assert_eq!(parse_scale("1.25"), Some(1.25));
+        assert_eq!(parse_scale("10%"), Some(0.25));
+        assert_eq!(parse_scale("25%"), Some(0.25));
+        assert_eq!(parse_scale("900%"), Some(2.0));
+        assert_eq!(parse_scale("big"), None);
+        let mut img = new_image("/a.jpg".into(), None);
+        assert_eq!(img.scale, 1.0);
+        apply_image_meta(&mut img, "scale", "75%");
+        assert_eq!(img.scale, 0.75);
     }
 }

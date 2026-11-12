@@ -817,19 +817,44 @@ fn paint_texture(
     let tint = Color32::WHITE.gamma_multiply(alpha);
     let mut mesh = Mesh::with_texture(tex);
     let drawn;
+    let k = if spec.scale.is_finite() && spec.scale > 0.0 {
+        spec.scale
+    } else {
+        1.0
+    };
     if contain {
-        let s = (rect.width() / iw).min(rect.height() / ih);
+        // The whole picture at `k` times its fitted size; what a larger one
+        // pushes past the area is cut off.
+        let s = (rect.width() / iw).min(rect.height() / ih) * k;
         let (w, h) = (iw * s, ih * s);
         let x = rect.left() + (rect.width() - w) * spec.x;
         let y = rect.top() + (rect.height() - h) * spec.y;
-        drawn = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
+        let full = Rect::from_min_size(pos2(x, y), egui::vec2(w, h));
+        drawn = full.intersect(rect);
         mesh.add_rect_with_uv(
             drawn,
-            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            Rect::from_min_max(
+                pos2((drawn.left() - x) / w, (drawn.top() - y) / h),
+                pos2((drawn.right() - x) / w, (drawn.bottom() - y) / h),
+            ),
             tint,
         );
     } else {
-        let s = (rect.width() / iw).max(rect.height() / ih);
+        // Smaller: the filled area shrinks towards the alignment point.
+        // Larger: the picture zooms in within the same area.
+        let rect = if k < 1.0 {
+            let size = rect.size() * k;
+            Rect::from_min_size(
+                pos2(
+                    rect.left() + (rect.width() - size.x) * spec.x,
+                    rect.top() + (rect.height() - size.y) * spec.y,
+                ),
+                size,
+            )
+        } else {
+            rect
+        };
+        let s = (rect.width() / iw).max(rect.height() / ih) * k.max(1.0);
         let uw = (rect.width() / (iw * s)).min(1.0);
         let vh = (rect.height() / (ih * s)).min(1.0);
         let u0 = (1.0 - uw) * spec.x;

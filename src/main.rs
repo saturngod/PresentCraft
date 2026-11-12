@@ -1848,6 +1848,7 @@ fn speaking_seconds(text: &str) -> f32 {
                 let kl = k.trim().to_ascii_lowercase();
                 if [
                     "size",
+                    "scale",
                     "x",
                     "y",
                     "background",

@@ -1,7 +1,7 @@
 //! Floating toolbar over the picture under the cursor:
 //! [cover] [contain] | [on slide] [background] | [•••].
 //! It edits the option lines written under the picture (`size:`, `x:`, `y:`,
-//! `background:`, `filter:`, `opacity:`, `title:`); default values remove
+//! `scale:`, `background:`, `filter:`, `opacity:`, `title:`); default values remove
 //! their line so the script stays short.
 
 use crate::tableblock::{char_of_line, line_of_char, lines_of};
@@ -15,6 +15,7 @@ use egui::{pos2, vec2, Color32, Galley, Pos2, Rect, Stroke};
 
 const KEYS: &[&str] = &[
     "size",
+    "scale",
     "x",
     "y",
     "background",
@@ -188,6 +189,11 @@ impl App {
         let yv = block.get(&lines, "y").unwrap_or_else(|| "center".into());
         let filter = block.get(&lines, "filter");
         let opacity = block.get(&lines, "opacity");
+        let scale_pct = block
+            .get(&lines, "scale")
+            .and_then(|v| crate::parse::parse_scale(&v))
+            .map(|s| (s * 100.0).round() as i32)
+            .unwrap_or(100);
         let caption =
             block.get(&lines, "title").is_some() || block.get(&lines, "caption").is_some();
         let mut act: Option<(&'static str, Option<String>)> = None;
@@ -293,6 +299,25 @@ impl App {
                         }
                     }
                     ui.separator();
+                    heading(ui, "Size");
+                    let size_label = if scale_pct == 100 {
+                        "Scale".to_string()
+                    } else {
+                        format!("✓  Scale: {scale_pct}%")
+                    };
+                    submenu(ui, size_label, |ui| {
+                        for pct in [200, 150, 125, 100, 75, 50, 25] {
+                            let name = if pct == 100 {
+                                "100% — Default".to_string()
+                            } else {
+                                format!("{pct}%")
+                            };
+                            if check(ui, scale_pct == pct, &name) {
+                                act = Some(("scale", (pct != 100).then(|| format!("{pct}%"))));
+                            }
+                        }
+                    });
+                    ui.separator();
                     heading(ui, "Style");
                     submenu(
                         ui,
@@ -387,5 +412,16 @@ mod tests {
         b.set(&mut l, "size", None);
         assert_eq!(l.join("\n"), "/a.jpg\nx: right\n\nnotes");
         assert_eq!(b.get(&l, "x").as_deref(), Some("right"));
+    }
+
+    #[test]
+    fn scale_is_a_picture_option() {
+        let mut l = lines("/a.jpg\n\nnotes");
+        let mut b = find(&l, 0).unwrap();
+        b.set(&mut l, "scale", Some("50%"));
+        assert_eq!(l.join("\n"), "/a.jpg\nscale: 50%\n\nnotes");
+        assert_eq!(find(&l, 1).map(|b| b.src), Some(0));
+        b.set(&mut l, "scale", None);
+        assert_eq!(l.join("\n"), "/a.jpg\n\nnotes");
     }
 }
