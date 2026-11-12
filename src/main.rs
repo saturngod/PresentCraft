@@ -16,6 +16,8 @@ mod math;
 mod mechanics;
 mod optionicons;
 #[cfg(target_os = "macos")]
+mod macos_menu;
+#[cfg(target_os = "macos")]
 mod macos_open;
 mod package;
 mod parse;
@@ -594,6 +596,9 @@ pub struct App {
     next_auto_check: u64,
     /// The MCP control channel (File > MCP).
     pub control: control::Control,
+    /// The menu bar at the top of the screen.
+    #[cfg(target_os = "macos")]
+    mac_menu: Option<macos_menu::MacMenu>,
 }
 
 pub const SIZES: [(&str, f32); 4] = [
@@ -720,9 +725,18 @@ impl App {
             update_available: None,
             next_auto_check: 0,
             control: Default::default(),
+            #[cfg(target_os = "macos")]
+            mac_menu: None,
         };
         #[cfg(target_os = "macos")]
-        macos_open::set_context(&cc.egui_ctx);
+        {
+            macos_open::set_context(&cc.egui_ctx);
+            let templates: Vec<(&str, Vec<&str>)> = SLIDE_TEMPLATES
+                .iter()
+                .map(|(group, items)| (*group, items.iter().map(|(name, _)| *name).collect()))
+                .collect();
+            app.mac_menu = macos_menu::MacMenu::install(&cc.egui_ctx, &templates);
+        }
         app.apply_preset(default_theme);
         if let Some(f) = file {
             app.open_path(f);
@@ -1425,6 +1439,77 @@ impl App {
         self.after_edit(cursor, cursor);
     }
 
+    /// Saves a copy under a new name.
+    fn duplicate_doc(&mut self) {
+        let path = self.path.clone();
+        let dirty = self.dirty;
+        self.save(true);
+        if self.path == path {
+            self.dirty = dirty;
+        }
+    }
+
+    /// Carries out an item chosen from the macOS menu bar.
+    #[cfg(target_os = "macos")]
+    fn menu_action(&mut self, id: &str, ctx: &egui::Context) {
+        let (name, arg) = id.split_once(':').unwrap_or((id, ""));
+        match name {
+            "new" => self.new_doc(),
+            "open" | "import" => self.open_dialog(),
+            "recent" => {
+                let path = arg.parse().ok().and_then(|i: usize| self.recent_files.get(i));
+                if let Some(path) = path.cloned() {
+                    if self.confirm_replace() {
+                        self.open_path(path);
+                    }
+                }
+            }
+            "save" => self.save(false),
+            "save_as" => self.save(true),
+            "duplicate" => self.duplicate_doc(),
+            "revert" => {
+                if let Some(path) = self.path.clone() {
+                    if self.confirm_replace() {
+                        self.open_path(path);
+                    }
+                }
+            }
+            "export" => match arg {
+                "pdf" => self.start_export(export::Format::Pdf),
+                "pptx" => self.start_export(export::Format::PowerPoint),
+                "images" => self.start_export(export::Format::Images),
+                "html" => self.start_export(export::Format::Html),
+                _ => self.export_markdown(),
+            },
+            "mcp_start" => self.control_start(ctx),
+            "mcp_stop" => self.control_stop(),
+            // With the presentation in front, Close Window closes that.
+            "close" if self.presenting => self.stop_presenting(ctx),
+            "close" | "quit" => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            "blank" => self.insert_slide_template(""),
+            "template" => {
+                let content = arg.split_once(':').and_then(|(g, i)| {
+                    let (_, items) = SLIDE_TEMPLATES.get(g.parse::<usize>().ok()?)?;
+                    Some(items.get(i.parse::<usize>().ok()?)?.1)
+                });
+                if let Some(content) = content {
+                    self.insert_slide_template(content);
+                }
+            }
+            "sidebar" => self.show_sidebar = !self.show_sidebar,
+            "settings" => self.settings_open = !self.settings_open,
+            "updates" => self.check_for_updates(ctx, true),
+            "present" => {
+                if self.presenting {
+                    self.stop_presenting(ctx);
+                } else {
+                    self.start_presenting(ctx);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn menus(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let menu_btn = egui::Button::new(egui::RichText::new("   ").size(16.0))
             .frame(false)
@@ -1479,12 +1564,7 @@ impl App {
                 }
                 if ui.button("Duplicate…").clicked() {
                     ui.close();
-                    let path = self.path.clone();
-                    let dirty = self.dirty;
-                    self.save(true);
-                    if self.path == path {
-                        self.dirty = dirty;
-                    }
+                    self.duplicate_doc();
                 }
                 if ui
                     .add_enabled(self.path.is_some(), egui::Button::new("Revert to Saved…"))
@@ -3008,9 +3088,12 @@ impl App {
                     pos2(plus.right() + 6.0, top.center().y - 13.0),
                     vec2(30.0, 26.0),
                 );
-                let mut menu_ui = ui.new_child(egui::UiBuilder::new().max_rect(menu_rect));
-                menu_ui.style_mut().spacing.interact_size.y = 26.0;
-                self.menus(&mut menu_ui, ctx);
+                // macOS has these in the menu bar at the top of the screen.
+                if !IS_MAC {
+                    let mut menu_ui = ui.new_child(egui::UiBuilder::new().max_rect(menu_rect));
+                    menu_ui.style_mut().spacing.interact_size.y = 26.0;
+                    self.menus(&mut menu_ui, ctx);
+                }
                 let id = egui::Id::unique(EDITOR_ID);
                 if let Some((a, b)) = self.jump_to.take() {
                     let mut st = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
@@ -3689,6 +3772,22 @@ impl eframe::App for App {
         #[cfg(target_os = "macos")]
         for p in macos_open::take_pending() {
             self.open_requested(p);
+        }
+        #[cfg(target_os = "macos")]
+        {
+            for id in macos_menu::take_actions() {
+                self.menu_action(&id, ctx);
+            }
+            let state = macos_menu::State {
+                recent: self.recent_files.clone(),
+                has_path: self.path.is_some(),
+                sidebar_shown: self.show_sidebar,
+                presenting: self.presenting,
+                mcp_port: self.control.running.as_ref().map(|r| r.port),
+            };
+            if let Some(menu) = &mut self.mac_menu {
+                menu.sync(state);
+            }
         }
         // A newly picked system font: load it now, draw with it next frame.
         if fonts::begin_frame() {

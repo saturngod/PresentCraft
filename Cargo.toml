@@ -20,6 +20,10 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 wry = "0.57"
 
+# The menu bar at the top of the screen (see src/macos_menu.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "0.21", default-features = false }
+
 [profile.dev]
 opt-level = 1
 
