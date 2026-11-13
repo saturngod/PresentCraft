@@ -24,6 +24,7 @@ mod parse;
 mod presenter;
 mod render;
 mod settings;
+mod icons;
 mod syntax;
 mod tableblock;
 mod tableeditor;
@@ -249,6 +250,14 @@ pub fn kbd(mac: &str) -> String {
         }
     }
     out + &key
+}
+
+/// The name Open Recent shows for a document: its file name. The full
+/// path is listed beneath it.
+pub fn file_label(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
 }
 
 /// Dim, non-clickable text inside a menu, aligned with the item labels.
@@ -1557,12 +1566,15 @@ impl App {
                         menu_note(ui, "No recent documents");
                     }
                     for path in self.recent_files.clone() {
-                        if ui.button(path.display().to_string()).clicked() {
+                        let label = file_label(&path);
+                        if ui.button(label).clicked() {
                             ui.close();
                             if self.confirm_replace() {
-                                self.open_path(path);
+                                self.open_path(path.clone());
                             }
                         }
+                        // The full path sits under the name, readable but not clickable.
+                        menu_note(ui, &path.display().to_string());
                     }
                 });
                 ui.separator();
@@ -2900,9 +2912,12 @@ impl App {
         );
         let glass = pos2(field.left() + 15.0, y - 1.0);
         let st = Stroke::new(1.4_f32, pal.icon);
-        ui.painter().circle_stroke(glass, 5.0, st);
-        ui.painter()
-            .line_segment([glass + vec2(3.6, 3.6), glass + vec2(7.0, 7.0)], st);
+        let lens = glass + vec2(1.0, 1.0);
+        if !icons::paint(ui.painter(), "magnifyingglass", lens, 13.0, pal.icon) {
+            ui.painter().circle_stroke(glass, 5.0, st);
+            ui.painter()
+                .line_segment([glass + vec2(3.6, 3.6), glass + vec2(7.0, 7.0)], st);
+        }
 
         let count = if self.find.not_found {
             "Not found".to_string()
@@ -3187,7 +3202,7 @@ impl App {
                                     optionicons::paint(painter, key, c, size, *color);
                                 }
                             }
-                            if !changed {
+                            if !changed && !self.settings_open {
                                 self.table_toolbar(ui, &out.galley, out.galley_pos);
                                 self.image_toolbar(ui, &out.galley, out.galley_pos);
                                 self.title_toolbar(ui, &out.galley, out.galley_pos);
@@ -3296,9 +3311,11 @@ impl App {
                     );
                     let c = pos2(pill.left() + 17.0, pill.center().y);
                     let st = Stroke::new(1.3_f32, pal.icon);
-                    p.circle_stroke(c, 6.0, st);
-                    p.line_segment([c, c + vec2(0.0, -3.5)], st);
-                    p.line_segment([c, c + vec2(2.8, 0.0)], st);
+                    if !icons::paint(p, "clock", c, 12.5, pal.icon) {
+                        p.circle_stroke(c, 6.0, st);
+                        p.line_segment([c, c + vec2(0.0, -3.5)], st);
+                        p.line_segment([c, c + vec2(2.8, 0.0)], st);
+                    }
                     p.galley(
                         pos2(pill.left() + 30.0, pill.center().y - g.size().y / 2.0),
                         g,
@@ -3355,6 +3372,28 @@ pub enum Icon {
 pub fn paint_icon(p: &egui::Painter, r: Rect, icon: Icon, color: Color32) {
     let s = Stroke::new(1.6_f32, color);
     let c = r.center();
+    // The system's own symbol where there is one; the shapes below otherwise.
+    let (name, pt) = match icon {
+        Icon::Sidebar => ("sidebar.left", 16.0),
+        Icon::Plus => ("plus.square", 16.0),
+        Icon::Picture => ("photo", 15.0),
+        Icon::Pen => ("pencil", 15.0),
+        Icon::Play => ("play.fill", 14.0),
+        Icon::Menu => ("line.3.horizontal", 15.0),
+        Icon::Brush => ("paintbrush.pointed.fill", 15.0),
+        Icon::ChevronLeft => ("chevron.left", 13.0),
+        Icon::ChevronRight => ("chevron.right", 13.0),
+        Icon::ChevronDown => ("chevron.down", 10.5),
+        Icon::ChevronUp => ("chevron.up", 10.5),
+        Icon::Pause => ("pause.fill", 14.0),
+        Icon::Gear => ("gearshape", 15.0),
+        Icon::Copy => ("doc.on.doc", 13.0),
+        Icon::Slide => ("play.rectangle", 15.0),
+        Icon::Mic => ("mic.fill", 15.0),
+    };
+    if icons::paint(p, name, c, pt, color) {
+        return;
+    }
     match icon {
         Icon::ChevronDown => {
             p.line_segment([c + vec2(-4.0, -2.0), c + vec2(0.0, 2.0)], s);

@@ -678,6 +678,7 @@ pub fn install_fonts(ctx: &egui::Context) {
             p.insert(0, "sans".to_string());
         }
     }
+    crate::icons::install_fonts(&mut fonts);
     ctx.set_fonts(fonts);
 }
 

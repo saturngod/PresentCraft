@@ -596,6 +596,16 @@ pub enum Page {
 }
 
 fn page_icon(p: &egui::Painter, c: egui::Pos2, page: Page, col: Color32) {
+    let name = match page {
+        Page::General => "gearshape",
+        Page::Editor => "doc.text",
+        Page::Presentation => "play.rectangle",
+        Page::Themes => "paintpalette",
+        Page::Markdown => "",
+    };
+    if !name.is_empty() && crate::icons::paint(p, name, c, 21.0, col) {
+        return;
+    }
     let s = Stroke::new(1.8_f32, col);
     match page {
         Page::General => {

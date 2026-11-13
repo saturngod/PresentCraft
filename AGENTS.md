@@ -28,6 +28,7 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 - `src/parse.rs`, `inline.rs`: document and inline Markdown parsing.
 - `src/render.rs`, `theme.rs`: slide layout, drawing, and themes.
 - `src/inspector.rs`, `settings.rs`: inspector controls and preferences.
+- `src/icons.rs`: icons, SF Symbols on macOS and Material Symbols elsewhere.
 - `src/images.rs`, `chart.rs`, `tableblock.rs`, `tabletools.rs`: media and structured content.
 - `src/video.rs`, `webvideo.rs`: inline video playback with ffmpeg; YouTube's player in the system web view.
 - `src/export.rs`: PDF, PowerPoint, image, and HTML export.
@@ -37,7 +38,7 @@ cargo run --locked --bin PresentCraft -- --tab design --screenshot shots/check-d
 
 Follow `DESIGN.md` for colours, typography, spacing and component rules (buttons, text fields, menus, inspector rows) when adding or changing UI.
 
-Never use emoji in the UI (buttons, labels, menus, tooltips, status text). Draw icons with `paint_icon` in `src/main.rs`, modelled on SF Symbols, and avoid egui stock widgets that show emoji, such as `egui::color_picker`.
+Never use emoji in the UI (buttons, labels, menus, tooltips, status text). Draw icons with `paint_icon` in `src/main.rs`: it shows SF Symbols on macOS and Material Symbols on Windows and Linux (`src/icons.rs`), and avoid egui stock widgets that show emoji, such as `egui::color_picker`.
 
 ## Evidence and maintenance
 

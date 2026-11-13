@@ -186,9 +186,11 @@ impl MacMenu {
             for (i, path) in state.recent.iter().enumerate() {
                 let _ = self.recent.append(&item(
                     &format!("recent:{i}"),
-                    &path.display().to_string(),
+                    &crate::file_label(path),
                     "",
                 ));
+                // The full path sits under the name as a greyed, unclickable line.
+                let _ = self.recent.append(&note(&path.display().to_string()));
             }
         }
         self.revert.set_enabled(state.has_path);

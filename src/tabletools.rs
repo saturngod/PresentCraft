@@ -308,12 +308,17 @@ pub(crate) fn more_button<R>(
     })
     .on_hover_text("More options");
     let col = crate::settings::pal().text_hi;
-    for dx in [-6.0, 0.0, 6.0] {
-        p.circle_filled(c + vec2(dx, 0.0), 2.0, col);
+    if !crate::icons::paint(&p, "ellipsis", c, 15.0, col) {
+        for dx in [-6.0, 0.0, 6.0] {
+            p.circle_filled(c + vec2(dx, 0.0), 2.0, col);
+        }
     }
 }
 
 fn table_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "tablecells", c, 15.0, col) {
+        return;
+    }
     let s = Stroke::new(1.6_f32, col);
     let b = Rect::from_center_size(c, vec2(18.0, 14.0));
     p.rect_stroke(b, 2.0, s, egui::StrokeKind::Inside);
@@ -338,6 +343,9 @@ fn table_icon(p: &egui::Painter, c: Pos2, col: Color32) {
 }
 
 fn chart_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "chart.bar.xaxis", c, 15.0, col) {
+        return;
+    }
     for (k, h) in [9.0, 13.0, 11.0, 7.0].iter().enumerate() {
         let x = c.x - 8.0 + k as f32 * 4.3;
         p.rect_filled(
@@ -354,6 +362,9 @@ fn chart_icon(p: &egui::Painter, c: Pos2, col: Color32) {
 
 /// A rising line (SF Symbols "chart.xyaxis.line").
 fn line_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "chart.xyaxis.line", c, 15.0, col) {
+        return;
+    }
     p.add(egui::Shape::line(
         vec![
             c + vec2(-8.0, 5.0),
@@ -367,6 +378,9 @@ fn line_icon(p: &egui::Painter, c: Pos2, col: Color32) {
 
 /// A circle with one slice cut out (SF Symbols "chart.pie").
 fn pie_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "chart.pie", c, 15.0, col) {
+        return;
+    }
     let s = Stroke::new(1.6_f32, col);
     p.circle_stroke(c, 8.0, s);
     p.line_segment([c, c + vec2(0.0, -8.0)], s);
@@ -375,6 +389,9 @@ fn pie_icon(p: &egui::Painter, c: Pos2, col: Color32) {
 
 /// A sheet with a pencil across its corner (SF Symbols "square.and.pencil").
 fn edit_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "square.and.pencil", c, 15.0, col) {
+        return;
+    }
     p.add(egui::Shape::line(
         vec![
             c + vec2(0.5, -6.5),

@@ -313,7 +313,14 @@ Style every menu with `tabletools::style_menu(ui)`:
 
 ## 6. Icons
 
-- Draw icons with `paint_icon` (vector strokes). Don't add image icons.
+- Draw icons with `paint_icon`, or `icons::paint(painter, name, centre, points, colour)`
+  for one-off icons. Icons are named by their SF Symbol. macOS shows the real SF
+  Symbol, rasterised by AppKit. Windows and Linux show the matching Material Symbol
+  (rounded) from the embedded icon font.
+- A new icon needs its SF Symbol name at the call site and a Material glyph in
+  `material::glyph` in `src/icons.rs`. Keep a painted fallback for the case where
+  `icons::paint` returns false. Don't add image icons.
+- Run with `PRESENTCRAFT_ICONS=material` to check the Material set on a Mac.
 - **No emoji anywhere in the UI** — not in buttons, labels, menus, tooltips or
   status messages. Draw the icon with `paint_icon` instead, modelled on the
   matching SF Symbol (for example `Icon::Copy` follows `doc.on.doc`).

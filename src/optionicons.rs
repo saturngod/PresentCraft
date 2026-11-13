@@ -38,6 +38,31 @@ pub fn key_of(line: &str) -> Option<&'static str> {
 
 /// Draws the icon for `key` centred on `c`, `s` points tall.
 pub fn paint(p: &Painter, key: &str, c: Pos2, s: f32, color: Color32) {
+    let name = match key {
+        "title" | "caption" => "note.text",
+        "x" => "align.horizontal.left",
+        "y" => "align.vertical.bottom",
+        "position" => "square.grid.3x3.middle.filled",
+        "size" => "arrow.up.left.and.arrow.down.right",
+        "scale" => "arrow.up.left.and.arrow.down.right.square",
+        "background" => "photo",
+        "opacity" => "circle.lefthalf.filled",
+        "filter" => "slider.horizontal.3",
+        "chart" | "type" => "chart.bar.fill",
+        "color-type" => "arrow.left.arrow.right",
+        "bar-type" => "square.stack.3d.up.fill",
+        "colors" => "paintpalette",
+        "orientation" => "arrow.clockwise",
+        "legend" => "list.bullet",
+        "xlabel" => "arrow.left.and.right",
+        "ylabel" => "arrow.up.and.down",
+        "xformat" => "number",
+        _ => "",
+    };
+    // Whole points, so every line shares one cached picture per symbol.
+    if !name.is_empty() && crate::icons::paint(p, name, c, (s * 0.8).round(), color) {
+        return;
+    }
     let st = Stroke::new((s * 0.09).max(1.0), color);
     let u = s / 2.0; // half size
     let r = |x0: f32, y0: f32, x1: f32, y1: f32| {

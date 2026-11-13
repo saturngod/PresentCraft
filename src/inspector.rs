@@ -190,6 +190,9 @@ fn divider(ui: &mut egui::Ui) {
 
 /// A marker pen leaning right over the stroke it has drawn (SF Symbols "highlighter").
 fn highlighter_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    if crate::icons::paint(p, "highlighter", c, 14.0, col) {
+        return;
+    }
     // u runs along the pen towards its top-right end, v across it.
     let at = |u: f32, v: f32| c + vec2(1.0, -1.5) + vec2(u + v, v - u) * 0.7071;
     p.add(egui::Shape::closed_line(
@@ -209,6 +212,9 @@ fn highlighter_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
 
 /// Two chain links joined on the diagonal (SF Symbols "link").
 fn link_icon(p: &egui::Painter, c: egui::Pos2, col: Color32) {
+    if crate::icons::paint(p, "link", c, 13.5, col) {
+        return;
+    }
     let at = |u: f32, v: f32| c + vec2(u + v, v - u) * 0.7071;
     for u0 in [-3.2_f32, 3.2] {
         // a capsule along u: two half circles of radius 2.8 joined by straight sides
@@ -242,13 +248,32 @@ fn item_row(ui: &mut egui::Ui, it: &Item) -> bool {
         "✎" => highlighter_icon(p, ic, icon_col),
         "∞" => link_icon(p, ic, icon_col),
         t => {
-            p.text(
-                ic,
-                egui::Align2::CENTER_CENTER,
-                t,
-                FontId::new(12.5, crate::theme::family(false, true, false)),
-                icon_col,
-            );
+            let symbol = match t {
+                "¶" => "paragraphsign",
+                "1." => "list.number",
+                "•" => "list.bullet",
+                "☐" => "checklist",
+                "“" => "text.quote",
+                "▣" => "photo",
+                "▶" => "play.rectangle",
+                "YT" => "play.rectangle.fill",
+                "B" => "bold",
+                "I" => "italic",
+                "S" => "strikethrough",
+                "A'" => "textformat.superscript",
+                "{}" => "curlybraces",
+                "[]" => "chevron.left.forwardslash.chevron.right",
+                _ => "",
+            };
+            if symbol.is_empty() || !crate::icons::paint(p, symbol, ic, 14.0, icon_col) {
+                p.text(
+                    ic,
+                    egui::Align2::CENTER_CENTER,
+                    t,
+                    FontId::new(12.5, crate::theme::family(false, true, false)),
+                    icon_col,
+                );
+            }
         }
     }
     let g = ui.fonts_mut(|f| f.layout_job(it.label.clone()));
@@ -351,6 +376,15 @@ pub fn csv_to_table(text: &str) -> String {
 }
 
 fn chart_icon(p: &egui::Painter, r: Rect, kind: usize, color: Color32) {
+    let name = match kind {
+        0 => "tablecells",
+        1 => "chart.xyaxis.line",
+        2 => "chart.bar.fill",
+        _ => "chart.pie.fill",
+    };
+    if crate::icons::paint(p, name, r.center(), 19.0, color) {
+        return;
+    }
     let c = r.center();
     let s = Stroke::new(1.8_f32, color);
     match kind {
@@ -418,6 +452,9 @@ fn chart_icon(p: &egui::Painter, r: Rect, kind: usize, color: Color32) {
 
 /// Up/down chevrons shown at the right of a pop-up button.
 fn paint_updown(p: &egui::Painter, c: egui::Pos2, color: Color32) {
+    if crate::icons::paint(p, "chevron.up.chevron.down", c, 12.0, color) {
+        return;
+    }
     let s = Stroke::new(1.6_f32, color);
     let (w, h, gap) = (4.5, 3.5, 3.0);
     p.line_segment([pos2(c.x - w, c.y - gap), pos2(c.x, c.y - gap - h)], s);
@@ -433,6 +470,9 @@ fn combo_chevrons(ui: &egui::Ui, rect: Rect, _v: &egui::style::WidgetVisuals, _o
     let c = rect.center();
     let (w, h, gap) = (3.5, 2.8, 2.0);
     let p = ui.painter();
+    if crate::icons::paint(p, "chevron.up.chevron.down", c, 10.0, crate::settings::pal().icon) {
+        return;
+    }
     p.line_segment([pos2(c.x - w, c.y - gap), pos2(c.x, c.y - gap - h)], s);
     p.line_segment([pos2(c.x, c.y - gap - h), pos2(c.x + w, c.y - gap)], s);
     p.line_segment([pos2(c.x - w, c.y + gap), pos2(c.x, c.y + gap + h)], s);
@@ -1227,29 +1267,6 @@ impl App {
 
     fn pictures_tab(&mut self, ui: &mut egui::Ui) {
         self.media_library(ui);
-        divider(ui);
-        if section(ui, "Media Options") {
-            for (k, v) in [
-                ("size:", "cover · contain"),
-                ("x:", "left · center · right"),
-                ("y:", "top · center · bottom"),
-                ("background:", "true"),
-                ("opacity:", "30%"),
-                ("filter:", "grayscale · sepia · darken · lighten · blur"),
-                ("title:", "\"Caption\""),
-            ] {
-                ui.horizontal_wrapped(|ui| {
-                    ui.add_space(10.0);
-                    ui.label(RichText::new(k).color(on_slide()).monospace());
-                    ui.label(RichText::new(v).color(text_mid()));
-                });
-            }
-            ui.label(
-                RichText::new("Write these on the lines right under a picture or video.")
-                    .color(text_mid())
-                    .size(12.0),
-            );
-        }
     }
 
     /// Every picture and video in the package (and any the script uses from

@@ -95,6 +95,14 @@ impl TitleBlock {
 
 /// Text lines aligned left, centre or right (SF Symbols "text.align…").
 fn halign_icon(p: &egui::Painter, c: Pos2, col: Color32, a: Align) {
+    let name = match a {
+        Align::Left => "text.alignleft",
+        Align::Center => "text.aligncenter",
+        Align::Right => "text.alignright",
+    };
+    if crate::icons::paint(p, name, c, 15.0, col) {
+        return;
+    }
     let s = Stroke::new(1.6_f32, col);
     for (dy, w) in [(-6.0, 16.0), (-2.0, 10.0), (2.0, 16.0), (6.0, 10.0)] {
         let x0 = match a {
@@ -108,6 +116,14 @@ fn halign_icon(p: &egui::Painter, c: Pos2, col: Color32, a: Align) {
 
 /// A frame with a text block at its top, middle or bottom.
 fn valign_icon(p: &egui::Painter, c: Pos2, col: Color32, a: VAlign) {
+    let name = match a {
+        VAlign::Top => "rectangle.topthird.inset.filled",
+        VAlign::Middle => "rectangle.center.inset.filled",
+        VAlign::Bottom => "rectangle.bottomthird.inset.filled",
+    };
+    if crate::icons::paint(p, name, c, 15.0, col) {
+        return;
+    }
     let b = Rect::from_center_size(c, vec2(18.0, 16.0));
     p.rect_stroke(b, 3.0, Stroke::new(1.5_f32, col), egui::StrokeKind::Inside);
     let cy = match a {

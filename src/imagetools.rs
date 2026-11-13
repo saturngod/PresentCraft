@@ -90,6 +90,9 @@ impl ImageBlock {
 }
 
 fn cover_icon(p: &egui::Painter, c: Pos2, col: Color32, hole: Color32) {
+    if crate::icons::paint(p, "photo.fill", c, 15.0, col) {
+        return;
+    }
     let b = Rect::from_center_size(c, vec2(19.0, 15.0));
     p.rect_filled(b, 3.0, col);
     p.add(egui::Shape::convex_polygon(
@@ -105,12 +108,18 @@ fn cover_icon(p: &egui::Painter, c: Pos2, col: Color32, hole: Color32) {
 }
 
 fn contain_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "rectangle.center.inset.filled#contain", c, 15.0, col) {
+        return;
+    }
     let b = Rect::from_center_size(c, vec2(19.0, 15.0));
     p.rect_stroke(b, 3.0, Stroke::new(1.5_f32, col), egui::StrokeKind::Inside);
     p.rect_filled(Rect::from_center_size(c, vec2(9.0, 7.0)), 1.5, col);
 }
 
 fn inline_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "rectangle.leadinghalf.inset.filled", c, 15.0, col) {
+        return;
+    }
     let s = Stroke::new(1.5_f32, col);
     let b = Rect::from_center_size(c, vec2(19.0, 15.0));
     p.rect_stroke(b, 3.0, s, egui::StrokeKind::Inside);
@@ -131,6 +140,9 @@ fn inline_icon(p: &egui::Painter, c: Pos2, col: Color32) {
 }
 
 fn background_icon(p: &egui::Painter, c: Pos2, col: Color32) {
+    if crate::icons::paint(p, "rectangle.inset.filled", c, 15.0, col) {
+        return;
+    }
     let b = Rect::from_center_size(c, vec2(19.0, 15.0));
     p.rect_filled(b, 3.0, col.gamma_multiply(0.35));
     p.rect_stroke(b, 3.0, Stroke::new(1.5_f32, col), egui::StrokeKind::Inside);
