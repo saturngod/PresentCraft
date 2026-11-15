@@ -551,13 +551,14 @@ pub struct App {
     pub sel_start: usize,
     pub jump_to: Option<(usize, usize)>,
     /// The editor's text area and layer last frame: a right-click there
-    /// opens the system text menu.
-    #[cfg(target_os = "macos")]
+    /// opens the text menu.
     editor_area: Option<(Rect, egui::LayerId)>,
     /// A right-click on the editor, taken out of egui's input, waiting for
     /// the editor to open the text menu.
-    #[cfg(target_os = "macos")]
     text_menu_at: Option<egui::Pos2>,
+    /// Where the editor's own Cut/Copy/Paste menu is open, on systems
+    /// without a native text menu (Windows and Linux).
+    edit_menu: Option<egui::Pos2>,
     /// Character to bring to the top of the editor (after clicking a slide).
     scroll_editor: Option<usize>,
     /// Find bar (⌘F) over the editor.
@@ -710,10 +711,9 @@ impl App {
             cursor: 0,
             sel_start: 0,
             jump_to: None,
-            #[cfg(target_os = "macos")]
             editor_area: None,
-            #[cfg(target_os = "macos")]
             text_menu_at: None,
+            edit_menu: None,
             scroll_editor: None,
             find: find::Find::default(),
             export: None,
@@ -1810,11 +1810,12 @@ impl App {
         self.after_edit(ch, ch);
     }
 
-    /// Right-click in the editor: the system's text menu for the selection
-    /// (see `textmenu`). A right-click outside the selection moves the caret
-    /// there first, as on a Mac. egui never sees the right-click (see
-    /// `raw_input_hook`), so the selection here is still the user's.
-    #[cfg(target_os = "macos")]
+    /// Right-click in the editor: the text menu for the selection. macOS
+    /// shows the system's own menu (see `textmenu`); Windows and Linux show
+    /// the editor's Cut/Copy/Paste menu (see `edit_menu`). A right-click
+    /// outside the selection moves the caret there first. egui never sees the
+    /// right-click (see `raw_input_hook`), so the selection here is still the
+    /// user's.
     fn text_menu(
         &mut self,
         out: &egui::text_edit::TextEditOutput,
@@ -1827,21 +1828,108 @@ impl App {
             self.cursor = at;
             self.sel_start = at;
         }
-        let (lo, hi) = (self.cursor.min(self.sel_start), self.cursor.max(self.sel_start));
-        let Some(menu) = textmenu::show(&self.text, (lo, hi), pos) else {
+        #[cfg(target_os = "macos")]
+        {
+            let (lo, hi) = (self.cursor.min(self.sel_start), self.cursor.max(self.sel_start));
+            let Some(menu) = textmenu::show(&self.text, (lo, hi), pos) else {
+                return;
+            };
+            let (start, end) = menu.selection;
+            if menu.text != self.text {
+                // Cut, Paste or a Service changed the text.
+                self.text = menu.text;
+                self.reparse();
+                self.after_edit(start, end);
+                *changed = true;
+            } else {
+                self.sel_start = start;
+                self.cursor = end;
+                self.jump_to = Some((start, end));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = changed;
+            self.jump_to = Some((self.sel_start, self.cursor));
+            self.edit_menu = Some(pos);
+        }
+    }
+
+    /// The editor's own text menu where the system has none to offer
+    /// (Windows and Linux): Cut, Copy, Paste and Select All. It acts on the
+    /// editor's selection and closes on a click elsewhere or Escape.
+    fn edit_menu(&mut self, ctx: &egui::Context) {
+        let Some(pos) = self.edit_menu else {
             return;
         };
-        let (start, end) = menu.selection;
-        if menu.text != self.text {
-            // Cut, Paste or a Service changed the text.
-            self.text = menu.text;
-            self.reparse();
-            self.after_edit(start, end);
-            *changed = true;
-        } else {
-            self.sel_start = start;
-            self.cursor = end;
-            self.jump_to = Some((start, end));
+        #[derive(Clone, Copy)]
+        enum Edit {
+            Cut,
+            Copy,
+            Paste,
+            SelectAll,
+        }
+        let (lo, hi) = (self.cursor.min(self.sel_start), self.cursor.max(self.sel_start));
+        let mut action = None;
+        let area = egui::Area::new(egui::Id::unique("editor_edit_menu"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .constrain(true)
+            .show(ctx, |ui| {
+                egui::Frame::menu(ui.style()).show(ui, |ui| {
+                    crate::tabletools::style_menu(ui);
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                        ui.add_enabled_ui(lo < hi, |ui| {
+                            if menu_item(ui, "Cut", "⌘X") {
+                                action = Some(Edit::Cut);
+                            }
+                            if menu_item(ui, "Copy", "⌘C") {
+                                action = Some(Edit::Copy);
+                            }
+                        });
+                        if menu_item(ui, "Paste", "⌘V") {
+                            action = Some(Edit::Paste);
+                        }
+                        ui.separator();
+                        if menu_item(ui, "Select All", "⌘A") {
+                            action = Some(Edit::SelectAll);
+                        }
+                    });
+                });
+            });
+        let escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        if action.is_some() || escape || area.response.clicked_elsewhere() {
+            self.edit_menu = None;
+        }
+        let Some(action) = action else {
+            return;
+        };
+        let (a, b) = (self.char_to_byte(lo), self.char_to_byte(hi));
+        match action {
+            Edit::Copy => {
+                ctx.copy_text(self.text[a..b].to_string());
+                // Clicking the menu took focus from the editor; give it back.
+                self.jump_to = Some((self.sel_start, self.cursor));
+            }
+            Edit::Cut => {
+                ctx.copy_text(self.text[a..b].to_string());
+                self.text.replace_range(a..b, "");
+                self.reparse();
+                self.after_edit(lo, lo);
+            }
+            Edit::Paste => {
+                // The integration reads the clipboard and delivers a paste
+                // event next frame, which the refocused editor applies to
+                // its selection like Ctrl+V.
+                self.jump_to = Some((self.sel_start, self.cursor));
+                ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            }
+            Edit::SelectAll => {
+                let end = self.text.chars().count();
+                self.sel_start = 0;
+                self.cursor = end;
+                self.jump_to = Some((0, end));
+            }
         }
     }
 
@@ -3171,8 +3259,7 @@ impl App {
                     menu_ui.style_mut().spacing.interact_size.y = 26.0;
                     self.menus(&mut menu_ui, ctx);
                 }
-                // Where a right-click opens the system text menu next frame.
-                #[cfg(target_os = "macos")]
+                // Where a right-click opens the text menu next frame.
                 if !self.settings_open {
                     self.editor_area = Some((body, ui.layer_id()));
                 }
@@ -3239,7 +3326,6 @@ impl App {
                                     self.scroll_thumb = true;
                                 }
                             }
-                            #[cfg(target_os = "macos")]
                             if let Some(pos) = self.text_menu_at.take() {
                                 self.text_menu(&out, pos, &mut changed);
                             }
@@ -3336,6 +3422,7 @@ impl App {
                     self.dirty = true;
                     self.reparse();
                 }
+                self.edit_menu(ctx);
                 if self.scroll_thumb || changed {
                     self.current = slide_at_char(&self.slides, self.cursor);
                 }
@@ -3879,10 +3966,9 @@ fn highlight(
 impl eframe::App for App {
     /// Takes right-button presses on the editor out of the input before egui
     /// reads it. egui's text editor would otherwise move the caret and start a
-    /// drag-selection on the press, and the system menu swallows the release,
-    /// leaving that drag running. The editor opens the menu instead (see
-    /// `text_menu`).
-    #[cfg(target_os = "macos")]
+    /// drag-selection on the press, losing the selection the menu is for (and
+    /// on macOS the system menu swallows the release, leaving that drag
+    /// running). The editor opens the menu instead (see `text_menu`).
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         if raw_input.viewport_id != egui::ViewportId::ROOT {
             return;
@@ -3913,8 +3999,7 @@ impl eframe::App for App {
             self.open_requested(p);
         }
         #[cfg(target_os = "macos")]
-        textmenu::remember(_frame);
-        // Another window may have opened or saved a document since.
+        textmenu::remember(_frame);        // Another window may have opened or saved a document since.
         let focused = ctx.input(|i| {
             i.events
                 .iter()
