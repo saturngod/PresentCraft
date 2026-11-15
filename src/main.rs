@@ -19,6 +19,8 @@ mod optionicons;
 mod macos_menu;
 #[cfg(target_os = "macos")]
 mod macos_open;
+#[cfg(target_os = "macos")]
+mod textmenu;
 mod package;
 mod parse;
 mod presenter;
@@ -548,6 +550,14 @@ pub struct App {
     pub cursor: usize,
     pub sel_start: usize,
     pub jump_to: Option<(usize, usize)>,
+    /// The editor's text area and layer last frame: a right-click there
+    /// opens the system text menu.
+    #[cfg(target_os = "macos")]
+    editor_area: Option<(Rect, egui::LayerId)>,
+    /// A right-click on the editor, taken out of egui's input, waiting for
+    /// the editor to open the text menu.
+    #[cfg(target_os = "macos")]
+    text_menu_at: Option<egui::Pos2>,
     /// Character to bring to the top of the editor (after clicking a slide).
     scroll_editor: Option<usize>,
     /// Find bar (⌘F) over the editor.
@@ -700,6 +710,10 @@ impl App {
             cursor: 0,
             sel_start: 0,
             jump_to: None,
+            #[cfg(target_os = "macos")]
+            editor_area: None,
+            #[cfg(target_os = "macos")]
+            text_menu_at: None,
             scroll_editor: None,
             find: find::Find::default(),
             export: None,
@@ -1794,6 +1808,41 @@ impl App {
         self.text.insert_str(line_end, &s);
         let ch = self.text[..line_end].chars().count() + s.chars().count() - 1;
         self.after_edit(ch, ch);
+    }
+
+    /// Right-click in the editor: the system's text menu for the selection
+    /// (see `textmenu`). A right-click outside the selection moves the caret
+    /// there first, as on a Mac. egui never sees the right-click (see
+    /// `raw_input_hook`), so the selection here is still the user's.
+    #[cfg(target_os = "macos")]
+    fn text_menu(
+        &mut self,
+        out: &egui::text_edit::TextEditOutput,
+        pos: egui::Pos2,
+        changed: &mut bool,
+    ) {
+        let at = out.galley.cursor_from_pos(pos - out.galley_pos).index.0;
+        let (lo, hi) = (self.cursor.min(self.sel_start), self.cursor.max(self.sel_start));
+        if !(lo < hi && (lo..=hi).contains(&at)) {
+            self.cursor = at;
+            self.sel_start = at;
+        }
+        let (lo, hi) = (self.cursor.min(self.sel_start), self.cursor.max(self.sel_start));
+        let Some(menu) = textmenu::show(&self.text, (lo, hi), pos) else {
+            return;
+        };
+        let (start, end) = menu.selection;
+        if menu.text != self.text {
+            // Cut, Paste or a Service changed the text.
+            self.text = menu.text;
+            self.reparse();
+            self.after_edit(start, end);
+            *changed = true;
+        } else {
+            self.sel_start = start;
+            self.cursor = end;
+            self.jump_to = Some((start, end));
+        }
     }
 
     fn after_edit(&mut self, sel_start: usize, cursor: usize) {
@@ -3122,6 +3171,11 @@ impl App {
                     menu_ui.style_mut().spacing.interact_size.y = 26.0;
                     self.menus(&mut menu_ui, ctx);
                 }
+                // Where a right-click opens the system text menu next frame.
+                #[cfg(target_os = "macos")]
+                if !self.settings_open {
+                    self.editor_area = Some((body, ui.layer_id()));
+                }
                 let id = egui::Id::unique(EDITOR_ID);
                 if let Some((a, b)) = self.jump_to.take() {
                     let mut st = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
@@ -3184,6 +3238,10 @@ impl App {
                                     self.sel_start = s;
                                     self.scroll_thumb = true;
                                 }
+                            }
+                            #[cfg(target_os = "macos")]
+                            if let Some(pos) = self.text_menu_at.take() {
+                                self.text_menu(&out, pos, &mut changed);
                             }
                             {
                                 // icons sit in the gap left before each option line
@@ -3819,12 +3877,43 @@ fn highlight(
 }
 
 impl eframe::App for App {
+    /// Takes right-button presses on the editor out of the input before egui
+    /// reads it. egui's text editor would otherwise move the caret and start a
+    /// drag-selection on the press, and the system menu swallows the release,
+    /// leaving that drag running. The editor opens the menu instead (see
+    /// `text_menu`).
+    #[cfg(target_os = "macos")]
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        if raw_input.viewport_id != egui::ViewportId::ROOT {
+            return;
+        }
+        // Set again by the editor each frame it is drawn.
+        let Some((area, layer)) = self.editor_area.take() else {
+            return;
+        };
+        let text_menu_at = &mut self.text_menu_at;
+        raw_input.events.retain(|e| match e {
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Secondary,
+                pressed: true,
+                ..
+            } if area.contains(*pos) && ctx.layer_id_at(*pos) == Some(layer) => {
+                *text_menu_at = Some(*pos);
+                false
+            }
+            _ => true,
+        });
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &ui.ctx().clone();
         #[cfg(target_os = "macos")]
         for p in macos_open::take_pending() {
             self.open_requested(p);
         }
+        #[cfg(target_os = "macos")]
+        textmenu::remember(_frame);
         // Another window may have opened or saved a document since.
         let focused = ctx.input(|i| {
             i.events
