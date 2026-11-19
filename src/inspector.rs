@@ -1943,7 +1943,7 @@ impl App {
             match self.design_anim.filter(|a| a.to == c && !a.done(now)) {
                 Some(anim) => {
                     let p = painter.with_clip_rect(card.intersect(painter.clip_rect()));
-                    self.paint_anim(&ui.ctx().clone(), &p, card, &anim, "design");
+                    self.paint_anim(&ui.ctx().clone(), &p, card, &anim);
                 }
                 None => {
                     self.design_anim = None;
@@ -2203,7 +2203,7 @@ impl App {
                 "Next slides move in from the right, previous slides from the left."
             }
             Transition::Motion => {
-                "The slide settles in, then its text and pictures rise in one by one."
+                "Pictures and text on both slides move to their new places; the rest fades in."
             }
         }
     }

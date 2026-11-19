@@ -65,9 +65,25 @@ fn put_galley(p: &Painter, pos: egui::Pos2, g: Arc<Galley>, fallback: Color32) {
         }
         None => false,
     });
-    if !recorded {
-        p.galley(pos, g, fallback);
+    if recorded || g.job.text.trim().is_empty() {
+        if !recorded {
+            p.galley(pos, g, fallback);
+        }
+        return;
     }
+    // Motion: a line of text on both slides moves on its own.
+    let rect = g.rect.translate(pos.to_vec2());
+    if crate::transition::skip_piece(
+        || format!("txt:{}", g.job.text),
+        rect,
+        || crate::transition::Piece::Text {
+            galley: g.clone(),
+            fallback,
+        },
+    ) {
+        return;
+    }
+    p.galley(pos, g, fallback);
 }
 
 /// Like `Painter::text`, but goes through `put_galley`.

@@ -746,6 +746,20 @@ pub fn draw_image(
     accents: &[Color32; 6],
     contain_override: Option<bool>,
 ) -> Rect {
+    // Motion: a picture on both slides moves on its own (backgrounds stay
+    // with their slide, under its text).
+    if !spec.background
+        && crate::transition::skip_piece(
+            || format!("img:{}", spec.src),
+            rect,
+            || crate::transition::Piece::Image {
+                spec: spec.clone(),
+                contain: contain_override,
+            },
+        )
+    {
+        return rect;
+    }
     let alpha = spec.opacity.clamp(0.0, 1.0);
     let contain = contain_override.unwrap_or(spec.contain);
     let ctx = painter.ctx().clone();

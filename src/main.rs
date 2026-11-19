@@ -2455,55 +2455,122 @@ impl App {
             self.paint_slide(painter, rect, self.current);
             return false;
         };
-        self.paint_anim(ctx, painter, rect, &anim, "present");
+        self.paint_anim(ctx, painter, rect, &anim);
         true
     }
 
-    /// Draws one frame of `anim` into `rect`. `salt` keeps the layers of
-    /// different places apart.
+    /// Draws one frame of `anim` into `rect`.
     pub fn paint_anim(
         &mut self,
         ctx: &egui::Context,
         painter: &egui::Painter,
         rect: Rect,
         anim: &transition::Anim,
-        salt: &str,
     ) {
-        use transition::{Pose, Transition};
+        use transition::Transition;
         ctx.request_repaint();
         let t = anim.elapsed(ctx.input(|i| i.time));
+        let slide_painter = painter.with_clip_rect(rect.intersect(painter.clip_rect()));
+        if anim.kind == Transition::Motion {
+            self.paint_motion(&slide_painter, rect, anim, t);
+            return;
+        }
         let (out, inn) = transition::poses(anim.kind, t, anim.dir());
-        let clip = painter.clip_rect();
-        let layer_painter = |name: &str, pose: Pose| {
-            if pose.scale == 1.0 {
-                // Only moved sideways (or not at all): draw in place, clipped
-                // to the slide so nothing spills into the letterbox.
-                let mut p = painter.with_clip_rect(rect.intersect(clip));
-                p.set_opacity(pose.opacity);
-                (p, rect.translate(vec2(pose.shift * rect.width(), 0.0)))
-            } else {
-                // Scaled: its own layer, so text is scaled, not laid out again.
-                let layer = egui::LayerId::new(
-                    egui::Order::Middle,
-                    egui::Id::unique(("slide-transition", salt, name)),
-                );
-                ctx.set_transform_layer(layer, pose.transform(rect));
-                let mut p = egui::Painter::new(ctx.clone(), layer, rect.intersect(clip));
-                p.set_opacity(pose.opacity);
-                (p, rect)
-            }
+        // Moved sideways at most: drawn in place, clipped to the slide so
+        // nothing spills into the letterbox.
+        let posed = |opacity: f32, shift: f32| {
+            let mut p = slide_painter.clone();
+            p.set_opacity(opacity);
+            (p, rect.translate(vec2(shift * rect.width(), 0.0)))
         };
         if out.opacity > 0.0 {
-            let (p, r) = layer_painter("out", out);
+            let (p, r) = posed(out.opacity, out.shift);
             self.paint_slide(&p, r, anim.from);
         }
-        let (p, r) = layer_painter("in", inn);
+        let (p, r) = posed(inn.opacity, inn.shift);
         images::begin_video_spots();
-        if anim.kind == Transition::Motion {
-            transition::begin_reveal(t);
-        }
         self.paint_slide(&p, r, anim.to);
+    }
+
+    /// Motion, like Keynote's Magic Move: pictures and lines of text on both
+    /// slides move and resize from their old places to their new ones, the
+    /// next slide fades in around them, and its other content rises in.
+    fn paint_motion(
+        &mut self,
+        painter: &egui::Painter,
+        rect: Rect,
+        anim: &transition::Anim,
+        t: f32,
+    ) {
+        use std::collections::HashSet;
+        // Where everything sits on each slide (nothing is drawn).
+        transition::begin_measure();
+        self.paint_slide(painter, rect, anim.from);
+        let old = transition::end_measure();
+        transition::begin_measure();
+        self.paint_slide(painter, rect, anim.to);
+        let new = transition::end_measure();
+        let pairs = transition::pair_up(old, &new);
+        let keys = |pick: fn(&(transition::Element, transition::Element)) -> &transition::Element| {
+            pairs
+                .iter()
+                .map(|pr| {
+                    let e = pick(pr);
+                    (e.key.clone(), e.nth)
+                })
+                .collect::<HashSet<_>>()
+        };
+        let (old_keys, new_keys) = (keys(|p| &p.0), keys(|p| &p.1));
+
+        // The old slide without its shared pieces, then the new one fading
+        // in over it, its own content rising in one by one.
+        transition::begin_hide(old_keys);
+        self.paint_slide(painter, rect, anim.from);
+        transition::end_hide();
+        let mut p = painter.clone();
+        p.set_opacity(transition::ease_out_cubic(t / transition::MOTION_FADE));
+        images::begin_video_spots();
+        transition::begin_hide(new_keys);
+        transition::begin_reveal(t);
+        self.paint_slide(&p, rect, anim.to);
         transition::end_reveal();
+        transition::end_hide();
+
+        // The shared pieces, on their way.
+        let k = transition::ease_in_out_cubic(t / transition::MOTION_MOVE);
+        let accents = self.theme().accents;
+        for (a, b) in &pairs {
+            let r = transition::lerp_rect(a.rect, b.rect, k);
+            match (&a.piece, &b.piece) {
+                (
+                    transition::Piece::Image { spec: sa, contain: ca },
+                    transition::Piece::Image { spec: sb, contain: cb },
+                ) => {
+                    // The old look underneath, the new one coming in on top.
+                    images::draw_image(painter, r, sa, &mut self.images, &accents, *ca);
+                    let mut top = painter.clone();
+                    top.set_opacity(k);
+                    images::draw_image(&top, r, sb, &mut self.images, &accents, *cb);
+                }
+                (
+                    transition::Piece::Text { galley: ga, fallback: fa },
+                    transition::Piece::Text { galley: gb, fallback: fb },
+                ) => {
+                    let c = r.center();
+                    let at = |g: &std::sync::Arc<egui::Galley>| c - g.rect.center().to_vec2();
+                    let same = (ga.size() - gb.size()).length() < 0.5;
+                    if !same {
+                        let mut under = painter.clone();
+                        under.set_opacity(1.0 - k);
+                        under.galley(at(ga), ga.clone(), *fa);
+                    }
+                    let mut top = painter.clone();
+                    top.set_opacity(if same { 1.0 } else { k });
+                    top.galley(at(gb), gb.clone(), *fb);
+                }
+                _ => {}
+            }
+        }
     }
 
     // ---------- exporting ----------
