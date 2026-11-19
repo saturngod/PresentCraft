@@ -1,6 +1,7 @@
 //! Writing exported presentations. Slides arrive as pictures (each slide is
 //! drawn full size and captured), then go into a PDF, a PowerPoint file,
-//! a folder of PNG images or a self-contained web page with speaker notes.
+//! a folder of PNG images, a self-contained web page with speaker notes, or
+//! an MP4 video that plays the slides with the deck's slide animation.
 //! For PowerPoint the picture is drawn without text, and the text is added
 //! as native, editable text boxes on top.
 
@@ -14,6 +15,7 @@ pub enum Format {
     PowerPoint,
     Images,
     Html,
+    Video,
 }
 
 impl Format {
@@ -23,6 +25,7 @@ impl Format {
             Format::PowerPoint => "PowerPoint",
             Format::Images => "images",
             Format::Html => "web page",
+            Format::Video => "MP4 video",
         }
     }
 }
@@ -44,6 +47,218 @@ pub struct Job {
     /// HTML: this slide has a background video, so its text is drawn as
     /// HTML above the video instead of into the picture.
     pub text_layer: bool,
+    /// MP4 only: what to capture and the encoder taking the frames.
+    pub video: Option<VideoJob>,
+}
+
+impl Job {
+    pub fn new(format: Format, dest: PathBuf) -> Self {
+        Job {
+            format,
+            dest,
+            idx: 0,
+            waiting: false,
+            frames: 0,
+            images: Vec::new(),
+            texts: Vec::new(),
+            pending_text: String::new(),
+            videos: Vec::new(),
+            pending_videos: Vec::new(),
+            text_layer: false,
+            video: None,
+        }
+    }
+
+    /// An MP4 export: every slide shown for `seconds`, with `kind` between them.
+    pub fn video(dest: PathBuf, slides: usize, seconds: f32, kind: Transition) -> Self {
+        let mut job = Job::new(Format::Video, dest);
+        job.video = Some(VideoJob {
+            shots: video_shots(slides, seconds, kind),
+            kind,
+            writer: None,
+            encoding: None,
+        });
+        job
+    }
+
+    /// How many pictures this export captures.
+    pub fn captures(&self, slides: usize) -> usize {
+        self.video.as_ref().map_or(slides, |v| v.shots.len())
+    }
+}
+
+// ---------- MP4 video ----------
+
+use crate::transition::Transition;
+use std::sync::mpsc;
+
+/// Frames per second of exported videos.
+pub const VIDEO_FPS: u32 = 30;
+
+/// One captured picture of a video.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Shot {
+    /// A slide at rest.
+    Hold(usize),
+    /// The animation from one slide to the next, `t` seconds in.
+    Step { from: usize, to: usize, t: f32 },
+}
+
+pub struct VideoJob {
+    /// Each picture to capture, with how many video frames it fills.
+    pub shots: Vec<(Shot, u32)>,
+    pub kind: Transition,
+    pub writer: Option<Mp4Writer>,
+    /// Set once every picture is in: the encoder's result arrives here.
+    pub encoding: Option<mpsc::Receiver<Result<(), String>>>,
+}
+
+/// The pictures of a video: each slide held for `seconds`, then (unless
+/// `kind` is None) the animation to the next one, a picture per frame.
+pub fn video_shots(slides: usize, seconds: f32, kind: Transition) -> Vec<(Shot, u32)> {
+    let hold = ((seconds.max(0.0) * VIDEO_FPS as f32).round() as u32).max(1);
+    let steps = (kind.duration() * VIDEO_FPS as f32).ceil() as u32;
+    let mut shots = Vec::new();
+    for i in 0..slides {
+        shots.push((Shot::Hold(i), hold));
+        if i + 1 < slides {
+            // Frame 0 is the slide just held; the last ends on the next one.
+            for f in 1..steps {
+                let t = f as f32 / VIDEO_FPS as f32;
+                shots.push((Shot::Step { from: i, to: i + 1, t }, 1));
+            }
+        }
+    }
+    shots
+}
+
+/// The video's size for slides captured at `w` x `h`: at most 1920 x 1080
+/// (high-density screens capture larger), even sides, same shape.
+pub fn video_size(w: u32, h: u32) -> (u32, u32) {
+    let scale = (1920.0 / w.max(1) as f32).min(1080.0 / h.max(1) as f32).min(1.0);
+    let even = |v: u32| ((v as f32 * scale).round() as u32 & !1).max(2);
+    (even(w), even(h))
+}
+
+/// The video's length in seconds.
+pub fn video_seconds(shots: &[(Shot, u32)]) -> f32 {
+    shots.iter().map(|s| s.1).sum::<u32>() as f32 / VIDEO_FPS as f32
+}
+
+/// The best H.264 encoder this ffmpeg has, with its quality settings.
+fn encoder_args(ffmpeg: &str) -> Vec<&'static str> {
+    let list = std::process::Command::new(ffmpeg)
+        .args(["-hide_banner", "-encoders"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default();
+    let has = |name: &str| list.split_whitespace().any(|w| w == name);
+    if has("libx264") {
+        vec!["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
+    } else if has("h264_videotoolbox") {
+        vec!["-c:v", "h264_videotoolbox", "-b:v", "16M"]
+    } else if has("h264_mf") {
+        vec!["-c:v", "h264_mf", "-b:v", "16M"]
+    } else if has("libopenh264") {
+        vec!["-c:v", "libopenh264", "-b:v", "16M"]
+    } else {
+        vec!["-c:v", "mpeg4", "-q:v", "2"]
+    }
+}
+
+/// Feeds frames to ffmpeg on its own thread, so the slides keep drawing
+/// while the video is written.
+pub struct Mp4Writer {
+    pub width: u32,
+    pub height: u32,
+    tx: mpsc::SyncSender<(RgbaImage, u32)>,
+    done: mpsc::Receiver<Result<(), String>>,
+}
+
+impl Mp4Writer {
+    /// Starts ffmpeg writing `dest`. Sizes must be even (H.264 needs it).
+    pub fn start(dest: &Path, width: u32, height: u32) -> Result<Self, String> {
+        let ffmpeg = crate::video::tool("ffmpeg")
+            .ok_or("MP4 export needs ffmpeg. Install it (for example with Homebrew) and try again.")?;
+        let size = format!("{width}x{height}");
+        let fps = VIDEO_FPS.to_string();
+        let mut cmd = std::process::Command::new(ffmpeg);
+        cmd.args(["-y", "-hide_banner", "-loglevel", "error"])
+            .args(["-f", "rawvideo", "-pix_fmt", "rgba", "-s", &size, "-r", &fps, "-i", "-"])
+            .args(encoder_args(ffmpeg))
+            .args(["-pix_fmt", "yuv420p", "-movflags", "+faststart"])
+            .arg(dest)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000);
+        }
+        let mut child = cmd.spawn().map_err(|e| format!("Couldn't start ffmpeg: {e}"))?;
+        let mut stdin = child.stdin.take().ok_or("ffmpeg has no input")?;
+        let (tx, rx) = mpsc::sync_channel::<(RgbaImage, u32)>(4);
+        let (done_tx, done) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut res = Ok(());
+            for (img, count) in rx {
+                for _ in 0..count {
+                    if let Err(e) = stdin.write_all(img.as_raw()) {
+                        res = Err(format!("ffmpeg stopped: {e}"));
+                        break;
+                    }
+                }
+                if res.is_err() {
+                    break;
+                }
+            }
+            drop(stdin);
+            let out = child.wait_with_output();
+            let res = match (res, out) {
+                (_, Ok(o)) if !o.status.success() => Err(format!(
+                    "ffmpeg failed: {}",
+                    String::from_utf8_lossy(&o.stderr).trim()
+                )),
+                (Err(e), _) => Err(e),
+                (_, Err(e)) => Err(format!("ffmpeg failed: {e}")),
+                (Ok(()), Ok(_)) => Ok(()),
+            };
+            let _ = done_tx.send(res);
+        });
+        Ok(Mp4Writer {
+            width,
+            height,
+            tx,
+            done,
+        })
+    }
+
+    /// Adds a picture that fills `count` frames; it is scaled to the video's
+    /// size if the window changed.
+    pub fn push(&self, img: RgbaImage, count: u32) -> Result<(), String> {
+        let img = if img.dimensions() == (self.width, self.height) {
+            img
+        } else {
+            image::imageops::resize(
+                &img,
+                self.width,
+                self.height,
+                image::imageops::FilterType::Triangle,
+            )
+        };
+        self.tx
+            .send((img, count))
+            .map_err(|_| "ffmpeg stopped early".to_string())
+    }
+
+    /// No more frames: the result arrives on the returned channel.
+    pub fn finish(self) -> mpsc::Receiver<Result<(), String>> {
+        drop(self.tx);
+        self.done
+    }
 }
 
 /// A video on an exported slide. Position and size are fractions of the slide.
@@ -1164,6 +1379,30 @@ pub fn write_pptx(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn video_holds_each_slide_and_steps_through_animations() {
+        use crate::transition::Transition;
+        // 3 slides, 2 s each, no animation: three held pictures.
+        let shots = video_shots(3, 2.0, Transition::None);
+        assert_eq!(shots.len(), 3);
+        assert!(shots.iter().all(|s| s.1 == 2 * VIDEO_FPS));
+        assert_eq!(video_seconds(&shots), 6.0);
+        // With Fade, a picture per frame between slides, none after the last.
+        let shots = video_shots(2, 1.0, Transition::Fade);
+        let steps = (Transition::Fade.duration() * VIDEO_FPS as f32).ceil() as usize - 1;
+        assert_eq!(shots.len(), 2 + steps);
+        assert_eq!(shots[0].0, Shot::Hold(0));
+        assert!(matches!(shots[1].0, Shot::Step { from: 0, to: 1, .. }));
+        assert_eq!(shots.last().unwrap().0, Shot::Hold(1));
+    }
+
+    #[test]
+    fn video_size_caps_at_full_hd_and_stays_even() {
+        assert_eq!(video_size(3500, 1968), (1920, 1080));
+        assert_eq!(video_size(1280, 720), (1280, 720));
+        assert_eq!(video_size(1001, 563), (1000, 562));
+    }
 
     #[test]
     fn writes_files() {

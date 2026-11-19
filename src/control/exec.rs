@@ -791,19 +791,7 @@ impl App {
                         dest.display()
                     ));
                 }
-                self.export = Some(export::Job {
-                    format,
-                    dest: dest.clone(),
-                    idx: 0,
-                    waiting: false,
-                    frames: 0,
-                    images: Vec::new(),
-                    texts: Vec::new(),
-                    pending_text: String::new(),
-                    videos: Vec::new(),
-                    pending_videos: Vec::new(),
-                    text_layer: false,
-                });
+                self.export = Some(export::Job::new(format, dest.clone()));
                 Ok(obj(vec![
                     ("exporting", text(&dest.display().to_string())),
                     ("slides", Json::Num(self.slides.len() as f64)),

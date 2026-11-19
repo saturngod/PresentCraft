@@ -299,6 +299,8 @@ fn main() -> eframe::Result<()> {
     let mut theme_idx: Option<usize> = None;
     let mut tab: Option<inspector::Tab> = None;
     let mut export_req: Option<(export::Format, PathBuf)> = None;
+    let mut video_seconds: Option<f32> = None;
+    let mut video_animation: Option<transition::Transition> = None;
     let mut cursor_line: Option<usize> = None;
     let mut find_query: Option<String> = None;
     let mut start_mcp = false;
@@ -355,6 +357,16 @@ fn main() -> eframe::Result<()> {
                 start_slide = next.parse::<usize>().unwrap_or(1).saturating_sub(1);
                 i += 2;
             }
+            "--video-seconds" => {
+                // MP4 export: how long each slide stays (default 5)
+                video_seconds = next.parse::<f32>().ok().filter(|s| *s > 0.0);
+                i += 2;
+            }
+            "--video-animation" => {
+                // MP4 export: none, fade, slide or motion (default: the deck's)
+                video_animation = transition::Transition::from_key(&next);
+                i += 2;
+            }
             "--theme" => {
                 theme_idx = Some(next.parse::<usize>().unwrap_or(1).saturating_sub(1));
                 i += 2;
@@ -365,6 +377,7 @@ fn main() -> eframe::Result<()> {
                     "pptx" => export::Format::PowerPoint,
                     "images" => export::Format::Images,
                     "html" => export::Format::Html,
+                    "mp4" | "video" => export::Format::Video,
                     _ => export::Format::Pdf,
                 };
                 export_req = Some((
@@ -465,18 +478,15 @@ fn main() -> eframe::Result<()> {
                 app.current = slide_at_char(&app.slides, ch);
             }
             if let Some((format, dest)) = export_req {
-                app.export = Some(export::Job {
-                    format,
-                    dest,
-                    idx: 0,
-                    waiting: false,
-                    frames: 0,
-                    images: Vec::new(),
-                    texts: Vec::new(),
-                    pending_text: String::new(),
-                    videos: Vec::new(),
-                    pending_videos: Vec::new(),
-                    text_layer: false,
+                app.export = Some(if format == export::Format::Video {
+                    export::Job::video(
+                        dest,
+                        app.slides.len(),
+                        video_seconds.unwrap_or(app.video_seconds),
+                        video_animation.unwrap_or(app.transition),
+                    )
+                } else {
+                    export::Job::new(format, dest)
                 });
                 app.quit_after_export = true;
             }
@@ -495,6 +505,14 @@ pub enum FontChoice {
     Serif,
     /// An installed system family.
     Named(fonts::Face),
+}
+
+/// The "Export Video" dialog: how long each slide stays and which
+/// animation plays between slides.
+#[derive(Clone, Copy, Debug)]
+pub struct VideoDialog {
+    pub seconds: f32,
+    pub kind: transition::Transition,
 }
 
 pub struct App {
@@ -541,6 +559,9 @@ pub struct App {
     pub anim: Option<transition::Anim>,
     /// The Design tab's preview of the slide animation.
     pub design_anim: Option<transition::Anim>,
+    /// The open "Export Video" dialog, and the seconds per slide last used.
+    pub video_dialog: Option<VideoDialog>,
+    pub video_seconds: f32,
     /// The slide last shown while presenting (a change starts `anim`).
     pub shown_slide: usize,
     pub images: ImageCache,
@@ -716,6 +737,8 @@ impl App {
             transition: transition::Transition::None,
             anim: None,
             design_anim: None,
+            video_dialog: None,
+            video_seconds: 5.0,
             shown_slide: 0,
             images: ImageCache::default(),
             presenting: false,
@@ -1669,6 +1692,7 @@ impl App {
                 "pptx" => self.start_export(export::Format::PowerPoint),
                 "images" => self.start_export(export::Format::Images),
                 "html" => self.start_export(export::Format::Html),
+                "mp4" => self.start_export(export::Format::Video),
                 _ => self.export_markdown(),
             },
             "mcp_start" => self.control_start(ctx),
@@ -1785,6 +1809,7 @@ impl App {
                         ("PowerPoint…", export::Format::PowerPoint),
                         ("Images…", export::Format::Images),
                         ("HTML…", export::Format::Html),
+                        ("Video (MP4)…", export::Format::Video),
                     ] {
                         if ui.button(name).clicked() {
                             ui.close();
@@ -2459,7 +2484,7 @@ impl App {
         true
     }
 
-    /// Draws one frame of `anim` into `rect`.
+    /// Draws `anim` as it is now into `rect`, and keeps it running.
     pub fn paint_anim(
         &mut self,
         ctx: &egui::Context,
@@ -2467,9 +2492,20 @@ impl App {
         rect: Rect,
         anim: &transition::Anim,
     ) {
-        use transition::Transition;
         ctx.request_repaint();
         let t = anim.elapsed(ctx.input(|i| i.time));
+        self.paint_anim_at(painter, rect, anim, t);
+    }
+
+    /// Draws `anim` `t` seconds in (video export steps through it).
+    pub fn paint_anim_at(
+        &mut self,
+        painter: &egui::Painter,
+        rect: Rect,
+        anim: &transition::Anim,
+        t: f32,
+    ) {
+        use transition::Transition;
         let slide_painter = painter.with_clip_rect(rect.intersect(painter.clip_rect()));
         if anim.kind == Transition::Motion {
             self.paint_motion(&slide_painter, rect, anim, t);
@@ -2580,8 +2616,23 @@ impl App {
     // ---------- exporting ----------
     /// Asks where to save, then draws and captures every slide.
     pub fn start_export(&mut self, format: export::Format) {
+        if format == export::Format::Video {
+            // Ask how long each slide stays first; see `video_dialog_ui`.
+            if crate::video::tool("ffmpeg").is_none() {
+                self.status =
+                    "MP4 export needs ffmpeg. Install it (for example with Homebrew) and try again."
+                        .into();
+                return;
+            }
+            self.video_dialog = Some(VideoDialog {
+                seconds: self.video_seconds,
+                kind: self.transition,
+            });
+            return;
+        }
         let name = self.doc_name();
         let dest = match format {
+            export::Format::Video => None,
             export::Format::Pdf => rfd::FileDialog::new()
                 .add_filter("PDF", &["pdf"])
                 .set_file_name(format!("{name}.pdf"))
@@ -2599,19 +2650,130 @@ impl App {
                 .pick_folder(),
         };
         if let Some(dest) = dest {
-            self.export = Some(export::Job {
-                format,
-                dest,
-                idx: 0,
-                waiting: false,
-                frames: 0,
-                images: Vec::new(),
-                texts: Vec::new(),
-                pending_text: String::new(),
-                videos: Vec::new(),
-                pending_videos: Vec::new(),
-                text_layer: false,
+            self.export = Some(export::Job::new(format, dest));
+        }
+    }
+
+    /// Asks where to save the video, then starts capturing it.
+    fn start_video_export(&mut self, d: VideoDialog) {
+        self.video_seconds = d.seconds;
+        let Some(dest) = rfd::FileDialog::new()
+            .add_filter("MP4 video", &["mp4"])
+            .set_file_name(format!("{}.mp4", self.doc_name()))
+            .save_file()
+        else {
+            return;
+        };
+        self.export = Some(export::Job::video(dest, self.slides.len(), d.seconds, d.kind));
+    }
+
+    /// The "Export Video" dialog.
+    fn video_dialog_ui(&mut self, ctx: &egui::Context) {
+        let Some(mut d) = self.video_dialog else {
+            return;
+        };
+        let pal = crate::settings::pal();
+        let mut go = false;
+        let mut close = ctx.input(|i| i.key_pressed(Key::Escape));
+        let frame = egui::Frame::new()
+            .fill(pal.inspector_bg)
+            .stroke(Stroke::new(1.0_f32, pal.border))
+            .corner_radius(12)
+            .shadow(ctx.global_style().visuals.window_shadow)
+            .inner_margin(egui::Margin::same(20));
+        egui::Modal::new(egui::Id::unique("video-export"))
+            .frame(frame)
+            .show(ctx, |ui| {
+                ui.set_width(340.0);
+                ui.label(RichText::new("Export Video").size(16.0).strong().color(pal.text_hi));
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new("An MP4 that plays every slide in turn.")
+                        .size(12.0)
+                        .color(pal.text_dim),
+                );
+                ui.add_space(14.0);
+                let row = |ui: &mut egui::Ui, label: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
+                    ui.horizontal(|ui| {
+                        let (r, _) = ui.allocate_exact_size(vec2(120.0, 24.0), Sense::hover());
+                        ui.painter().text(
+                            pos2(r.left(), r.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            label,
+                            FontId::proportional(13.0),
+                            pal.text_dim,
+                        );
+                        add(ui);
+                    });
+                };
+                row(ui, "Seconds per slide", &mut |ui| {
+                    ui.add(
+                        egui::DragValue::new(&mut d.seconds)
+                            .range(0.5..=120.0)
+                            .speed(0.1)
+                            .fixed_decimals(1)
+                            .suffix(" s"),
+                    );
+                });
+                ui.add_space(6.0);
+                row(ui, "Animation", &mut |ui| {
+                    // The menu fills the space it is given, so give it a box.
+                    let w = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        vec2(w, 24.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.set_width(w);
+                            let options: Vec<(transition::Transition, &str)> =
+                                transition::Transition::ALL
+                                    .into_iter()
+                                    .map(|t| (t, t.name()))
+                                    .collect();
+                            inspector::menu_combo(ui, "video animation", &mut d.kind, &options);
+                        },
+                    );
+                });
+                ui.add_space(10.0);
+                let total = export::video_seconds(&export::video_shots(
+                    self.slides.len(),
+                    d.seconds,
+                    d.kind,
+                ))
+                .round() as u32;
+                ui.label(
+                    RichText::new(format!(
+                        "{} slide{} · {}:{:02} long",
+                        self.slides.len(),
+                        if self.slides.len() == 1 { "" } else { "s" },
+                        total / 60,
+                        total % 60
+                    ))
+                    .size(12.0)
+                    .color(pal.text_dim),
+                );
+                ui.add_space(16.0);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(egui::Button::new("Export…").min_size(vec2(90.0, 28.0)))
+                        .clicked()
+                    {
+                        go = true;
+                    }
+                    if ui
+                        .add(egui::Button::new("Cancel").min_size(vec2(80.0, 28.0)))
+                        .clicked()
+                    {
+                        close = true;
+                    }
+                });
             });
+        if go {
+            self.video_dialog = None;
+            self.start_video_export(d);
+        } else if close {
+            self.video_dialog = None;
+        } else {
+            self.video_dialog = Some(d);
         }
     }
 
@@ -2634,7 +2796,10 @@ impl App {
     fn export_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         let n = self.slides.len();
+        // Pictures to capture: one per slide, or every video frame that differs.
+        let total = self.export.as_ref().map_or(n, |j| j.captures(n));
         let mut cancel = ctx.input(|i| i.key_pressed(Key::Escape));
+        let mut video_error: Option<String> = None;
         // a captured picture arrived?
         let shot = take_shot();
         if let (Some(img), Some(job)) = (shot, self.export.as_mut()) {
@@ -2656,19 +2821,96 @@ impl App {
                     );
                 }
             }
-            job.images.push(out);
-            job.texts.push(std::mem::take(&mut job.pending_text));
-            job.videos.push(std::mem::take(&mut job.pending_videos));
+            if let Some(v) = job.video.as_mut() {
+                let count = v.shots.get(job.idx).map_or(1, |s| s.1);
+                // H.264 needs even sizes.
+                let (ew, eh) = ((out.width() & !1).max(2), (out.height() & !1).max(2));
+                let out = if (ew, eh) == out.dimensions() {
+                    out
+                } else {
+                    image::imageops::crop_imm(&out, 0, 0, ew, eh).to_image()
+                };
+                if v.writer.is_none() {
+                    let (w, h) = export::video_size(out.width(), out.height());
+                    match export::Mp4Writer::start(&job.dest, w, h) {
+                        Ok(w) => v.writer = Some(w),
+                        Err(e) => video_error = Some(e),
+                    }
+                }
+                if let Some(w) = &v.writer {
+                    if let Err(e) = w.push(out, count) {
+                        video_error = Some(e);
+                    }
+                }
+            } else {
+                job.images.push(out);
+                job.texts.push(std::mem::take(&mut job.pending_text));
+                job.videos.push(std::mem::take(&mut job.pending_videos));
+            }
             job.idx += 1;
             job.text_layer = false;
             job.waiting = false;
             job.frames = 0;
         }
+        if let Some(e) = video_error {
+            self.export = None;
+            self.status = format!("Export failed: {e}");
+            if self.quit_after_export {
+                eprintln!("{}", self.status);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            return;
+        }
         let downloading = self.images.pending();
         let Some(job) = self.export.as_mut() else {
             return;
         };
-        if job.idx >= n {
+        if job.idx >= total {
+            if let Some(v) = job.video.as_mut() {
+                // Every picture is in: wait for ffmpeg to finish the file.
+                if v.encoding.is_none() {
+                    v.encoding = v.writer.take().map(|w| w.finish());
+                }
+                let res = match v.encoding.as_ref().map(|r| r.try_recv()) {
+                    None => Some(Err("No frames were captured.".to_string())),
+                    Some(Ok(r)) => Some(r),
+                    Some(Err(std::sync::mpsc::TryRecvError::Empty)) => None,
+                    Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
+                        Some(Err("ffmpeg stopped early".to_string()))
+                    }
+                };
+                let Some(res) = res else {
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::new().fill(Color32::BLACK))
+                        .show(ui, |ui| {
+                            ui.painter().text(
+                                ui.max_rect().center(),
+                                egui::Align2::CENTER_CENTER,
+                                "Finishing the video…",
+                                FontId::proportional(15.0),
+                                Color32::from_gray(170),
+                            );
+                        });
+                    ctx.request_repaint_after(std::time::Duration::from_millis(50));
+                    return;
+                };
+                let name = job
+                    .dest
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                self.export = None;
+                self.status = match res {
+                    Ok(()) => format!("Exported {n} slides as {name}"),
+                    Err(e) => format!("Export failed: {e}"),
+                };
+                if self.quit_after_export {
+                    eprintln!("{}", self.status);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                return;
+            }
             let job = self.export.take().unwrap();
             let notes: Vec<String> = self.slides.iter().map(|s| s.notes.join("\n\n")).collect();
             let res: Result<(), String> = match job.format {
@@ -2679,6 +2921,8 @@ impl App {
                     export::write_pptx(&job.dest, &job.images, &job.texts, &notes, &job.videos)
                 }
                 export::Format::Images => export::write_images(&job.dest, &job.images),
+                // Written as it goes; finished above.
+                export::Format::Video => Ok(()),
                 export::Format::Html => export::write_html(
                     &job.dest,
                     &job.images,
@@ -2704,6 +2948,10 @@ impl App {
             return;
         }
         let idx = job.idx;
+        let shot = job
+            .video
+            .as_ref()
+            .map(|v| (v.shots.get(idx).map(|s| s.0), v.kind));
         job.frames += 1;
         // Wait for web pictures to arrive (up to about 20 seconds).
         let request = !job.waiting && job.frames >= 3 && (downloading == 0 || job.frames > 1200);
@@ -2735,7 +2983,19 @@ impl App {
                 if with_videos {
                     images::begin_video_spots();
                 }
-                self.paint_slide(&painter, rect, idx);
+                match shot {
+                    Some((Some(export::Shot::Step { from, to, t }), kind)) => {
+                        let anim = transition::Anim {
+                            kind,
+                            from,
+                            to,
+                            start: 0.0,
+                        };
+                        self.paint_anim_at(&painter.with_clip_rect(rect), rect, &anim, t);
+                    }
+                    Some((Some(export::Shot::Hold(i)), _)) => self.paint_slide(&painter, rect, i),
+                    _ => self.paint_slide(&painter, rect, idx),
+                }
                 if with_videos {
                     let images = &self.images;
                     recorded_videos = images::take_video_spots()
@@ -2762,10 +3022,15 @@ impl App {
                             if downloading == 1 { "" } else { "s" }
                         )
                     } else {
+                        let at = match shot {
+                            Some((Some(export::Shot::Hold(i)), _)) => i + 1,
+                            Some((Some(export::Shot::Step { to, .. }), _)) => to + 1,
+                            _ => idx + 1,
+                        };
                         format!(
                             "Exporting {} — slide {} of {}   ·   Esc to cancel",
                             fmt_name,
-                            idx + 1,
+                            at.min(n),
                             n
                         )
                     },
@@ -4440,6 +4705,7 @@ impl eframe::App for App {
         self.inspector(ui);
         self.editor(ui);
         self.table_editor_ui(ctx);
+        self.video_dialog_ui(ctx);
         self.settings_window(ctx);
         self.update_banner(ctx);
     }

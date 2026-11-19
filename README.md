@@ -26,7 +26,7 @@
 - **Write first, design later.** One Markdown script holds the slides and your speaker notes. Text with a tab in front shows on the slide; the rest stays in your notes.
 - **Rich slides.** Pictures, videos, tables, line, bar and pie charts, code, math and footnotes.
 - **Themes.** 24 built-in themes, background gradients, logos, headers and footers. Import or make your own.
-- **Present and export.** Present full screen, or export to PDF, PowerPoint, images or HTML. Videos play in HTML and PowerPoint, YouTube videos included.
+- **Present and export.** Present full screen, or export to PDF, PowerPoint, images, HTML or an MP4 video that plays the slide animations. Videos play in HTML and PowerPoint, YouTube videos included.
 - **Native and offline.** No Electron, no account. Presentations are `.prcraft` packages on your own disk.
 
 <p align="center">
@@ -78,7 +78,7 @@ cargo run --locked --bin PresentCraft -- path/to/talk.prcraft  # or a .md file
 cargo build --locked --release                                 # optimized build in target/release/
 ```
 
-For video when running from source, install `ffmpeg` (`brew install ffmpeg`, `winget install ffmpeg`, or your Linux package manager).
+For video playback and MP4 export when running from source, install `ffmpeg` (`brew install ffmpeg`, `winget install ffmpeg`, or your Linux package manager).
 
 YouTube links (`![](https://www.youtube.com/watch?v=…)`) show the video's preview picture and, while presenting, play in YouTube's own player over the slide (the system's web view on macOS and Windows; on Linux they open in the browser). Settings → Presentation → Content has Auto play and Show controls for all videos.
 

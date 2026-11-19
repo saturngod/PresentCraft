@@ -90,6 +90,7 @@ impl MacMenu {
                 &item("export:pptx", "PowerPoint…", ""),
                 &item("export:images", "Images…", ""),
                 &item("export:html", "HTML…", ""),
+                &item("export:mp4", "Video (MP4)…", ""),
                 &item("export:markdown", "Markdown…", ""),
             ])
             .ok()?;

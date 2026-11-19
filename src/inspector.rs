@@ -1819,7 +1819,7 @@ impl App {
         }
 
         if section(ui, "Export") {
-            let rows: [(&str, Color32, &str, &str, Option<crate::export::Format>); 5] = [
+            let rows: [(&str, Color32, &str, &str, Option<crate::export::Format>); 6] = [
                 (
                     "PDF",
                     Color32::from_rgb(0xE5, 0x48, 0x4D),
@@ -1847,6 +1847,13 @@ impl App {
                     "Web Page",
                     "One page to host anywhere. Press N for notes.",
                     Some(crate::export::Format::Html),
+                ),
+                (
+                    "MP4",
+                    Color32::from_rgb(0x8E, 0x4E, 0xC6),
+                    "Video",
+                    "Plays every slide with its animation. Needs ffmpeg.",
+                    Some(crate::export::Format::Video),
                 ),
                 (
                     "MD",
