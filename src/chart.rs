@@ -8,6 +8,7 @@ use egui::epaint::TextShape;
 use egui::{pos2, vec2, Align2, Color32, FontId, Mesh, Painter, Pos2, Rect, Shape, Stroke};
 use std::f32::consts::{PI, TAU};
 
+#[derive(Clone)]
 pub struct ChartStyle {
     pub fg: Color32,
     /// Slide background, used to fade sequential and differential shades.
@@ -19,6 +20,7 @@ pub struct ChartStyle {
     pub face: crate::fonts::Face,
 }
 
+#[derive(Clone)]
 struct Data {
     cats: Vec<String>,
     series: Vec<(String, Vec<f64>)>,
@@ -189,8 +191,81 @@ fn legend(p: &Painter, rect: Rect, names: &[String], spec: &ChartSpec, st: &Char
     h + st.base * 0.4
 }
 
-pub fn draw_chart(p: &Painter, rect: Rect, spec: &ChartSpec, st: &ChartStyle) {
-    let d = data(spec);
+/// The key that pairs a chart on one slide with the same chart on the next
+/// (Motion): its type and categories, not its values.
+fn motion_key(spec: &ChartSpec) -> String {
+    let cats: Vec<&str> = spec
+        .table
+        .rows
+        .iter()
+        .map(|r| r.first().map(|s| s.as_str()).unwrap_or(""))
+        .collect();
+    format!(
+        "chart:{:?}:{}:{}:{}",
+        spec.kind,
+        spec.horizontal,
+        spec.stacked,
+        cats.join("\u{1f}")
+    )
+}
+
+/// Draws a chart with its marks grown to `grow` (0 = not yet, 1 = full):
+/// bars rise, lines lift, pies sweep round and gauges count up, while the
+/// axes stay where the full chart puts them.
+pub fn draw_chart_growing(p: &Painter, rect: Rect, spec: &ChartSpec, st: &ChartStyle, grow: f32) {
+    // Motion: a chart on both slides moves (and changes) on its own.
+    if crate::transition::skip_piece(
+        || motion_key(spec),
+        rect,
+        || crate::transition::Piece::Chart {
+            spec: spec.clone(),
+            style: st.clone(),
+        },
+    ) {
+        return;
+    }
+    draw_data(p, rect, spec, &data(spec), st, grow);
+}
+
+/// Motion: the chart `k` of the way from `from` to `to` (0 = `from`). With
+/// the same categories and series its values move; otherwise the old chart
+/// fades out under the new one.
+pub fn draw_chart_between(
+    p: &Painter,
+    rect: Rect,
+    from: (&ChartSpec, &ChartStyle),
+    to: (&ChartSpec, &ChartStyle),
+    k: f32,
+) {
+    let (a, b) = (data(from.0), data(to.0));
+    let mut st = to.1.clone();
+    st.base = from.1.base + (to.1.base - from.1.base) * k;
+    let same_shape = a.cats.len() == b.cats.len()
+        && a.series.len() == b.series.len()
+        && a.series.iter().zip(&b.series).all(|(x, y)| x.1.len() == y.1.len());
+    if same_shape {
+        let mut d = b.clone();
+        for (s, (_, vals)) in d.series.iter_mut().enumerate() {
+            for (i, v) in vals.iter_mut().enumerate() {
+                let old = a.series[s].1[i];
+                *v = old + (*v - old) * k as f64;
+            }
+        }
+        draw_data(p, rect, to.0, &d, &st, 1.0);
+    } else {
+        let mut under = p.clone();
+        under.set_opacity(1.0 - k);
+        let mut old_st = from.1.clone();
+        old_st.base = st.base;
+        draw_data(&under, rect, from.0, &a, &old_st, 1.0);
+        let mut top = p.clone();
+        top.set_opacity(k);
+        draw_data(&top, rect, to.0, &b, &st, 1.0);
+    }
+}
+
+fn draw_data(p: &Painter, rect: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle, grow: f32) {
+    let grow = grow.clamp(0.0, 1.0);
     let mut area = rect;
     if let Some(t) = &spec.title {
         let r = text(
@@ -226,14 +301,14 @@ pub fn draw_chart(p: &Painter, rect: Rect, spec: &ChartSpec, st: &ChartStyle) {
         return;
     }
     match spec.kind {
-        ChartKind::Pie | ChartKind::Donut => pie(p, area, spec, &d, st),
-        ChartKind::Radar => radar(p, area, spec, &d, st),
-        ChartKind::Gauge => gauge(p, area, spec, &d, st),
-        _ => xy(p, area, spec, &d, st),
+        ChartKind::Pie | ChartKind::Donut => pie(p, area, spec, d, st, grow),
+        ChartKind::Radar => radar(p, area, spec, d, st, grow),
+        ChartKind::Gauge => gauge(p, area, spec, d, st, grow),
+        _ => xy(p, area, spec, d, st, grow),
     }
 }
 
-fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) {
+fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle, grow: f32) {
     if spec.legend {
         let h = legend(p, area, &d.cats, spec, st);
         area.min.y += h;
@@ -252,7 +327,8 @@ fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle)
     };
     let mut a0 = -PI / 2.0;
     for (i, v) in vals.iter().enumerate() {
-        let sweep = (*v / total) as f32 * TAU;
+        // Growing: the slices unroll clockwise from the top.
+        let sweep = (*v / total) as f32 * TAU * grow;
         let col = color_for(spec, st, i, vals.len());
         let steps = ((sweep / TAU) * 120.0).ceil().max(2.0) as usize;
         let mut mesh = Mesh::default();
@@ -274,7 +350,7 @@ fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle)
             [c + dir0 * inner, c + dir0 * r],
             Stroke::new((r * 0.012).max(1.0), Color32::WHITE),
         );
-        if sweep > 0.25 {
+        if sweep > 0.25 && grow > 0.85 {
             let mid = a0 + sweep / 2.0;
             let lr = (r + inner) / 2.0 + if inner == 0.0 { r * 0.12 } else { 0.0 };
             let pct = (*v / total * 100.0).round();
@@ -297,7 +373,7 @@ fn pie(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle)
     }
 }
 
-fn radar(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) {
+fn radar(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle, grow: f32) {
     if spec.legend {
         let names: Vec<String> = d.series.iter().map(|s| s.0.clone()).collect();
         area.min.y += legend(p, area, &names, spec, st);
@@ -350,7 +426,7 @@ fn radar(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyl
         let pts: Vec<Pos2> = (0..n)
             .map(|i| {
                 let v = vals.get(i).cloned().unwrap_or(0.0).max(0.0);
-                c + vec2(ang(i).cos(), ang(i).sin()) * (r * (v / top) as f32)
+                c + vec2(ang(i).cos(), ang(i).sin()) * (r * (v / top) as f32 * grow)
             })
             .collect();
         let mut mesh = Mesh::default();
@@ -369,12 +445,14 @@ fn radar(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyl
     }
 }
 
-fn gauge(p: &Painter, area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) {
-    let v = d.series[0].1.first().cloned().unwrap_or(0.0);
-    let max = if v <= 100.0 {
+fn gauge(p: &Painter, area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle, grow: f32) {
+    let full = d.series[0].1.first().cloned().unwrap_or(0.0);
+    // Growing: the needle sweeps up and the number counts up with it.
+    let v = full * grow as f64;
+    let max = if full <= 100.0 {
         100.0
     } else {
-        nice_step(v, 1.0) * (v / nice_step(v, 1.0)).ceil()
+        nice_step(full, 1.0) * (full / nice_step(full, 1.0)).ceil()
     };
     let frac = (v / max).clamp(0.0, 1.0) as f32;
     let r = (area.width() / 2.0).min(area.height() * 0.8) * 0.9;
@@ -453,7 +531,7 @@ fn catmull(pts: &[Pos2]) -> Vec<Pos2> {
     out
 }
 
-fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) {
+fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle, grow: f32) {
     let ncat = d.cats.len();
     let nser = d.series.len();
     let stacked = spec.stacked && matches!(spec.kind, ChartKind::Bar | ChartKind::Area);
@@ -543,6 +621,7 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
     }
     let grid = st.fg.gamma_multiply(0.15);
     let axis = st.fg.gamma_multiply(0.5);
+    let g = grow as f64;
     let val_to = |v: f64| -> f32 {
         let t = ((v - vmin) / (vmax - vmin)) as f32;
         if horizontal {
@@ -657,7 +736,7 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
                 let mut acc_pos = 0.0;
                 let mut acc_neg = 0.0;
                 for (s, (_, vals)) in d.series.iter().enumerate() {
-                    let v = vals[c];
+                    let v = vals[c] * g;
                     let col = color_for(spec, st, s, nser);
                     let (a, b, lo_off, w) = if stacked {
                         let (from, to) = if v >= 0.0 {
@@ -692,11 +771,11 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
                 .max(1e-9);
             let rmax = band.min(plot.height() / 3.0) * 0.45;
             for c in 0..ncat {
-                let v = d.series[0].1[c];
+                let v = d.series[0].1[c] * g;
                 let rr = match sizes {
                     Some(s) => (rmax * ((s[c].max(0.0) / smax) as f32).sqrt()).max(3.0),
                     None => rmax * 0.4,
-                };
+                } * grow;
                 let col = color_for(spec, st, c, ncat);
                 p.circle_filled(pos2(cat_center(c), val_to(v)), rr, col.gamma_multiply(0.75));
             }
@@ -706,9 +785,9 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
             for (s, (_, vals)) in d.series.iter().enumerate() {
                 let col = color_for(spec, st, s, d.series.len());
                 let tops: Vec<f64> = if stacked {
-                    (0..ncat).map(|c| base_line[c] + vals[c]).collect()
+                    (0..ncat).map(|c| base_line[c] + vals[c] * g).collect()
                 } else {
-                    vals.clone()
+                    vals.iter().map(|v| v * g).collect()
                 };
                 let mut pts: Vec<Pos2> = (0..ncat)
                     .map(|c| pos2(cat_center(c), val_to(tops[c])))
@@ -772,5 +851,29 @@ fn xy(p: &Painter, mut area: Rect, spec: &ChartSpec, d: &Data, st: &ChartStyle) 
             [pos2(plot.left(), zero), pos2(plot.right(), zero)],
             Stroke::new(1.0_f32, axis),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::{parse_document, Block};
+
+    fn chart(md: &str) -> ChartSpec {
+        match &parse_document(md)[0].groups[0][0] {
+            Block::Chart(c) => c.clone(),
+            _ => panic!("not a chart"),
+        }
+    }
+
+    #[test]
+    fn motion_pairs_charts_by_type_and_categories() {
+        let a = chart("| | Sales |\n|:--|--:|\n| Q1 | 10 |\n| Q2 | 20 |\nChart: Bar");
+        let b = chart("| | Sales |\n|:--|--:|\n| Q1 | 30 |\n| Q2 | 5 |\nChart: Bar");
+        let pie = chart("| | Sales |\n|:--|--:|\n| Q1 | 10 |\n| Q2 | 20 |\nChart: Pie");
+        let other = chart("| | Sales |\n|:--|--:|\n| Q3 | 10 |\n| Q4 | 20 |\nChart: Bar");
+        assert_eq!(motion_key(&a), motion_key(&b));
+        assert_ne!(motion_key(&a), motion_key(&pie));
+        assert_ne!(motion_key(&a), motion_key(&other));
     }
 }

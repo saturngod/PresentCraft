@@ -3,7 +3,7 @@
 //! centred title (level 2 alone),
 //! single picture full-bleed, split (2–3 groups side by side), grid (4+ groups).
 
-use crate::chart::{draw_chart, ChartStyle};
+use crate::chart::{draw_chart_growing, ChartStyle};
 use crate::images::{draw_image, ImageCache};
 use crate::inline::{self, Style};
 use crate::parse::{Align, Block, Slide, TableSpec, VAlign};
@@ -286,7 +286,7 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
             let col = Rect::from_min_size(pos2(rect.left() + w * i as f32, rect.top()), vec2(w, h));
             if single_image(g) {
                 if let Block::Image(img) = &g[0] {
-                    let (p, _) = crate::transition::reveal_painter(&painter, 0.0);
+                    let (p, _, _) = crate::transition::reveal_painter(&painter, 0.0);
                     draw_image(&p, col, img, sub.images, &theme.accents, None);
                 }
             } else {
@@ -325,7 +325,7 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
         );
         if single_image(g) {
             if let Block::Image(img) = &g[0] {
-                let (p, _) = crate::transition::reveal_painter(&painter, 0.0);
+                let (p, _, _) = crate::transition::reveal_painter(&painter, 0.0);
                 draw_image(&p, cell, img, sub.images, &theme.accents, None);
             }
         } else {
@@ -834,7 +834,7 @@ fn draw_group(
     let n = items.len();
     for (i, it) in items.into_iter().enumerate() {
         // Motion transition: each piece fades and rises in, one after another.
-        let (item_painter, down) =
+        let (item_painter, down, progress) =
             crate::transition::reveal_painter(painter, base * scale * 1.6);
         let painter = &item_painter;
         y += down;
@@ -898,7 +898,8 @@ fn draw_group(
                         let used = draw_table(painter, r, t, base * scale, colors, theme);
                         let _ = used;
                     }
-                    Block::Chart(c) => draw_chart(
+                    // Motion: charts grow in as they rise.
+                    Block::Chart(c) => draw_chart_growing(
                         painter,
                         r,
                         c,
@@ -910,6 +911,7 @@ fn draw_group(
                             base: base * scale.max(0.7),
                             face: theme.face,
                         },
+                        crate::transition::ease_out_cubic(progress),
                     ),
                     _ => {}
                 }

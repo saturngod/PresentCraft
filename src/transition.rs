@@ -176,29 +176,30 @@ pub fn end_reveal() {
     REVEAL.with(|r| r.set(None));
 }
 
-/// For the next piece of content: its opacity and how far below its place
-/// it sits, as a share of `lift`. Outside a reveal: fully shown, in place.
-pub fn reveal_step() -> (f32, f32) {
+/// For the next piece of content: its opacity, how far below its place it
+/// sits (as a share of `lift`), and how far it has come (0 to 1). Outside
+/// a reveal: fully shown, in place.
+pub fn reveal_step() -> (f32, f32, f32) {
     REVEAL.with(|r| match r.get() {
-        None => (1.0, 0.0),
+        None => (1.0, 0.0, 1.0),
         Some((t, n)) => {
             r.set(Some((t, n + 1)));
             let start = REVEAL_START + REVEAL_STAGGER * n.min(REVEAL_MAX_STEPS) as f32;
             let p = ((t - start) / REVEAL_LEN).clamp(0.0, 1.0);
-            (ease_out_cubic(p * 1.4), 1.0 - ease_out_quint(p))
+            (ease_out_cubic(p * 1.4), 1.0 - ease_out_quint(p), p)
         }
     })
 }
 
-/// A painter for one piece of content during a reveal, and how far down to
-/// draw it (`lift` points at most).
-pub fn reveal_painter(p: &egui::Painter, lift: f32) -> (egui::Painter, f32) {
-    let (opacity, down) = reveal_step();
+/// A painter for one piece of content during a reveal, how far down to
+/// draw it (`lift` points at most), and how far it has come (0 to 1).
+pub fn reveal_painter(p: &egui::Painter, lift: f32) -> (egui::Painter, f32, f32) {
+    let (opacity, down, progress) = reveal_step();
     let mut p = p.clone();
     if opacity < 1.0 {
         p.multiply_opacity(opacity);
     }
-    (p, down * lift)
+    (p, down * lift, progress)
 }
 
 // ---------- shared pieces (Motion) ----------
@@ -213,6 +214,10 @@ pub enum Piece {
     Text {
         galley: Arc<Galley>,
         fallback: Color32,
+    },
+    Chart {
+        spec: crate::parse::ChartSpec,
+        style: crate::chart::ChartStyle,
     },
 }
 
@@ -429,15 +434,16 @@ mod tests {
     #[test]
     fn reveal_staggers_and_finishes() {
         begin_reveal(0.0);
-        let (a, d) = reveal_step();
+        let (a, d, p) = reveal_step();
         assert_eq!(a, 0.0);
         assert_eq!(d, 1.0);
+        assert_eq!(p, 0.0);
         end_reveal();
         begin_reveal(MOTION_TOTAL);
         for _ in 0..20 {
-            assert_eq!(reveal_step(), (1.0, 0.0));
+            assert_eq!(reveal_step(), (1.0, 0.0, 1.0));
         }
         end_reveal();
-        assert_eq!(reveal_step(), (1.0, 0.0));
+        assert_eq!(reveal_step(), (1.0, 0.0, 1.0));
     }
 }

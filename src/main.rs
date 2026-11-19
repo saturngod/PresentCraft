@@ -2568,6 +2568,10 @@ impl App {
                     top.set_opacity(if same { 1.0 } else { k });
                     top.galley(at(gb), gb.clone(), *fb);
                 }
+                (
+                    transition::Piece::Chart { spec: sa, style: ta },
+                    transition::Piece::Chart { spec: sb, style: tb },
+                ) => chart::draw_chart_between(painter, r, (sa, ta), (sb, tb), k),
                 _ => {}
             }
         }
