@@ -611,6 +611,13 @@ pub struct App {
     /// A running check for a newer release, and a newer release to offer.
     pub update_check: Option<update::Check>,
     update_available: Option<update::Release>,
+    /// The newer release being downloaded or ready to install.
+    update_install: Option<update::Install>,
+    /// The app bundle this copy can replace in place, found once an update
+    /// with a download for this computer turns up.
+    install_target: Option<update::Target>,
+    /// A downloaded app to swap in when the app quits: (new bundle, bundle to replace).
+    install_on_quit: Option<(PathBuf, PathBuf)>,
     /// When the next automatic update check may run (seconds since 1970).
     /// Zero, so the first one runs as soon as the app opens.
     next_auto_check: u64,
@@ -746,6 +753,9 @@ impl App {
             doc_form: None,
             update_check: None,
             update_available: None,
+            update_install: None,
+            install_target: None,
+            install_on_quit: None,
             next_auto_check: 0,
             control: Default::default(),
             #[cfg(target_os = "macos")]
@@ -761,6 +771,11 @@ impl App {
             app.mac_menu = macos_menu::MacMenu::install(&cc.egui_ctx, &templates);
         }
         app.apply_preset(default_theme);
+        if app.shot_path.is_none() && update::take_failed_install() {
+            app.status =
+                "The update couldn't be installed. Download it from the release page instead."
+                    .into();
+        }
         if let Some(f) = file {
             app.open_path(f);
         }
@@ -815,6 +830,11 @@ impl App {
         }
         match outcome {
             update::Outcome::Newer(release) => {
+                // Looked up only when there is something to install, so a
+                // normal launch doesn't touch the app's folder.
+                if release.asset.is_some() && self.install_target.is_none() {
+                    self.install_target = update::install_target();
+                }
                 if manual || release.version != self.settings.skipped_version {
                     self.update_available = Some(release);
                 }
@@ -832,15 +852,97 @@ impl App {
         }
     }
 
+    /// Starts downloading a newer release for in-place install, when this copy
+    /// can be replaced. Otherwise the release page is opened.
+    fn start_install(&mut self, ctx: &egui::Context, release: update::Release) {
+        match (release.asset.clone(), self.install_target.as_ref()) {
+            (Some(asset), Some(target)) => {
+                self.status = format!("Downloading PresentCraft {}…", release.version);
+                self.update_install = Some(update::Install::start(ctx, release, asset, target));
+            }
+            _ => self.open_release_page(&release),
+        }
+    }
+
+    /// Sends the person to the release page and closes the banner.
+    fn open_release_page(&mut self, release: &update::Release) {
+        if !open_external(std::ffi::OsStr::new(&release.url)) {
+            self.status = format!("Couldn't open {}", release.url);
+        }
+        self.discard_install();
+        self.update_available = None;
+    }
+
+    /// Picks up the finished download, or reports why it failed.
+    fn poll_install(&mut self) {
+        let Some(install) = self.update_install.as_mut() else {
+            return;
+        };
+        match install.poll() {
+            None => {}
+            Some(Ok(())) => {
+                self.status = format!(
+                    "PresentCraft {} is ready to install.",
+                    install.release.version
+                );
+            }
+            Some(Err(e)) => {
+                self.discard_install();
+                self.status = format!("Couldn't install the update: {e}. You can download it instead.");
+            }
+        }
+    }
+
+    /// Ends the install from the banner: the app closes (asking to save
+    /// first) and the new version takes its place on the way out.
+    fn restart_to_install(&mut self, ctx: &egui::Context) {
+        let Some(new_app) = self
+            .update_install
+            .as_ref()
+            .and_then(|i| i.app().map(Path::to_path_buf))
+        else {
+            return;
+        };
+        let Some(target) = self.install_target.as_ref().map(|t| t.app.clone()) else {
+            return;
+        };
+        if !update::can_replace(&target) {
+            self.status = "PresentCraft can't be replaced in its folder. Download the update instead.".into();
+            return;
+        }
+        self.install_on_quit = Some((new_app, target));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Stops an update that was downloaded or is downloading, and removes its files.
+    fn discard_install(&mut self) {
+        if let Some(install) = self.update_install.take() {
+            install.discard();
+        }
+    }
+
     /// A small card under the top bar offering the newer release.
     fn update_banner(&mut self, ctx: &egui::Context) {
         let Some(release) = self.update_available.clone() else {
             return;
         };
         let pal = settings::pal();
+        let progress = self
+            .update_install
+            .as_ref()
+            .filter(|i| !i.ready())
+            .map(|i| i.fraction());
+        let ready = self.update_install.as_ref().is_some_and(|i| i.ready());
+        let can_install = release.asset.is_some() && self.install_target.is_some();
+        let mut install = false;
+        let mut restart = false;
         let mut download = false;
         let mut skip = false;
         let mut later = false;
+        let mut cancel = false;
+        if progress.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
         egui::Area::new(egui::Id::unique("update-banner"))
             .anchor(egui::Align2::CENTER_TOP, vec2(0.0, TOP_BAR + 10.0))
             .order(egui::Order::Foreground)
@@ -854,38 +956,75 @@ impl App {
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.vertical(|ui| {
+                                let title = if ready {
+                                    format!("PresentCraft {} is ready to install", release.version)
+                                } else {
+                                    format!("PresentCraft {} is available", release.version)
+                                };
                                 ui.label(
-                                    RichText::new(format!(
-                                        "PresentCraft {} is available",
-                                        release.version
-                                    ))
-                                    .size(13.5)
-                                    .strong()
-                                    .color(pal.text_hi),
+                                    RichText::new(title)
+                                        .size(13.5)
+                                        .strong()
+                                        .color(pal.text_hi),
                                 );
-                                ui.label(
-                                    RichText::new(format!("You have {}.", update::CURRENT))
-                                        .size(12.0)
-                                        .color(pal.text_dim),
-                                );
+                                match progress {
+                                    Some(f) => {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "Downloading… {:.0}%",
+                                                f * 100.0
+                                            ))
+                                            .size(12.0)
+                                            .color(pal.text_dim),
+                                        );
+                                        ui.add(
+                                            egui::ProgressBar::new(f).desired_width(200.0),
+                                        );
+                                    }
+                                    None => {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "You have {}.",
+                                                update::CURRENT
+                                            ))
+                                            .size(12.0)
+                                            .color(pal.text_dim),
+                                        );
+                                    }
+                                }
                             });
                             ui.add_space(18.0);
-                            download = ui.button("Download").clicked();
-                            skip = ui.button("Skip This Version").clicked();
-                            later = ui.button("Later").clicked();
+                            if progress.is_some() {
+                                cancel = ui.button("Cancel").clicked();
+                            } else if ready {
+                                restart = ui.button("Restart to Install").clicked();
+                                later = ui.button("Later").clicked();
+                            } else {
+                                if can_install {
+                                    install = ui.button("Install Update").clicked();
+                                }
+                                download = ui.button("Download").clicked();
+                                skip = ui.button("Skip This Version").clicked();
+                                later = ui.button("Later").clicked();
+                            }
                         });
                     });
             });
-        if download {
-            if !open_external(std::ffi::OsStr::new(&release.url)) {
-                self.status = format!("Couldn't open {}", release.url);
-            }
-            self.update_available = None;
+        if restart {
+            self.restart_to_install(ctx);
+        } else if cancel {
+            self.discard_install();
+        } else if install {
+            self.start_install(ctx, release);
+        } else if download {
+            self.open_release_page(&release);
         } else if skip {
             self.settings.skipped_version = release.version;
             self.settings.save();
+            self.discard_install();
             self.update_available = None;
         } else if later {
+            self.discard_install();
             self.update_available = None;
         }
     }
@@ -3992,6 +4131,19 @@ impl eframe::App for App {
         });
     }
 
+    /// Runs after the window has closed (and any save prompt was answered).
+    /// A downloaded update is swapped in here, once this process has exited.
+    fn on_exit(&mut self) {
+        if let Some((new_app, target)) = self.install_on_quit.take() {
+            if let Err(e) = update::spawn_swap(&new_app, &target) {
+                eprintln!("PresentCraft: the update could not be installed: {e}");
+            }
+        } else {
+            // Quitting without installing: drop the downloaded files.
+            self.discard_install();
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &ui.ctx().clone();
         #[cfg(target_os = "macos")]
@@ -4031,6 +4183,7 @@ impl eframe::App for App {
         }
         settings::apply_appearance(ctx, &self.settings);
         self.poll_update_check();
+        self.poll_install();
         self.auto_check_updates(ctx);
         self.screenshot_tick(ctx);
         self.control_drain(ctx);
@@ -4057,6 +4210,7 @@ impl eframe::App for App {
         }
         if ctx.input(|i| i.viewport().close_requested()) && !self.confirm_replace() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.install_on_quit = None;
         }
         if cmd(Key::O) {
             self.open_dialog();

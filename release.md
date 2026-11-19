@@ -21,6 +21,8 @@ Linux also gets a `.deb`, an `.rpm` and an AppImage. After `package-linux.sh`, r
 
 `.github/workflows/release.yml` builds all packages when a tag starting with `v` is pushed and attaches them to a GitHub release for that tag: macOS (Apple silicon, signed and notarized), Linux x86_64 and aarch64 (`.tar.gz`, `.deb`, `.rpm` and AppImage each), and Windows x64 and ARM64. Running it by hand from the Actions tab builds the packages without publishing.
 
+The in-app "Install Update" button on macOS finds the release's `PresentCraft-<version>-macos-arm64.zip` by its name, so keep that name (and the zip's `PresentCraft.app` at its top level) as `package-macos.sh` makes it.
+
 The version comes from `Cargo.toml`. It shows in the app, the package file names, the macOS bundle and the Windows exe. Make releases with `packaging/release.sh`, which sets the version, commits it and adds the matching tag, so the build always has the right number:
 
 ```sh
