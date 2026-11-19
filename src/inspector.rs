@@ -2134,25 +2134,20 @@ impl App {
                 }
             });
             labeled(ui, "", |ui| {
-                let ok = self.transition != crate::transition::Transition::None;
-                if ui
-                    .add_enabled(
-                        ok,
-                        egui::Button::new("Preview").min_size(vec2(ui.available_width(), 24.0)),
-                    )
-                    .on_hover_text("Play the animation on the slide above")
-                    .clicked()
-                {
-                    let to = self.current;
-                    self.preview_transition(ui.ctx(), to.saturating_sub(1), to);
-                }
-            });
-            labeled(ui, "", |ui| {
-                ui.label(
-                    RichText::new(self.transition_hint())
-                        .color(crate::settings::pal().text_dim)
-                        .size(11.5),
-                );
+                // Wrap within the column: an unwrapped line in this row
+                // would widen the whole inspector.
+                let w = ui.available_width();
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.set_max_width(w);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(self.transition_hint())
+                                .color(crate::settings::pal().text_dim)
+                                .size(11.5),
+                        )
+                        .wrap(),
+                    );
+                });
             });
         }
         divider(ui);
@@ -2195,6 +2190,8 @@ impl App {
             to,
             start: ctx.input(|i| i.time),
         });
+        // Nothing else may wake the next frame once the click is handled.
+        ctx.request_repaint();
     }
 
     fn transition_hint(&self) -> &'static str {
