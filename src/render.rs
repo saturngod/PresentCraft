@@ -270,7 +270,8 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
             let col = Rect::from_min_size(pos2(rect.left() + w * i as f32, rect.top()), vec2(w, h));
             if single_image(g) {
                 if let Block::Image(img) = &g[0] {
-                    draw_image(&painter, col, img, sub.images, &theme.accents, None);
+                    let (p, _) = crate::transition::reveal_painter(&painter, 0.0);
+                    draw_image(&p, col, img, sub.images, &theme.accents, None);
                 }
             } else {
                 let mut c = col.shrink2(vec2(pad.x * 0.75, pad.y));
@@ -308,7 +309,8 @@ fn draw_content(cx: &mut Ctx, rect: Rect, slide: &Slide) -> Color32 {
         );
         if single_image(g) {
             if let Block::Image(img) = &g[0] {
-                draw_image(&painter, cell, img, sub.images, &theme.accents, None);
+                let (p, _) = crate::transition::reveal_painter(&painter, 0.0);
+                draw_image(&p, cell, img, sub.images, &theme.accents, None);
             }
         } else {
             draw_group(&mut sub, cell, g, base * 0.8, &colors, Anchor::Top, Align::Left);
@@ -815,6 +817,11 @@ fn draw_group(
     };
     let n = items.len();
     for (i, it) in items.into_iter().enumerate() {
+        // Motion transition: each piece fades and rises in, one after another.
+        let (item_painter, down) =
+            crate::transition::reveal_painter(painter, base * scale * 1.6);
+        let painter = &item_painter;
+        y += down;
         match it {
             Item::Text {
                 galley,
@@ -893,6 +900,7 @@ fn draw_group(
                 y += flex_h + gap * 0.5;
             }
         }
+        y -= down;
     }
 }
 

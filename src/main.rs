@@ -34,6 +34,7 @@ mod tabletools;
 mod theme;
 mod titletools;
 mod themefile;
+mod transition;
 mod update;
 mod video;
 mod webvideo;
@@ -535,6 +536,13 @@ pub struct App {
     pub today: String,
     pub author: String,
     pub audience: String,
+    /// The deck's slide animation, and the one playing now.
+    pub transition: transition::Transition,
+    pub anim: Option<transition::Anim>,
+    /// The Design tab's preview of the slide animation.
+    pub design_anim: Option<transition::Anim>,
+    /// The slide last shown while presenting (a change starts `anim`).
+    pub shown_slide: usize,
     pub images: ImageCache,
     pub presenting: bool,
     pub prompter: bool,
@@ -705,6 +713,10 @@ impl App {
             today: theme::today(),
             author: String::new(),
             audience: String::new(),
+            transition: transition::Transition::None,
+            anim: None,
+            design_anim: None,
+            shown_slide: 0,
             images: ImageCache::default(),
             presenting: false,
             prompter: false,
@@ -1334,6 +1346,7 @@ impl App {
             dark: Some(self.dark),
             author: Some(self.author.clone()),
             audience: Some(self.audience.clone()),
+            transition: Some(self.transition.key().to_string()),
             logo: Some(self.logo.clone()),
             logo_size: Some(self.logo_size),
             slots: Some(self.slots.clone()),
@@ -1352,6 +1365,9 @@ impl App {
         }
         if let Some(a) = &d.audience {
             self.audience = a.clone();
+        }
+        if let Some(t) = d.transition.as_deref().and_then(transition::Transition::from_key) {
+            self.transition = t;
         }
         if let Some(l) = &d.logo {
             self.logo = l.clone();
@@ -2316,6 +2332,8 @@ impl App {
             self.status = mechanics::EMPTY_SLIDE_GUIDANCE.into();
         }
         self.presenting = true;
+        self.anim = None;
+        self.shown_slide = self.current;
         self.present_focus = true;
         self.present_note = 0;
         self.note_scroll = true;
@@ -2410,6 +2428,82 @@ impl App {
             };
             draw_slide(&mut cx, rect, slide, idx + 1);
         }
+    }
+
+    /// Draws the presented slide into `rect`, playing the deck's slide
+    /// animation when the slide has just changed. Video spots are collected
+    /// for the incoming slide only. Returns true while an animation runs.
+    fn paint_presented(&mut self, ctx: &egui::Context, painter: &egui::Painter, rect: Rect) -> bool {
+        use transition::{Anim, Transition};
+        let now = ctx.input(|i| i.time);
+        if self.current != self.shown_slide {
+            let from = self.shown_slide;
+            self.shown_slide = self.current;
+            self.anim = (self.transition != Transition::None && from < self.slides.len()).then_some(
+                Anim {
+                    kind: self.transition,
+                    from,
+                    to: self.current,
+                    start: now,
+                },
+            );
+        }
+        let anim = self.anim.filter(|a| a.to == self.current && !a.done(now));
+        self.anim = anim;
+        let Some(anim) = anim else {
+            images::begin_video_spots();
+            self.paint_slide(painter, rect, self.current);
+            return false;
+        };
+        self.paint_anim(ctx, painter, rect, &anim, "present");
+        true
+    }
+
+    /// Draws one frame of `anim` into `rect`. `salt` keeps the layers of
+    /// different places apart.
+    pub fn paint_anim(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &egui::Painter,
+        rect: Rect,
+        anim: &transition::Anim,
+        salt: &str,
+    ) {
+        use transition::{Pose, Transition};
+        ctx.request_repaint();
+        let t = anim.elapsed(ctx.input(|i| i.time));
+        let (out, inn) = transition::poses(anim.kind, t, anim.dir());
+        let clip = painter.clip_rect();
+        let layer_painter = |name: &str, pose: Pose| {
+            if pose.scale == 1.0 {
+                // Only moved sideways (or not at all): draw in place, clipped
+                // to the slide so nothing spills into the letterbox.
+                let mut p = painter.with_clip_rect(rect.intersect(clip));
+                p.set_opacity(pose.opacity);
+                (p, rect.translate(vec2(pose.shift * rect.width(), 0.0)))
+            } else {
+                // Scaled: its own layer, so text is scaled, not laid out again.
+                let layer = egui::LayerId::new(
+                    egui::Order::Middle,
+                    egui::Id::unique(("slide-transition", salt, name)),
+                );
+                ctx.set_transform_layer(layer, pose.transform(rect));
+                let mut p = egui::Painter::new(ctx.clone(), layer, rect.intersect(clip));
+                p.set_opacity(pose.opacity);
+                (p, rect)
+            }
+        };
+        if out.opacity > 0.0 {
+            let (p, r) = layer_painter("out", out);
+            self.paint_slide(&p, r, anim.from);
+        }
+        let (p, r) = layer_painter("in", inn);
+        images::begin_video_spots();
+        if anim.kind == Transition::Motion {
+            transition::begin_reveal(t);
+        }
+        self.paint_slide(&p, r, anim.to);
+        transition::end_reveal();
     }
 
     // ---------- exporting ----------
@@ -2767,8 +2861,7 @@ impl App {
                 if self.images.tick_videos(ctx) {
                     ctx.request_repaint();
                 }
-                images::begin_video_spots();
-                self.paint_slide(&painter, rect, self.current);
+                let animating = self.paint_presented(ctx, &painter, rect);
                 let videos = images::take_video_spots();
                 // Videos play in the system's player: click one, or press V.
                 // Background videos start by themselves (silent, looping).
@@ -2811,7 +2904,8 @@ impl App {
                 }
                 // Auto play: the slide's first video starts by itself. It
                 // stays quiet if it can't (no browser or player pops up).
-                if std::mem::take(&mut self.auto_play) && play.is_none() {
+                // It waits for the slide animation to settle.
+                if !animating && std::mem::take(&mut self.auto_play) && play.is_none() {
                     if let Some(v) = videos.iter().find(|v| !v.background) {
                         if images::youtube_id(&v.src).is_some() {
                             self.open_web_video(ctx, &v.src, v.rect.intersect(rect));

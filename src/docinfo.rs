@@ -44,6 +44,8 @@ pub struct DocSettings {
     pub dark: Option<bool>,
     pub author: Option<String>,
     pub audience: Option<String>,
+    /// The deck's slide animation (`none`, `fade`, `slide` or `motion`).
+    pub transition: Option<String>,
     pub logo: Option<String>,
     pub logo_size: Option<f32>,
     pub slots: Option<[Slot; 6]>,
@@ -67,6 +69,7 @@ pub fn read(info: &Json) -> DocSettings {
     d.dark = text(pick("appearance", "Appearance")).map(|a| a.eq_ignore_ascii_case("dark"));
     d.author = text(pick("author", "Author"));
     d.audience = text(pick("audience", "Audience"));
+    d.transition = text(pick("transition", "Transition"));
     d.logo = text(pick("logo", "Logo")).or_else(|| ia.and_then(|i| i.str("logo")).map(str::to_string));
     d.logo_size = match pick("logoSize", "LogoSize") {
         Some(Json::Num(n)) => Some((*n as f32).clamp(0.01, 0.5)),
@@ -164,6 +167,10 @@ pub fn write(base: Option<&Json>, d: &DocSettings) -> Json {
     ours.set("appearance", if dark { "dark" } else { "light" }.into());
     ours.set("author", d.author.clone().unwrap_or_default().into());
     ours.set("audience", d.audience.clone().unwrap_or_default().into());
+    ours.set(
+        "transition",
+        d.transition.clone().unwrap_or_else(|| "none".into()).into(),
+    );
     let logo = d.logo.clone().unwrap_or_default();
     ours.set("logo", logo.clone().into());
     ours.set("logoSize", (d.logo_size.unwrap_or(0.05) as f64).into());
@@ -338,6 +345,16 @@ mod tests {
         assert_eq!(back.dark, Some(true));
         assert_eq!(back.slots, d.slots);
         assert_eq!(back.logo, d.logo);
+    }
+
+    #[test]
+    fn slide_animation_round_trips() {
+        let base = Json::parse(IA).unwrap();
+        let mut d = read(&base);
+        assert_eq!(d.transition, None);
+        d.transition = Some("motion".into());
+        let back = read(&write(Some(&base), &d));
+        assert_eq!(back.transition.as_deref(), Some("motion"));
     }
 
     #[test]

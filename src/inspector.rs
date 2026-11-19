@@ -1937,7 +1937,19 @@ impl App {
                 4.0,
                 Color32::from_black_alpha(40),
             );
-            self.paint_slide(&painter, card, c);
+            // The slide animation plays here when it is picked or the
+            // slide changes with the arrows below.
+            let now = ui.input(|i| i.time);
+            match self.design_anim.filter(|a| a.to == c && !a.done(now)) {
+                Some(anim) => {
+                    let p = painter.with_clip_rect(card.intersect(painter.clip_rect()));
+                    self.paint_anim(&ui.ctx().clone(), &p, card, &anim, "design");
+                }
+                None => {
+                    self.design_anim = None;
+                    self.paint_slide(&painter, card, c);
+                }
+            }
             painter.rect_stroke(
                 card,
                 2.0,
@@ -1971,11 +1983,13 @@ impl App {
             paint_icon(ui.painter(), prev_r, Icon::ChevronLeft, off);
         } else if icon_button(ui, prev_r, Icon::ChevronLeft, "Previous slide").clicked() {
             self.select_slide(c - 1);
+            self.preview_transition(ui.ctx(), c, c - 1);
         }
         if c + 1 >= n {
             paint_icon(ui.painter(), next_r, Icon::ChevronRight, off);
         } else if icon_button(ui, next_r, Icon::ChevronRight, "Next slide").clicked() {
             self.select_slide(c + 1);
+            self.preview_transition(ui.ctx(), c, c + 1);
         }
         divider(ui);
 
@@ -2102,6 +2116,47 @@ impl App {
         }
         divider(ui);
 
+        if section(ui, "Slide Animation") {
+            labeled(ui, "Animation", |ui| {
+                let before = self.transition;
+                let options: Vec<(crate::transition::Transition, &str)> =
+                    crate::transition::Transition::ALL
+                        .into_iter()
+                        .map(|t| (t, t.name()))
+                        .collect();
+                menu_combo(ui, "slide animation", &mut self.transition, &options);
+                if self.transition != before {
+                    self.dirty = true;
+                    // Show it: the previous slide (or this one again) moves
+                    // to this one.
+                    let to = self.current;
+                    self.preview_transition(ui.ctx(), to.saturating_sub(1), to);
+                }
+            });
+            labeled(ui, "", |ui| {
+                let ok = self.transition != crate::transition::Transition::None;
+                if ui
+                    .add_enabled(
+                        ok,
+                        egui::Button::new("Preview").min_size(vec2(ui.available_width(), 24.0)),
+                    )
+                    .on_hover_text("Play the animation on the slide above")
+                    .clicked()
+                {
+                    let to = self.current;
+                    self.preview_transition(ui.ctx(), to.saturating_sub(1), to);
+                }
+            });
+            labeled(ui, "", |ui| {
+                ui.label(
+                    RichText::new(self.transition_hint())
+                        .color(crate::settings::pal().text_dim)
+                        .size(11.5),
+                );
+            });
+        }
+        divider(ui);
+
         if section(ui, "Header & Footer") {
             self.header_footer(ui);
         }
@@ -2131,6 +2186,31 @@ impl App {
 }
 
 impl App {
+    /// Plays the deck's slide animation on the Design tab's preview.
+    fn preview_transition(&mut self, ctx: &egui::Context, from: usize, to: usize) {
+        use crate::transition::{Anim, Transition};
+        self.design_anim = (self.transition != Transition::None).then(|| Anim {
+            kind: self.transition,
+            from,
+            to,
+            start: ctx.input(|i| i.time),
+        });
+    }
+
+    fn transition_hint(&self) -> &'static str {
+        use crate::transition::Transition;
+        match self.transition {
+            Transition::None => "Slides change at once.",
+            Transition::Fade => "Each slide fades in over the last.",
+            Transition::Slide => {
+                "Next slides move in from the right, previous slides from the left."
+            }
+            Transition::Motion => {
+                "The slide settles in, then its text and pictures rise in one by one."
+            }
+        }
+    }
+
     /// Six-place header/footer picker: click a place in the preview, then
     /// choose what it shows.
     fn header_footer(&mut self, ui: &mut egui::Ui) {
